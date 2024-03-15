@@ -3,5 +3,9 @@
 version = 3
 
 [[package]]
-name = "sandpit"
+name = "gc"
+version = "0.1.0"
+
+[[package]]
+name = "gc-derive"
 version = "0.1.0"
