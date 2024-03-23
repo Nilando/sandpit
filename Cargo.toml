@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
 
-members = [ "gc", "gc-derive" ]
+members = ["gc", "gc_derive"]
