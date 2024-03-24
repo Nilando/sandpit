@@ -1,11 +1,11 @@
-use super::raw_ptr::RawPtr;
+use std::ptr::NonNull;
 use super::trace::Trace;
 
-pub struct GcPtr<T> {
-    ptr: RawPtr<T>,
+pub struct GcPtr<T: Trace> {
+    ptr: NonNull<T>,
 }
 
-unsafe impl<T> Trace for GcPtr<T> {
+unsafe impl<T: Trace> Trace for GcPtr<T> {
     fn trace(&self) {
         todo!()
     }

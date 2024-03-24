@@ -15,10 +15,11 @@ impl<A: Allocate> Gc<A> {
         }
     }
 
-    pub fn mutate<T: MutatorRunner>(&self, mutator: &mut T) {
+    pub fn mutate<T: MutatorRunner>(&self, runner: &mut T) {
         let scope = self.create_scope();
+        let root = runner.get_root();
 
-        mutator.run(&scope);
+        T::run(root, &scope);
     }
 
     fn create_scope(&self) -> MutatorScope<A> {

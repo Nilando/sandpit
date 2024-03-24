@@ -1,14 +1,17 @@
 use super::tracer_handle::TracerHandle;
 use super::allocate::Allocate;
 use super::gc_ptr::GcPtr;
+use super::trace::Trace;
 
 pub trait MutatorRunner  {
-    fn run<'a, T: Mutator>(&mut self, scope: &'a T);
-    // we want mutator runner to also be able to pass in and out the roots
+    type Root: Trace;
+
+    fn get_root(&mut self) -> &mut Self::Root;
+    fn run<'a, T: Mutator>(root: &mut Self::Root, scope: &'a T);
 }
 
 pub trait Mutator {
-    fn alloc<T>(&mut self) -> GcPtr<T>;
+    fn alloc<T: Trace>(&mut self, obj: T) -> GcPtr<T>;
     // fn alloc_sized
     // fn alloc_grow
     // fn alloc_shrink
@@ -26,7 +29,7 @@ impl<A: Allocate> MutatorScope<A> {
 }
 
 impl<A: Allocate> Mutator for MutatorScope<A> {
-    fn alloc<T>(&mut self) -> GcPtr<T> {
+    fn alloc<T: Trace>(&mut self, obj: T) -> GcPtr<T> {
         todo!()
     }
 }

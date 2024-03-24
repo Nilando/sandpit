@@ -4,7 +4,6 @@ mod gc;
 mod gc_cell;
 mod gc_ptr;
 mod mutator; 
-mod raw_ptr;
 mod trace;
 mod tracer;
 mod tracer_handle;

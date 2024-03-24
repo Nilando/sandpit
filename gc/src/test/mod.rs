@@ -1,23 +1,42 @@
-use crate::{Gc, MutatorRunner, Mutator};
+use crate::{Gc, MutatorRunner, Mutator, GcPtr, GcCell, Trace};
+
+struct Node {
+    left: GcCell<Option<GcPtr<Node>>>,
+    right: GcCell<Option<GcPtr<Node>>>,
+    val: usize,
+}
+
+unsafe impl Trace for Node {
+    fn trace(&self) {}
+}
 
 struct TestMutator {
-
+    root: Option<GcPtr<Node>>
 }
 
 impl TestMutator {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            root: None
+        }
     }
 }
 
 impl MutatorRunner for TestMutator {
-    fn run<'a, T: Mutator>(&mut self, scope: &'a T) {
+    type Root = Option<GcPtr<Node>>;
 
+    fn run<'a, T: Mutator>(root: &mut Self::Root, mutator: &'a T) {
+
+        //let my_gc_ptr = mutator.alloc();
+    }
+
+    fn get_root(&mut self) -> &mut Self::Root {
+        &mut self.root
     }
 }
 
 #[test]
-fn foo() {
+fn create_mutator_runner() {
     let gc = Gc::new();
     let mut mutator = TestMutator::new();
 
