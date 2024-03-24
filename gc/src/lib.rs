@@ -1,5 +1,6 @@
 mod allocate;
 mod allocator;
+mod error;
 mod gc;
 mod gc_cell;
 mod gc_ptr;

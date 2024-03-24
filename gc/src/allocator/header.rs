@@ -1,6 +1,7 @@
 use super::size_class::SizeClass;
-use std::sync::atomic::AtomicBool;
 use super::constants::aligned_size;
+
+use std::sync::atomic::AtomicBool;
 
 pub struct Header {
     marked: AtomicBool,
@@ -11,11 +12,11 @@ pub struct Header {
 impl Header {
     pub const ALIGNED_SIZE: usize = aligned_size::<Self>();
 
-    pub fn new(size: u16) -> Self {
+    pub fn new(size_class: SizeClass, size: u16) -> Self {
         Header {
             marked: AtomicBool::new(false),
-            size_class: todo!(),
-            size: todo!(),
+            size_class,
+            size,
         }
     }
 }

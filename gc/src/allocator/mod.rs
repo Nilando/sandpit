@@ -1,4 +1,5 @@
 mod allocator; 
+mod arena;
 mod block;
 mod block_list;
 mod block_meta;

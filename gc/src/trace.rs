@@ -7,3 +7,7 @@ unsafe impl<T: Trace> Trace for Option<T> {
         self.as_ref().map(|val| val.trace());
     }
 }
+
+unsafe impl Trace for usize {
+    fn trace(&self) {}
+}

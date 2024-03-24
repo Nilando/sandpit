@@ -1,30 +1,29 @@
 use crate::allocate::Allocate;
 use super::size_class::SizeClass;
 use super::errors::AllocError;
-use super::block_list::BlockList;
-use super::block_store::BlockStore;
+use super::block_list::BlockList as AllocHead;
 use super::header::Header;
 use super::constants::ALIGN;
-use std::sync::Arc;
+use super::arena::Arena;
 use std::ptr::NonNull;
 use std::mem::size_of;
 
 use std::ptr::write;
 
 pub struct Allocator {
-    blocks: BlockList,
+    head: AllocHead,
 }
 
 impl Allocator {
-    pub fn new(block_store: Arc<BlockStore>) -> Allocator {
+    pub fn new(arena: Arena) -> Allocator {
         Self {
-            blocks: BlockList::new(block_store),
+            head: AllocHead::new(arena.get_block_store()),
         }
     }
 
     fn get_space(&self, size_class: SizeClass, alloc_size: usize) -> Result<*const u8, AllocError>
     {
-        self.blocks.alloc(alloc_size, size_class)
+        self.head.alloc(alloc_size, size_class)
     }
 
     fn get_header(object: &NonNull<()>) -> &Header {
@@ -45,14 +44,16 @@ impl Allocator {
     }
 }
 
-fn size_class<T>() -> SizeClass { todo!() }
+const fn size_class<T>() -> SizeClass {
+    SizeClass::const_get_for_size(size_of::<T>())
+}
 
 impl Allocate for Allocator {
-    type Arena = Arc<BlockStore>;
+    type Arena = Arena;
     type Error = AllocError;
 
     fn new_arena() -> Self::Arena {
-        Arc::new(BlockStore::new())
+        Arena::new()
     }
 
     fn new_allocator(arena: &Self::Arena) -> Self {
@@ -63,7 +64,7 @@ impl Allocate for Allocator {
         let obj_size = size_of::<T>();
         let obj_class = size_class::<T>();
         let space = self.get_space(obj_class, obj_size)?;
-        let header = Header::new(obj_size as u16);
+        let header = Header::new(obj_class, obj_size as u16);
 
         unsafe {
             let object_space = space.add(Header::ALIGNED_SIZE);

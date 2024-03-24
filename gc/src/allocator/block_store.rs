@@ -3,6 +3,8 @@ use super::errors::AllocError;
 use super::constants::ALIGN;
 use super::block::Block;
 
+use crate::allocate::GenerationalArena;
+
 use std::sync::Mutex;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -69,4 +71,10 @@ impl BlockStore {
         self.block_count.fetch_add(1, Ordering::SeqCst);
         Ok(ptr)
     }
+}
+
+impl GenerationalArena for BlockStore {
+    fn start_eden_trace(&self) {}
+    fn start_full_trace(&self) {}
+    fn complete_trace(&self) {}
 }

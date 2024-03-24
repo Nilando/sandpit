@@ -25,9 +25,8 @@ impl TestMutator {
 impl MutatorRunner for TestMutator {
     type Root = Option<GcPtr<Node>>;
 
-    fn run<'a, T: Mutator>(root: &mut Self::Root, mutator: &'a T) {
-
-        //let my_gc_ptr = mutator.alloc();
+    fn run<'a, T: Mutator>(root: &mut Self::Root, mutator: &'a mut T) {
+        let my_gc_ptr = mutator.alloc(69);
     }
 
     fn get_root(&mut self) -> &mut Self::Root {
