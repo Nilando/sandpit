@@ -72,9 +72,3 @@ impl BlockStore {
         Ok(ptr)
     }
 }
-
-impl GenerationalArena for BlockStore {
-    fn start_eden_trace(&self) {}
-    fn start_full_trace(&self) {}
-    fn complete_trace(&self) {}
-}
