@@ -23,7 +23,7 @@ impl<T: Tracer> TracerHandle<T> {
         }
     }
 
-    pub fn send_to_unscanned<O: Trace<Tracer = T>>(&mut self, obj: &O) {
+    pub fn send_to_unscanned<O: Trace>(&mut self, obj: &O) {
         let obj_ptr: NonNull<()> = NonNull::from(obj).cast();
         let job: Work<T> = (obj_ptr, O::dyn_trace);
 

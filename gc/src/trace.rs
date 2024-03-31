@@ -5,32 +5,25 @@ use std::ptr::NonNull;
 
 pub unsafe trait TraceLeaf {}
 pub unsafe trait Trace {
-    type Tracer: Tracer;
-
-    fn trace(&self, tracer: &Self::Tracer) {}
-    fn dyn_trace(ptr: NonNull<()>, tracer: &Self::Tracer) {}
+    fn trace<T: Tracer>(&self, tracer: &T) {}
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &T) {}
 }
 
 unsafe impl<O: Trace> Trace for Option<O> {
-    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl TraceLeaf for usize {}
 unsafe impl Trace for usize {
-    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 unsafe impl<O: TraceLeaf> Trace for gc_cell::GcCell<O> {
-    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
-    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
-    type Tracer = TracerController<Allocator>;
 }
 
 
