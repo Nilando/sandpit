@@ -1,10 +1,12 @@
 use crate::{Gc, Mutator, GcPtr, GcCell, GcCellPtr};
 
+/*
 struct Node {
     left: GcCellPtr<Node>,
     right: GcCellPtr<Node>,
     val: GcCell<usize>,
 }
+*/
 
 #[test]
 fn create_rooted_arena() {

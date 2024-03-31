@@ -60,6 +60,14 @@ impl BlockStore {
         self.block_count.load(Ordering::SeqCst)
     }
 
+    pub fn count_large_space(&self) -> usize {
+        self.large.lock()
+            .unwrap()
+            .iter()
+            .map(|block| block.size())
+            .sum::<usize>()
+    }
+
     pub fn create_large(&self, alloc_size: usize) -> Result<*const u8, AllocError> {
         let block = Block::new(alloc_size, ALIGN)?;
         let ptr = block.as_ptr();

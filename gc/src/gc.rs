@@ -5,7 +5,7 @@ use super::allocate::{Allocate, GenerationalArena};
 use std::sync::Arc;
 use super::gc_ptr::GcPtr;
 
-pub struct Gc<A: Allocate, Root> {
+pub struct Gc<A: Allocate, Root: Trace> {
     arena: Arc<A::Arena>,
     tracer: Arc<TracerController<A>>,
     root: GcPtr<Root>,

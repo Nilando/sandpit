@@ -1,14 +1,14 @@
 use std::ptr::NonNull;
-use std::cell::{UnsafeCell, Cell};
+use std::cell::Cell;
 
-use super::allocate::Allocate;
-use super::mutator::MutatorScope;
+use super::mutator::Mutator;
+use super::trace::Trace;
 
-pub struct GcPtr<T> {
+pub struct GcPtr<T: Trace> {
     ptr: NonNull<T>,
 }
 
-impl<T> From<GcPtr<T>> for GcCellPtr<T> {
+impl<T: Trace> From<GcPtr<T>> for GcCellPtr<T> {
     fn from(ptr: GcPtr<T>) -> Self {
         Self {
             cell: Cell::new(Some(ptr.clone()))
@@ -16,26 +16,26 @@ impl<T> From<GcPtr<T>> for GcCellPtr<T> {
     }
 }
 
-pub struct StrongGcPtr<'a, T> {
+pub struct StrongGcPtr<'a, T: Trace> {
     ptr: &'a GcPtr<T>,
 }
 
-impl<'a, T> StrongGcPtr<'a, T> {
+impl<'a, T: Trace> StrongGcPtr<'a, T> {
     fn downgrade(self) -> GcPtr<T> {
         self.ptr.clone()
     }
 }
 
-pub struct GcCellPtr<T> {
+pub struct GcCellPtr<T: Trace> {
     cell: Cell<Option<GcPtr<T>>>,
 }
 
-impl<T> GcPtr<T> {
+impl<T: Trace> GcPtr<T> {
     pub fn new(ptr: NonNull<T>) -> Self {
         Self { ptr }
     }
 
-    pub fn as_ref<'a, A: Allocate>(&self, _: &'a MutatorScope<A>) -> &'a T {
+    pub fn as_ref<'a, M: Mutator>(&self, _: &'a M) -> &'a T {
         unsafe { self.ptr.as_ref() }
     }
 
@@ -43,21 +43,21 @@ impl<T> GcPtr<T> {
         self.ptr.clone()
     }
 
-    pub fn write_barrier<V, A: Allocate>(
+    pub fn write_barrier<V: Trace, M: Mutator>(
         &self,
-        scope: &MutatorScope<A>,
+        scope: &mut M,
         new_ptr: GcPtr<V>,
         callback: fn(&T) -> &GcCellPtr<V>
     ) {
         let old_ref = self.as_ref(scope);
         let old_ptr = callback(old_ref);
         unsafe { old_ptr.unsafe_set(scope, new_ptr) }
-        // TODO: send this ptr to unscanned if it is marked as old!
+        scope.write_barrier(self.as_ptr());
     }
 }
 
-impl<T> GcCellPtr<T> {
-    pub fn as_ref<'a, A: Allocate>(&self, scope: &'a MutatorScope<A>) -> Option<&'a T> {
+impl<T: Trace> GcCellPtr<T> {
+    pub fn as_ref<'a, M: Mutator>(&self, scope: &'a M) -> Option<&'a T> {
         let opt_ref = unsafe { &*self.cell.as_ptr() as &Option<GcPtr<T>> };
 
         opt_ref.as_ref().map(|gc_ptr| gc_ptr.as_ref(scope))
@@ -65,9 +65,9 @@ impl<T> GcCellPtr<T> {
 
     // TODO: make a version of this write_barrier which allows updating many ptrs
     // at once
-    pub fn write_barrier<A: Allocate>(
+    pub fn write_barrier<M: Mutator>(
         &self,
-        scope: &MutatorScope<A>,
+        scope: &M,
         new_ptr: GcPtr<T>,
         callback: fn(&T) -> &GcCellPtr<T>
     ) {
@@ -80,7 +80,7 @@ impl<T> GcCellPtr<T> {
         }
     }
 
-    pub fn set<A: Allocate>(&self, scope: &MutatorScope<A>, new_ptr: StrongGcPtr<T>) {
+    pub fn set<M: Mutator>(&self, scope: &M, new_ptr: StrongGcPtr<T>) {
         unsafe { self.unsafe_set(scope, new_ptr.downgrade()) }
     }
 
@@ -105,12 +105,12 @@ impl<T> GcCellPtr<T> {
     // To ensure that the invariant is upheld don't use this function and instead
     // use the safe version which uses a strongPtr, or update the ptr through a
     // write barrier.
-    pub unsafe fn unsafe_set<A: Allocate>(&self, _: &MutatorScope<A>, new_ptr: GcPtr<T>) {
+    pub unsafe fn unsafe_set<M: Mutator>(&self, _: &M, new_ptr: GcPtr<T>) {
         self.cell.set(Some(new_ptr))
     }
 }
 
-impl<T> Clone for GcCellPtr<T> {
+impl<T: Trace> Clone for GcCellPtr<T> {
     fn clone(&self) -> Self {
         let opt_ref = unsafe { &*self.cell.as_ptr() as &Option<GcPtr<T>> };
 
@@ -120,7 +120,7 @@ impl<T> Clone for GcCellPtr<T> {
     }
 }
 
-impl<T> Clone for GcPtr<T> {
+impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr.clone().into()

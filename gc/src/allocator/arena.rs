@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use super::block_store::BlockStore;
 use crate::allocate::GenerationalArena;
+use super::constants::BLOCK_SIZE;
 
 #[derive(Clone)]
 pub struct Arena {
@@ -21,6 +22,13 @@ impl GenerationalArena for Arena {
     }
 
     fn refresh(&self) {
-    todo!()
+        todo!()
+    }
+
+    fn get_size(&self) -> usize {
+        let block_space = self.block_store.block_count() * BLOCK_SIZE;
+        let large_space = self.block_store.count_large_space();
+
+        block_space + large_space
     }
 }

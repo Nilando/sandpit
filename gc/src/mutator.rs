@@ -5,9 +5,11 @@ use super::trace::Trace;
 use super::tracer::TracerController;
 use super::error::GcError;
 use std::sync::Arc;
+use std::ptr::NonNull;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&mut self, obj: T) -> Result<GcPtr<T>, GcError>;
+    fn write_barrier<T: Trace>(&mut self, obj: NonNull<T>);
     //fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, Self::Error>;
     // fn alloc_sized
     // fn alloc_grow
@@ -34,5 +36,10 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
             Ok(ptr) => Ok(GcPtr::new(ptr)),
             Err(_) => todo!()
         }
+    }
+
+    fn write_barrier<T: Trace>(&mut self, obj: NonNull<T>) {
+        // get the header
+        // check if header is marked
     }
 }
