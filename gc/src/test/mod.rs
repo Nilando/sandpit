@@ -1,4 +1,4 @@
-use crate::{Gc, Mutator, GcPtr, GcCell, GcCellPtr, allocate::Allocate};
+use crate::{Gc, Mutator, GcPtr, GcCell, GcCellPtr};
 
 struct Node {
     left: GcCellPtr<Node>,

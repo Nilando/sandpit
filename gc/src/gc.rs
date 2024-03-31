@@ -13,20 +13,20 @@ pub struct Gc<A: Allocate, Root> {
 
 impl<A: Allocate, T: Trace> Gc<A, T> {
     pub fn build(callback: fn(&mut MutatorScope<A>) -> GcPtr<T>) -> Self {
-        let arena = A::Arena::new();
-        let tracer = Tracer::<A>::new();
-        let mut scope = MutatorScope::new(&arena, &tracer);
+        let arena = Arc::new(A::Arena::new());
+        let tracer = Arc::new(Tracer::<A>::new());
+        let mut scope = MutatorScope::new(arena.as_ref(), tracer.clone());
         let root = callback(&mut scope);
 
         Self {
-            arena: Arc::new(arena),
-            tracer: Arc::new(tracer),
+            arena,
+            tracer,
             root
         }
     }
 
     pub fn mutate(&mut self, callback: fn(&GcPtr<T>, &mut MutatorScope<A>)) {
-        let mut scope = MutatorScope::new(self.arena.as_ref(), self.tracer.as_ref());
+        let mut scope = MutatorScope::new(self.arena.as_ref(), self.tracer.clone());
 
         callback(&self.root, &mut scope);
     }

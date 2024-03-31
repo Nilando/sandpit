@@ -31,14 +31,12 @@ impl<A: Allocate> Tracer<A> {
         }
     }
 
-    /*
-    pub fn get_yield_lock(&self) -> &RwLockReadGuard<()> {
-        &self.yield_lock.read().unwrap()
+    pub fn get_yield_lock(&self) -> RwLockReadGuard<()> {
+        self.yield_lock.read().unwrap()
     }
-    */
 
-    pub fn get_yield_flag(&self) -> &AtomicBool {
-        &self.yield_flag
+    pub fn get_yield_flag(&self) -> bool {
+        self.yield_flag.load(Ordering::Relaxed)
     }
 
     pub fn eden_collection(&self) {
