@@ -1,14 +1,22 @@
-use std::marker::PhantomData;
 use super::allocate::Allocate;
+use super::tracer::Tracer;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    RwLockReadGuard
+};
 
-pub struct TracerHandle<A: Allocate> {
-    _allocator: PhantomData<A>
-    //tracer: Tracer<A>,
-    // work packet, once full send to tracer
+pub struct TracerHandle {
+    //yield_lock: &'a RwLockReadGuard<'a, ()>,
+    //yield_flag: &'a AtomicBool
+    // work_packet for building
+    // place to send work 
 }
 
-impl<A: Allocate> TracerHandle<A> {
-    pub fn new() -> Self {
-        Self { _allocator: PhantomData::<A> }
+impl TracerHandle {
+    pub fn new<A: Allocate>(tracer: &Tracer<A>) -> Self {
+        Self { 
+            //yield_lock: tracer.get_yield_lock(),
+            //yield_flag: tracer.get_yield_flag()
+        }
     }
 }

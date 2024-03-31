@@ -9,16 +9,13 @@ mod trace;
 mod tracer;
 mod tracer_handle;
 
-use allocator::Allocator;
-use gc::Gc as GenericGc;
-use mutator::MutatorScope as GenericMutatorScope;
-
-pub use mutator::{MutatorRunner, Mutator};
+pub use mutator::Mutator;
 pub use gc_cell::GcCell;
-pub use gc_ptr::GcPtr;
+pub use gc_ptr::{GcPtr, StrongGcPtr, GcCellPtr};
 pub use trace::Trace;
-pub type Gc = GenericGc<Allocator>;
-pub type MutatorScope = GenericMutatorScope<Allocator>;
+
+pub type MutatorScope = mutator::MutatorScope<allocator::Allocator>;
+pub type Gc<T> = gc::Gc<allocator::Allocator, T>;
 
 #[cfg(test)]
 mod test;

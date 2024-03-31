@@ -1,13 +1,78 @@
+use super::*;
+use allocate::Allocate;
+use tracer::Tracer;
+
+pub unsafe trait TraceLeaf {}
 pub unsafe trait Trace {
-    fn trace(&self);
+    fn trace<A: Allocate>(&self, tracer: Tracer<A>);
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace(&self) {
-        self.as_ref().map(|val| val.trace());
+    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
+        self.as_ref().map(|val| val.trace(tracer));
     }
 }
 
+unsafe impl TraceLeaf for usize {}
 unsafe impl Trace for usize {
-    fn trace(&self) {}
+    fn trace<A: Allocate>(&self, _tracer: Tracer<A>) {}
 }
+
+unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
+unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {
+    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {}
+}
+
+unsafe impl<T: Trace> Trace for gc_ptr::GcPtr<T> {
+    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
+        // mark the ptr
+        // get a ref
+        // call trace on ref
+        todo!()
+    }
+}
+
+unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
+    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
+        // mark the ptr
+        // get a ref
+        // call trace on ref
+        todo!()
+    }
+}
+
+
+// We need a type to allow for interior mutability of gc values, yet also helps
+// maintain the writer barrier when mutating nested gc refs.
+//
+// To do this we must implement our our interior mutability pattern while excluding,
+// the existing cell types from being allocated into the gc arena, essentially
+// enforcing our new interior mutability pattern.
+//
+// The two main types in interation here that allow interior mutatbility inside the
+// gc are the GcCell<T> and GcPtr<T>.
+//
+// As well as the two traits TraceNode, TraceLeaf. Both traits are unsafe to impl
+// by hand but can safely be implemented via the macro trace.
+//
+// Now if we ever need to mutate a traceleaf type, we don't need to worry about 
+// the write barrier as that type contains no references.
+//
+// However, if a type is of type TraceNode, than we must make sure that updating
+//
+//
+//  struct A {
+//      inner: Struct B { // B contains a nonleaf, meaning it can't go into a gccell
+//          ptr: GcPtr
+//          cell_ptr: GcCellPtr
+//      }
+//      num: GcCell<usize> // a usize is a leaf so it can go in a gccell
+//  }
+//
+// If a type contains GcPtr's or a type that implment TraceNode, than that type
+// will implement TraceNode, else the type is TraceLeaf.
+//
+// With a GcCell<T>, T must impl TraceLeaf, and updating a GcCell will therefore,
+// never need to trigger a write barrier.
+//
+// Updating a GcPtr will always need to trigger a write barrier

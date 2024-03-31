@@ -3,8 +3,6 @@ use super::errors::AllocError;
 use super::constants::ALIGN;
 use super::block::Block;
 
-use crate::allocate::GenerationalArena;
-
 use std::sync::Mutex;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,8 +13,7 @@ pub struct BlockStore {
     free: Mutex<Vec<BumpBlock>>,
     recycle: Mutex<Vec<BumpBlock>>,
     rest: Mutex<Vec<BumpBlock>>,
-    used: Mutex<Vec<BumpBlock>>,
-    large: Mutex<LinkedList<Block>>
+    large: Mutex<LinkedList<Block>>,
 }
 
 impl BlockStore {
@@ -27,13 +24,12 @@ impl BlockStore {
             free: Mutex::new(vec![]),
             recycle: Mutex::new(vec![]),
             rest: Mutex::new(vec![]),
-            used: Mutex::new(vec![]),
             large: Mutex::new(LinkedList::new()),
         }
     }
 
-    pub fn push_used(&self, block: BumpBlock) {
-        self.used.lock().unwrap().push(block);
+    pub fn push_rest(&self, block: BumpBlock) {
+        self.rest.lock().unwrap().push(block);
     }
 
     pub fn push_recycle(&self, block: BumpBlock) {

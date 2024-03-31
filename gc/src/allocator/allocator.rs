@@ -7,7 +7,6 @@ use super::constants::ALIGN;
 use super::arena::Arena;
 use std::ptr::NonNull;
 use std::mem::size_of;
-
 use std::ptr::write;
 
 pub struct Allocator {
@@ -15,12 +14,6 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub fn new(arena: Arena) -> Allocator {
-        Self {
-            head: AllocHead::new(arena.get_block_store()),
-        }
-    }
-
     fn get_space(&self, size_class: SizeClass, alloc_size: usize) -> Result<*const u8, AllocError>
     {
         self.head.alloc(alloc_size, size_class)
@@ -52,12 +45,10 @@ impl Allocate for Allocator {
     type Arena = Arena;
     type Error = AllocError;
 
-    fn new_arena() -> Self::Arena {
-        Arena::new()
-    }
-
-    fn new_allocator(arena: &Self::Arena) -> Self {
-        Self::new(arena.clone())
+    fn new(arena: &Self::Arena) -> Self {
+        Self {
+            head: AllocHead::new(arena.get_block_store()),
+        }
     }
 
     fn alloc<T>(&self, object: T) -> Result<NonNull<T>, AllocError> {

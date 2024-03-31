@@ -9,7 +9,18 @@ pub struct BlockList {
     head: Cell<Option<BumpBlock>>,
     overflow: Cell<Option<BumpBlock>>,
     block_store: Arc<BlockStore>
-    // TODO: impl drop to send back head and overflow into the blockstore
+}
+
+impl Drop for BlockList {
+    fn drop(&mut self) {
+        if let Some(head) = self.head.take() {
+            self.block_store.push_recycle(head);
+        }
+
+        if let Some(overflow) = self.overflow.take() {
+            self.block_store.push_recycle(overflow);
+        }
+    }
 }
 
 impl BlockList {
@@ -65,7 +76,7 @@ impl BlockList {
         self.head.set(Some(new_head));
 
         if rest_block.is_some() {
-            self.block_store.push_used(rest_block.unwrap());
+            self.block_store.push_rest(rest_block.unwrap());
         }
 
         Ok(())
