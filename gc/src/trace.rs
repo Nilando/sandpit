@@ -1,44 +1,36 @@
 use super::*;
-use allocate::Allocate;
-use tracer::Tracer;
+use tracer::{Tracer, TracerController};
+use allocator::{Allocator};
+use std::ptr::NonNull;
 
 pub unsafe trait TraceLeaf {}
 pub unsafe trait Trace {
-    fn trace<A: Allocate>(&self, tracer: Tracer<A>);
+    type Tracer: Tracer;
+
+    fn trace(&self, tracer: &Self::Tracer) {}
+    fn dyn_trace(ptr: NonNull<()>, tracer: &Self::Tracer) {}
 }
 
-unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
-        self.as_ref().map(|val| val.trace(tracer));
-    }
+unsafe impl<O: Trace> Trace for Option<O> {
+    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl TraceLeaf for usize {}
 unsafe impl Trace for usize {
-    fn trace<A: Allocate>(&self, _tracer: Tracer<A>) {}
+    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {
-    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {}
+unsafe impl<O: TraceLeaf> Trace for gc_cell::GcCell<O> {
+    type Tracer = TracerController<Allocator>;
 }
 
-unsafe impl<T: Trace> Trace for gc_ptr::GcPtr<T> {
-    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
-        // mark the ptr
-        // get a ref
-        // call trace on ref
-        todo!()
-    }
+unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
+    type Tracer = TracerController<Allocator>;
 }
 
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
-    fn trace<A: Allocate>(&self, tracer: Tracer<A>) {
-        // mark the ptr
-        // get a ref
-        // call trace on ref
-        todo!()
-    }
+    type Tracer = TracerController<Allocator>;
 }
 
 

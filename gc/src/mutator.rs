@@ -2,7 +2,7 @@ use super::tracer_handle::TracerHandle;
 use super::allocate::Allocate;
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
-use super::tracer::Tracer;
+use super::tracer::TracerController;
 use super::error::GcError;
 use std::sync::Arc;
 
@@ -16,11 +16,11 @@ pub trait Mutator {
 
 pub struct MutatorScope<A: Allocate> {
     allocator: A,
-    tracer_handle: TracerHandle<A>
+    tracer_handle: TracerHandle<TracerController<A>>
 }
 
 impl<A: Allocate> MutatorScope<A> {
-    pub fn new(arena: &A::Arena, tracer: Arc<Tracer<A>>) -> Self {
+    pub fn new(arena: &A::Arena, tracer: Arc<TracerController<A>>) -> Self {
         let allocator = A::new(arena);
         let tracer_handle = TracerHandle::new(tracer);
 

@@ -6,7 +6,10 @@ use std::sync::{
 };
 use super::allocate::Allocate;
 
-pub struct Tracer<A: Allocate> {
+pub trait Tracer {}
+impl<A: Allocate> Tracer for TracerController<A> {}
+
+pub struct TracerController<A: Allocate> {
     _allocator: PhantomData<A>,
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
@@ -22,7 +25,7 @@ pub struct Tracer<A: Allocate> {
     // how would the tracer wait 
 }
 
-impl<A: Allocate> Tracer<A> {
+impl<A: Allocate> TracerController<A> {
     pub fn new() -> Self {
         Self {
             _allocator: PhantomData::<A>,
