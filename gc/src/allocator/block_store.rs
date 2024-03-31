@@ -72,7 +72,8 @@ impl BlockStore {
         let block = Block::new(alloc_size, ALIGN)?;
         let ptr = block.as_ptr();
         self.large.lock().unwrap().push_front(block);
-        self.block_count.fetch_add(1, Ordering::SeqCst);
+        // self.block_count.fetch_add(1, Ordering::SeqCst); // technically this is a block.. but
+        // really is being considered a 'large' instead
         Ok(ptr)
     }
 }
