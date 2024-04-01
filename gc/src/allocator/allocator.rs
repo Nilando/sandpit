@@ -1,12 +1,12 @@
 use crate::allocate::Allocate;
+use std::slice::from_raw_parts_mut;
 use super::size_class::SizeClass;
 use super::errors::AllocError;
 use super::block_list::BlockList as AllocHead;
 use super::header::Header;
-use super::constants::ALIGN;
+use super::constants::{ALIGN, aligned_size};
 use super::arena::Arena;
 use std::ptr::NonNull;
-use std::mem::size_of;
 use std::ptr::write;
 
 pub struct Allocator {
@@ -37,10 +37,6 @@ impl Allocator {
     }
 }
 
-const fn size_class<T>() -> SizeClass {
-    SizeClass::const_get_for_size(size_of::<T>())
-}
-
 impl Allocate for Allocator {
     type Arena = Arena;
     type Error = AllocError;
@@ -52,38 +48,35 @@ impl Allocate for Allocator {
     }
 
     fn alloc<T>(&self, object: T) -> Result<NonNull<T>, AllocError> {
-        let obj_size = size_of::<T>();
-        let obj_class = size_class::<T>();
-        let space = self.get_space(obj_class, obj_size)?;
-        let header = Header::new(obj_class, obj_size as u16);
+        let alloc_size = aligned_size::<Header>() + aligned_size::<T>();
+        let size_class = SizeClass::get_for_size(alloc_size)?;
+        let header = Header::new(size_class, alloc_size as u16);
+        let space = self.get_space(size_class, alloc_size)?;
 
         unsafe {
-            let object_space = space.add(Header::ALIGNED_SIZE);
+            let object_space = space.add(aligned_size::<Header>());
             write(space as *mut Header, header);
             write(object_space as *mut T, object);
             Ok(NonNull::new(object_space as *mut T).unwrap())
         }
     }
 
-    fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, AllocError> {
-        todo!()
-        /*
-        let alloc_size = Header::ALIGNED_SIZE + Self::aligned_array_size(len as usize);
+    fn alloc_sized(&self, len: u32) -> Result<NonNull<u8>, AllocError> {
+        let alloc_size = aligned_size::<Header>() + Self::aligned_array_size(len as usize);
         let size_class = SizeClass::get_for_size(alloc_size)?;
+        let header = Header::new(size_class, alloc_size as u16);
         let space = self.get_space(size_class, alloc_size)?;
-        let header = Header::array_header(alloc_size as u32, size_class);
 
         unsafe {
-            let array_space = space.offset(Header::ALIGNED_SIZE as isize);
-            let array = from_raw_parts_mut(array_space as *mut u8, alloc_size);
-
+            let array_space = space.add(aligned_size::<Header>());
             write(space as *mut Header, header);
+            let array = from_raw_parts_mut(array_space as *mut u8, len as usize);
+
             for byte in array {
                 *byte = 0;
             }
             
-            Ok(RawPtr::new(array_space as *const u8))
+            Ok(NonNull::new(array_space as *mut u8).unwrap())
         }
-        */
     }
 }

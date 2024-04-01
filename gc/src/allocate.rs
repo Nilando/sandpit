@@ -7,7 +7,7 @@ pub trait Allocate {
 
     fn new(arena: &Self::Arena) -> Self;
     fn alloc<T>(&self, object: T) -> Result<NonNull<T>, Self::Error>;
-    fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, Self::Error>;
+    fn alloc_sized(&self, len: u32) -> Result<NonNull<u8>, Self::Error>;
     // get mark -> Mark
     // set mark
 }
