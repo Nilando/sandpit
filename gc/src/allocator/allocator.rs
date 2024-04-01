@@ -2,7 +2,7 @@ use crate::allocate::Allocate;
 use std::slice::from_raw_parts_mut;
 use super::size_class::SizeClass;
 use super::errors::AllocError;
-use super::block_list::BlockList as AllocHead;
+use super::alloc_head::AllocHead;
 use super::header::Header;
 use super::constants::{ALIGN, aligned_size};
 use super::arena::Arena;

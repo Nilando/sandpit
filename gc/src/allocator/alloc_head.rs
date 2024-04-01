@@ -5,13 +5,13 @@ use super::block_store::BlockStore;
 use std::sync::Arc;
 use std::cell::Cell;
 
-pub struct BlockList {
+pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
     overflow: Cell<Option<BumpBlock>>,
     block_store: Arc<BlockStore>
 }
 
-impl Drop for BlockList {
+impl Drop for AllocHead {
     fn drop(&mut self) {
         if let Some(head) = self.head.take() {
             self.block_store.push_recycle(head);
@@ -23,9 +23,9 @@ impl Drop for BlockList {
     }
 }
 
-impl BlockList {
-    pub fn new(block_store: Arc<BlockStore>) -> BlockList {
-        BlockList {
+impl AllocHead {
+    pub fn new(block_store: Arc<BlockStore>) -> Self {
+        Self {
             head: Cell::new(None),
             overflow: Cell::new(None),
             block_store,
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = BlockList::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone());
 
         blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Medium).unwrap();
         assert_eq!(store.block_count(), 1);
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_alloc_many_blocks() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = BlockList::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone());
 
         for i in 1..100 {
             blocks.alloc(constants::BLOCK_CAPACITY, SizeClass::Medium).unwrap();
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_alloc_into_overflow() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = BlockList::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone());
 
         blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Small).unwrap();
         blocks.alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium).unwrap();
