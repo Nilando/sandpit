@@ -6,6 +6,7 @@ mod gc_cell;
 mod gc_ptr;
 mod mutator; 
 mod trace;
+mod tracer_controller;
 mod tracer;
 mod tracer_handle;
 

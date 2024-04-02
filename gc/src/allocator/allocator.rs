@@ -1,6 +1,7 @@
 use crate::allocate::Allocate;
 use std::slice::from_raw_parts_mut;
 use super::size_class::SizeClass;
+use super::header::Mark;
 use super::errors::AllocError;
 use super::alloc_head::AllocHead;
 use super::header::Header;
@@ -78,5 +79,26 @@ impl Allocate for Allocator {
             
             Ok(NonNull::new(array_space as *mut u8).unwrap())
         }
+    }
+
+    fn get_mark<T>(ptr: NonNull<T>) -> Mark {
+        let binding = ptr.cast();
+        let header = Self::get_header(&binding);
+
+        header.get_mark()
+    }
+
+    fn swap_mark<T>(ptr: NonNull<T>, mark: Mark) -> Mark {
+        let binding = ptr.cast();
+        let header = Self::get_header(&binding);
+
+        header.swap_mark(mark)
+    }
+
+    fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
+        let binding = ptr.cast();
+        let header = Self::get_header(&binding);
+
+        header.set_mark(mark)
     }
 }

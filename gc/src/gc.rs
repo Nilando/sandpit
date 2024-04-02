@@ -1,5 +1,5 @@
 use super::mutator::MutatorScope;
-use super::tracer::TracerController;
+use super::tracer_controller::TracerController;
 use super::trace::Trace;
 use super::allocate::{Allocate, GenerationalArena};
 use std::sync::Arc;

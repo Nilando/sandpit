@@ -1,11 +1,14 @@
 use std::sync::Arc;
 use super::block_store::BlockStore;
-use crate::allocate::GenerationalArena;
 use super::constants::BLOCK_SIZE;
+use super::header::Mark;
+use std::sync::Mutex;
+use crate::allocate::GenerationalArena;
 
 #[derive(Clone)]
 pub struct Arena {
-    block_store: Arc<BlockStore>
+    block_store: Arc<BlockStore>,
+    current_mark: Arc<Mutex<Mark>>
 }
 
 impl Arena {
@@ -15,14 +18,17 @@ impl Arena {
 }
 
 impl GenerationalArena for Arena {
+    type Mark = Mark;
+
     fn new() -> Self {
         Self {
-            block_store: Arc::new(BlockStore::new())
+            block_store: Arc::new(BlockStore::new()),
+            current_mark: Arc::new(Mutex::new(Mark::Red))
         }
     }
 
     fn refresh(&self) {
-        todo!()
+        self.block_store.refresh();
     }
 
     fn get_size(&self) -> usize {
@@ -30,5 +36,15 @@ impl GenerationalArena for Arena {
         let large_space = self.block_store.count_large_space();
 
         block_space + large_space
+    }
+
+    fn current_mark(&self) -> Self::Mark {
+        *self.current_mark.lock().unwrap()
+    }
+
+    fn rotate_mark(&self) {
+        let mut mark = self.current_mark.lock().unwrap();
+
+        *mark = mark.rotate();
     }
 }

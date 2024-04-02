@@ -1,38 +1,37 @@
-use super::tracer::Tracer;
+use super::tracer_controller::{TracerController, UnscannedPtr, TracePacket};
 use super::trace::Trace;
+use super::tracer::TracerWorker;
+use super::allocate::Allocate;
 use std::sync::Arc;
 use std::ptr::NonNull;
 
-const WORK_PACKET_SIZE: usize = 420;
-
-type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &T));
-
-pub struct TracerHandle<T: Tracer> {
-    tracer: Arc<T>,
-    work_packet: [
-        Option<UnscannedPtr<T>>;
-        WORK_PACKET_SIZE
-    ]
+pub struct TracerHandle<A: Allocate> {
+    controller: Arc<TracerController<A>>,
+    work_packet: TracePacket<TracerWorker<A>>
 }
 
-impl<T: Tracer> TracerHandle<T> {
-    pub fn new(tracer: Arc<T>) -> Self {
+// TODO: impl drop to send work packet to tracercontroller
+
+impl<T: Allocate> TracerHandle<T> {
+    pub fn new(controller: Arc<TracerController<T>>) -> Self {
         Self { 
-            tracer,
-            work_packet: [None; WORK_PACKET_SIZE]
+            controller,
+            work_packet: TracePacket::new()
         }
     }
 
     pub fn send_to_unscanned<O: Trace>(&mut self, obj: &O) {
         let obj_ptr: NonNull<()> = NonNull::from(obj).cast();
-        let job: UnscannedPtr<T> = (obj_ptr, O::dyn_trace);
+        let job: UnscannedPtr<TracerWorker<T>> = (obj_ptr, O::dyn_trace);
 
-        self.work_packet[0] = Some(job);
+        //self.work_packet[0] = Some(job);
     }
 
     pub fn do_work(&self) {
+        /*
         if let Some((ptr, trace_func)) = self.work_packet[0] {
             trace_func(ptr, &self.tracer.as_ref());
         }
+        */
     }
 }

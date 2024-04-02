@@ -41,7 +41,7 @@ impl<T: Trace> GcPtr<T> {
         Self { ptr }
     }
 
-    fn as_ptr(&self) -> NonNull<T> {
+    pub fn as_ptr(&self) -> NonNull<T> {
         self.ptr.clone()
     }
 

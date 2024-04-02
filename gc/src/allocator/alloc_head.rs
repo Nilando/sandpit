@@ -2,6 +2,7 @@ use super::bump_block::BumpBlock;
 use super::size_class::SizeClass;
 use super::errors::AllocError;
 use super::block_store::BlockStore;
+use super::header::Mark;
 use std::sync::Arc;
 use std::cell::Cell;
 

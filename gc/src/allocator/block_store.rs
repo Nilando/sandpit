@@ -6,6 +6,7 @@ use super::block::Block;
 use std::sync::Mutex;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use super::header::Mark;
 
 pub struct BlockStore {
     block_count: AtomicUsize,
@@ -75,5 +76,14 @@ impl BlockStore {
         // self.block_count.fetch_add(1, Ordering::SeqCst); // technically this is a block.. but
         // really is being considered a 'large' instead
         Ok(ptr)
+    }
+
+    pub fn refresh(&self) {
+        // this should use tri color
+        // reserve
+        // new
+        // old 
+        //
+        // partial
     }
 }
