@@ -1,6 +1,4 @@
 use super::*;
-use tracer::{Tracer, TracerController};
-use allocator::{Allocator};
 use std::ptr::NonNull;
 
 pub unsafe trait TraceLeaf {}
@@ -13,18 +11,13 @@ unsafe impl<O: Trace> Trace for Option<O> {
 }
 
 unsafe impl TraceLeaf for usize {}
-unsafe impl Trace for usize {
-}
+unsafe impl Trace for usize {}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
-unsafe impl<O: TraceLeaf> Trace for gc_cell::GcCell<O> {
-}
+unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {}
 
-unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
-}
-
-unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
-}
+unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {}
+unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {}
 
 
 // We need a type to allow for interior mutability of gc values, yet also helps

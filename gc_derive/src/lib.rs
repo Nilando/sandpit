@@ -19,7 +19,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
             .map(|field| {
                 let field_name = &field.ident;
                 quote! {
-                    gc::Trace::trace(&self.#field_name);
+                    gc::Trace::trace(&self.#field_name, tracer);
                 }
             })
             .collect::<Vec<_>>(),
@@ -43,8 +43,11 @@ pub fn trace(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
-            fn trace(&self) {
+            fn trace<T: gc::Tracer>(&self, tracer: &T) {
                 #(#trace_body)*
+            }
+            fn dyn_trace<T: gc::Tracer>(ptr: NonNull<()>, tracer: &T) {
+                todo!()
             }
         }
     };

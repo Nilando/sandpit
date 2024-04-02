@@ -5,12 +5,12 @@ use std::ptr::NonNull;
 
 const WORK_PACKET_SIZE: usize = 420;
 
-type Work<T> = (NonNull<()>, fn(NonNull<()>, &T));
+type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &T));
 
 pub struct TracerHandle<T: Tracer> {
     tracer: Arc<T>,
     work_packet: [
-        Option<Work<T>>;
+        Option<UnscannedPtr<T>>;
         WORK_PACKET_SIZE
     ]
 }
@@ -25,7 +25,7 @@ impl<T: Tracer> TracerHandle<T> {
 
     pub fn send_to_unscanned<O: Trace>(&mut self, obj: &O) {
         let obj_ptr: NonNull<()> = NonNull::from(obj).cast();
-        let job: Work<T> = (obj_ptr, O::dyn_trace);
+        let job: UnscannedPtr<T> = (obj_ptr, O::dyn_trace);
 
         self.work_packet[0] = Some(job);
     }

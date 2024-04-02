@@ -1,4 +1,4 @@
-use super::mutator::{Mutator, MutatorScope};
+use super::mutator::MutatorScope;
 use super::tracer::TracerController;
 use super::trace::Trace;
 use super::allocate::{Allocate, GenerationalArena};
@@ -32,6 +32,6 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
     }
 
     pub fn collect(&mut self) {
-        self.tracer.full_collection();
+        self.tracer.full_collection(self.arena.as_ref(), self.root);
     }
 }

@@ -4,7 +4,11 @@ use std::sync::{
     RwLock,
     RwLockReadGuard
 };
-use super::allocate::Allocate;
+use super::allocate::{Allocate, GenerationalArena};
+use super::Trace;
+use super::GcPtr;
+
+const WORKER_COUNT: usize = 5;
 
 pub trait Tracer {}
 impl<A: Allocate> Tracer for TracerController<A> {}
@@ -16,13 +20,9 @@ pub struct TracerController<A: Allocate> {
     // Used so that multiple mutator scopes can hold the lock,
     // but only on tracer can hold
     // tracer needs A: Allocate so that it can mark gc ptrs correctly
-    // and so that it can signal to the allocator when to begin partial or full tracing
     // unscanned objects(work) *should be divided up into work packets
-    // yield lock
-    // yield flag
     // metrics?
     // threads?
-    // how would the tracer wait 
 }
 
 impl<A: Allocate> TracerController<A> {
@@ -43,8 +43,7 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn eden_collection(&self) {
-        self.yield_flag.store(true, Ordering::Relaxed);
-        self.yield_lock.write().unwrap();
+        todo!()
         // grab
         // collect roots
         // remove yield
@@ -56,15 +55,23 @@ impl<A: Allocate> TracerController<A> {
         // remove yield
     }
 
-    pub fn full_collection(&self) {
-        // reqeust a yield
-        // collect roots
-        // remove yield
+    pub fn full_collection<G: GenerationalArena, T: Trace>(&self, arena: &G, root: GcPtr<T>) {
         // add the roots to unscanned objects
-        // spin up worker threads to go through unscanned objects
-        // once work is about gone
-        // request a yield
-        // free memory
-        // remove yield
+        // spin up worker threads
+        //
+        for i in 0..WORKER_COUNT {
+
+        }
+        let thread = std::thread::spawn(|| {
+            // get unscanned work, scan it
+            // if a work packet is filled, send it to the controller
+            // if no unscanned work left, grab one from the controller
+            // if no unscanned work from the controller, or a certain amount of time/debt has
+            // passed, then request a yield
+        });
+        thread.join().unwrap();
+        self.yield_flag.store(true, Ordering::Relaxed);
+        let _lock = self.yield_lock.write().unwrap();
+        arena.refresh();
     }
 }
