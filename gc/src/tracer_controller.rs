@@ -3,7 +3,6 @@ use super::tracer::Tracer;
 use super::tracer::TracerWorker;
 use super::GcPtr;
 use super::Trace;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -27,7 +26,6 @@ unsafe impl<T> Send for TracePacket<T> {}
 unsafe impl<T> Sync for TracePacket<T> {}
 
 pub struct TracerController<A: Allocate> {
-    _allocator: PhantomData<A>,
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
@@ -37,7 +35,6 @@ pub struct TracerController<A: Allocate> {
 impl<A: Allocate> TracerController<A> {
     pub fn new() -> Self {
         Self {
-            _allocator: PhantomData::<A>,
             yield_lock: RwLock::new(()),
             yield_flag: AtomicBool::new(false),
             unscanned: Arc::new(Mutex::new(vec![])),
