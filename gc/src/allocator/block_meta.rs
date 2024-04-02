@@ -48,7 +48,7 @@ impl BlockMeta {
     }
 
     pub fn is_marked(&self) -> bool {
-        unsafe { *self.lines.add(constants::LINE_COUNT - 1) == MARKED } 
+        unsafe { *self.lines.add(constants::LINE_COUNT - 1) == MARKED }
     }
 
     unsafe fn as_line_mark(&mut self, line: usize) -> &mut u8 {
@@ -110,8 +110,8 @@ impl BlockMeta {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::block::Block;
+    use super::*;
 
     #[test]
     fn test_mark_block() {

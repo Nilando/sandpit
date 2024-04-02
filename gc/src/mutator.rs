@@ -1,11 +1,11 @@
-use super::tracer_handle::TracerHandle;
 use super::allocate::Allocate;
+use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
 use super::tracer_controller::TracerController;
-use super::error::GcError;
-use std::sync::Arc;
+use super::tracer_handle::TracerHandle;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
@@ -18,7 +18,7 @@ pub trait Mutator {
 
 pub struct MutatorScope<A: Allocate> {
     allocator: A,
-    tracer_handle: TracerHandle<A>
+    tracer_handle: TracerHandle<A>,
 }
 
 impl<A: Allocate> MutatorScope<A> {
@@ -26,7 +26,10 @@ impl<A: Allocate> MutatorScope<A> {
         let allocator = A::new(arena);
         let tracer_handle = TracerHandle::new(tracer);
 
-        Self { allocator, tracer_handle }
+        Self {
+            allocator,
+            tracer_handle,
+        }
     }
 }
 
@@ -34,7 +37,7 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
         match self.allocator.alloc(obj) {
             Ok(ptr) => Ok(GcPtr::new(ptr)),
-            Err(_) => todo!()
+            Err(_) => todo!(),
         }
     }
 

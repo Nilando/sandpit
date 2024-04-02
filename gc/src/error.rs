@@ -1,4 +1,2 @@
 #[derive(Debug)]
-pub enum GcError {
-
-}
+pub enum GcError {}

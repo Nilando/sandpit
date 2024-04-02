@@ -1,6 +1,6 @@
-use std::ptr::NonNull;
-use super::errors::BlockError;
 use super::constants::BLOCK_SIZE;
+use super::errors::BlockError;
+use std::ptr::NonNull;
 
 pub type BlockPtr = NonNull<u8>;
 pub type BlockSize = usize;
@@ -52,8 +52,8 @@ impl Drop for Block {
 mod internal {
     use super::{BlockError, BlockPtr, BlockSize};
     use std::alloc::{alloc, dealloc, Layout};
-    use std::ptr::NonNull;
     use std::mem::size_of;
+    use std::ptr::NonNull;
     const LAYOUT: usize = size_of::<usize>();
 
     pub fn alloc_block(size: BlockSize, align: usize) -> Result<BlockPtr, BlockError> {
@@ -80,8 +80,8 @@ mod internal {
 
 #[cfg(test)]
 mod tests {
-    use std::mem::size_of;
     use super::{Block, BlockError, BlockSize};
+    use std::mem::size_of;
 
     fn alloc_dealloc(size: BlockSize) -> Result<(), BlockError> {
         let block = Block::new(size, 8)?;
@@ -114,7 +114,10 @@ mod tests {
 
     #[test]
     fn test_oom() {
-        assert_eq!(alloc_dealloc(1024 * 1024 * 1024 * 1024), Err(BlockError::OOM))
+        assert_eq!(
+            alloc_dealloc(1024 * 1024 * 1024 * 1024),
+            Err(BlockError::OOM)
+        )
     }
 
     #[test]
@@ -123,6 +126,6 @@ mod tests {
         let ptr = block.as_ptr();
         let new_block = unsafe { Block::from_raw_parts(block.into_mut_ptr(), 1024) };
         assert_eq!(ptr, new_block.as_ptr());
-        std::mem::forget(new_block); // don't dealloc 'new_block' since it already exists, and will be dropped, as 'block' 
+        std::mem::forget(new_block); // don't dealloc 'new_block' since it already exists, and will be dropped, as 'block'
     }
 }

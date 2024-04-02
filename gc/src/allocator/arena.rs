@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use super::block_store::BlockStore;
 use super::constants::BLOCK_SIZE;
 use super::header::Mark;
-use std::sync::Mutex;
 use crate::allocate::GenerationalArena;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Clone)]
 pub struct Arena {
     block_store: Arc<BlockStore>,
-    current_mark: Arc<Mutex<Mark>>
+    current_mark: Arc<Mutex<Mark>>,
 }
 
 impl Arena {
@@ -23,7 +23,7 @@ impl GenerationalArena for Arena {
     fn new() -> Self {
         Self {
             block_store: Arc::new(BlockStore::new()),
-            current_mark: Arc::new(Mutex::new(Mark::Red))
+            current_mark: Arc::new(Mutex::new(Mark::Red)),
         }
     }
 

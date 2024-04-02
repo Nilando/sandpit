@@ -1,10 +1,8 @@
-use crate::{Gc, Mutator, GcPtr, GcCell, GcCellPtr};
+use crate::{Gc, GcCell, GcCellPtr, GcPtr, Mutator};
 
 #[test]
 fn create_rooted_arena() {
-    let mut gc: Gc<usize> = Gc::build(|mutator| {
-        mutator.alloc(69).unwrap()
-    });
+    let mut gc: Gc<usize> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
     gc.mutate(|root, _| {
         assert_eq!(**root, 69);
@@ -13,9 +11,7 @@ fn create_rooted_arena() {
 
 #[test]
 fn gc_cell_swap() {
-    let mut gc: Gc<GcCell<usize>> = Gc::build(|mutator| {
-        mutator.alloc(GcCell::new(69)).unwrap()
-    });
+    let mut gc: Gc<GcCell<usize>> = Gc::build(|mutator| mutator.alloc(GcCell::new(69)).unwrap());
 
     gc.mutate(|root, _| {
         root.set(420);
@@ -37,7 +33,7 @@ fn gc_cell_write_barrier() {
         let val: usize = **(root.as_ref().unwrap());
         assert_eq!(val, 69);
 
-        root.write_barrier(mutator, new_val, |root_ref| { root_ref });
+        root.write_barrier(mutator, new_val, |root_ref| root_ref);
 
         let val: usize = **(root.as_ref().unwrap());
         assert_eq!(val, 420);

@@ -1,8 +1,8 @@
-use crate::allocate::{Allocate, GenerationalArena};
-use super::Allocator;
 use super::arena::Arena;
-use super::constants::{BLOCK_SIZE, BLOCK_CAPACITY, aligned_size};
+use super::constants::{aligned_size, BLOCK_CAPACITY, BLOCK_SIZE};
 use super::header::Header;
+use super::Allocator;
+use crate::allocate::{Allocate, GenerationalArena};
 
 #[test]
 fn hello_alloc() {
@@ -33,7 +33,10 @@ fn alloc_large() {
 
     allocator.alloc(data).unwrap();
 
-    assert_eq!(arena.get_size(), (BLOCK_SIZE * aligned_size::<usize>()) + aligned_size::<Header>());
+    assert_eq!(
+        arena.get_size(),
+        (BLOCK_SIZE * aligned_size::<usize>()) + aligned_size::<Header>()
+    );
 }
 
 #[test]

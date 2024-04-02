@@ -21,7 +21,7 @@ pub const LARGE_OBJECT_MAX: usize = MAX_ALLOC_SIZE;
 pub const ALIGN: usize = std::mem::size_of::<usize>();
 pub const fn aligned_size<T: Sized>() -> usize {
     let size = std::mem::size_of::<T>();
-    if size % ALIGN == 0 { 
+    if size % ALIGN == 0 {
         size
     } else {
         size + (ALIGN - (size % ALIGN))

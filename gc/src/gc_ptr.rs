@@ -1,6 +1,6 @@
-use std::ptr::NonNull;
 use std::cell::Cell;
 use std::ops::Deref;
+use std::ptr::NonNull;
 
 use super::mutator::Mutator;
 use super::trace::Trace;
@@ -12,7 +12,7 @@ pub struct GcPtr<T: Trace> {
 impl<T: Trace> From<GcPtr<T>> for GcCellPtr<T> {
     fn from(ptr: GcPtr<T>) -> Self {
         Self {
-            cell: Cell::new(Some(ptr.clone()))
+            cell: Cell::new(Some(ptr.clone())),
         }
     }
 }
@@ -35,7 +35,6 @@ impl<T: Trace> Deref for GcPtr<T> {
     }
 }
 
-
 impl<T: Trace> GcPtr<T> {
     pub fn new(ptr: NonNull<T>) -> Self {
         Self { ptr }
@@ -49,7 +48,7 @@ impl<T: Trace> GcPtr<T> {
         &self,
         mutator: &M,
         new_ptr: GcPtr<V>,
-        callback: fn(&T) -> &GcCellPtr<V>
+        callback: fn(&T) -> &GcCellPtr<V>,
     ) {
         let old_ptr = callback(self);
         unsafe { old_ptr.unsafe_set(mutator, new_ptr) } // safe b/c we call write_barrier after
@@ -75,7 +74,9 @@ impl<T: Trace> GcCellPtr<T> {
     }
 
     pub fn new_null() -> Self {
-        Self { cell: Cell::new(None) }
+        Self {
+            cell: Cell::new(None),
+        }
     }
 
     pub fn is_null(&self) -> bool {
@@ -109,7 +110,7 @@ impl<T: Trace> Clone for GcCellPtr<T> {
         let opt_ref = unsafe { &*self.cell.as_ptr() as &Option<GcPtr<T>> };
 
         Self {
-            cell: Cell::new(opt_ref.clone())
+            cell: Cell::new(opt_ref.clone()),
         }
     }
 }
@@ -117,7 +118,7 @@ impl<T: Trace> Clone for GcCellPtr<T> {
 impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
         Self {
-            ptr: self.ptr.clone().into()
+            ptr: self.ptr.clone().into(),
         }
     }
 }

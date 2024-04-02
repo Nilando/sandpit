@@ -1,9 +1,9 @@
-use super::mutator::MutatorScope;
-use super::tracer_controller::TracerController;
-use super::trace::Trace;
 use super::allocate::{Allocate, GenerationalArena};
-use std::sync::Arc;
 use super::gc_ptr::GcPtr;
+use super::mutator::MutatorScope;
+use super::trace::Trace;
+use super::tracer_controller::TracerController;
+use std::sync::Arc;
 
 pub struct Gc<A: Allocate, Root: Trace> {
     arena: Arc<A::Arena>,
@@ -21,7 +21,7 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
         Self {
             arena,
             tracer,
-            root
+            root,
         }
     }
 

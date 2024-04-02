@@ -1,15 +1,14 @@
+use super::allocate::{Allocate, GenerationalArena};
+use super::tracer::Tracer;
+use super::tracer::TracerWorker;
+use super::GcPtr;
+use super::Trace;
 use std::marker::PhantomData;
+use std::ptr::NonNull;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    RwLock,
-    RwLockReadGuard
+    RwLock, RwLockReadGuard,
 };
-use super::allocate::{Allocate, GenerationalArena};
-use super::Trace;
-use super::GcPtr;
-use super::tracer::TracerWorker;
-use super::tracer::Tracer;
-use std::ptr::NonNull;
 
 pub const WORK_PACKET_SIZE: usize = 420;
 pub const WORKER_COUNT: usize = 5;
@@ -31,8 +30,8 @@ pub struct TracerController<A: Allocate> {
     _allocator: PhantomData<A>,
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
-    unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>> // TODO: store in GcArray instead of vec
-    // metrics?
+    unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
+                                                              // metrics?
 }
 
 impl<A: Allocate> TracerController<A> {
@@ -41,7 +40,7 @@ impl<A: Allocate> TracerController<A> {
             _allocator: PhantomData::<A>,
             yield_lock: RwLock::new(()),
             yield_flag: AtomicBool::new(false),
-            unscanned: Arc::new(Mutex::new(vec![]))
+            unscanned: Arc::new(Mutex::new(vec![])),
         }
     }
 

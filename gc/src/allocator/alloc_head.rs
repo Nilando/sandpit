@@ -1,15 +1,15 @@
-use super::bump_block::BumpBlock;
-use super::size_class::SizeClass;
-use super::errors::AllocError;
 use super::block_store::BlockStore;
+use super::bump_block::BumpBlock;
+use super::errors::AllocError;
 use super::header::Mark;
-use std::sync::Arc;
+use super::size_class::SizeClass;
 use std::cell::Cell;
+use std::sync::Arc;
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
     overflow: Cell<Option<BumpBlock>>,
-    block_store: Arc<BlockStore>
+    block_store: Arc<BlockStore>,
 }
 
 impl Drop for AllocHead {
@@ -39,9 +39,9 @@ impl AllocHead {
         }
 
         match size_class {
-            SizeClass::Small  => self.small_alloc(alloc_size),
+            SizeClass::Small => self.small_alloc(alloc_size),
             SizeClass::Medium => self.medium_alloc(alloc_size),
-            SizeClass::Large  => self.block_store.create_large(alloc_size),
+            SizeClass::Large => self.block_store.create_large(alloc_size),
         }
     }
 
@@ -67,8 +67,7 @@ impl AllocHead {
     }
 
     fn get_new_head(&self) -> Result<(), AllocError> {
-        let new_head = 
-        match self.overflow.take() {
+        let new_head = match self.overflow.take() {
             Some(block) => block,
             None => self.block_store.get_head()?,
         };
@@ -102,7 +101,7 @@ impl AllocHead {
                 self.head.set(Some(head));
                 result
             }
-            None => None
+            None => None,
         }
     }
 
@@ -113,44 +112,67 @@ impl AllocHead {
                 self.overflow.set(Some(overflow));
                 result
             }
-            None => None
+            None => None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::constants;
+    use super::*;
 
     #[test]
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
         let mut blocks = AllocHead::new(store.clone());
 
-        blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Medium).unwrap();
+        blocks
+            .alloc(
+                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
+                SizeClass::Medium,
+            )
+            .unwrap();
         assert_eq!(store.block_count(), 1);
 
-        blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Medium).unwrap();
+        blocks
+            .alloc(
+                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
+                SizeClass::Medium,
+            )
+            .unwrap();
         assert_eq!(store.block_count(), 2);
 
-        blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Medium).unwrap();
+        blocks
+            .alloc(
+                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
+                SizeClass::Medium,
+            )
+            .unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the head
-        blocks.alloc(constants::LINE_SIZE, SizeClass::Small).unwrap();
+        blocks
+            .alloc(constants::LINE_SIZE, SizeClass::Small)
+            .unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the overflow head
-        blocks.alloc(constants::LINE_SIZE, SizeClass::Small).unwrap();
+        blocks
+            .alloc(constants::LINE_SIZE, SizeClass::Small)
+            .unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the recycle
-        blocks.alloc(constants::LINE_SIZE, SizeClass::Small).unwrap();
+        blocks
+            .alloc(constants::LINE_SIZE, SizeClass::Small)
+            .unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should need a new block
-        blocks.alloc(constants::LINE_SIZE, SizeClass::Small).unwrap();
+        blocks
+            .alloc(constants::LINE_SIZE, SizeClass::Small)
+            .unwrap();
         assert_eq!(store.block_count(), 4);
     }
 
@@ -160,7 +182,9 @@ mod tests {
         let mut blocks = AllocHead::new(store.clone());
 
         for i in 1..100 {
-            blocks.alloc(constants::BLOCK_CAPACITY, SizeClass::Medium).unwrap();
+            blocks
+                .alloc(constants::BLOCK_CAPACITY, SizeClass::Medium)
+                .unwrap();
             assert_eq!(store.block_count(), i);
         }
     }
@@ -170,13 +194,26 @@ mod tests {
         let store = Arc::new(BlockStore::new());
         let mut blocks = AllocHead::new(store.clone());
 
-        blocks.alloc(constants::BLOCK_CAPACITY - constants::LINE_SIZE, SizeClass::Small).unwrap();
-        blocks.alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium).unwrap();
-        blocks.alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium).unwrap();
+        blocks
+            .alloc(
+                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
+                SizeClass::Small,
+            )
+            .unwrap();
+        blocks
+            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
+            .unwrap();
+        blocks
+            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
+            .unwrap();
         assert_eq!(store.block_count(), 2);
 
-        blocks.alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium).unwrap();
-        blocks.alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium).unwrap();
+        blocks
+            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
+            .unwrap();
+        blocks
+            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
+            .unwrap();
         assert_eq!(store.block_count(), 3);
     }
 }

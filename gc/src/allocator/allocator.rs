@@ -1,22 +1,21 @@
-use crate::allocate::Allocate;
-use std::slice::from_raw_parts_mut;
-use super::size_class::SizeClass;
-use super::header::Mark;
-use super::errors::AllocError;
 use super::alloc_head::AllocHead;
-use super::header::Header;
-use super::constants::{ALIGN, aligned_size};
 use super::arena::Arena;
-use std::ptr::NonNull;
+use super::constants::{aligned_size, ALIGN};
+use super::errors::AllocError;
+use super::header::Header;
+use super::header::Mark;
+use super::size_class::SizeClass;
+use crate::allocate::Allocate;
 use std::ptr::write;
+use std::ptr::NonNull;
+use std::slice::from_raw_parts_mut;
 
 pub struct Allocator {
     head: AllocHead,
 }
 
 impl Allocator {
-    fn get_space(&self, size_class: SizeClass, alloc_size: usize) -> Result<*const u8, AllocError>
-    {
+    fn get_space(&self, size_class: SizeClass, alloc_size: usize) -> Result<*const u8, AllocError> {
         self.head.alloc(alloc_size, size_class)
     }
 
@@ -30,7 +29,7 @@ impl Allocator {
     }
 
     fn aligned_array_size(size: usize) -> usize {
-        if size % ALIGN == 0 { 
+        if size % ALIGN == 0 {
             size
         } else {
             size + (ALIGN - (size % ALIGN))
@@ -76,7 +75,7 @@ impl Allocate for Allocator {
             for byte in array {
                 *byte = 0;
             }
-            
+
             Ok(NonNull::new(array_space as *mut u8).unwrap())
         }
     }

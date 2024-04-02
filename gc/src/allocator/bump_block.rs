@@ -1,7 +1,7 @@
 use super::block::Block;
-use super::errors::AllocError;
 use super::block_meta::BlockMeta;
 use super::constants;
+use super::errors::AllocError;
 
 pub struct BumpBlock {
     cursor: *const u8,
@@ -25,7 +25,8 @@ impl BumpBlock {
     }
 
     pub fn reset_hole(&mut self) {
-        if let Some((cursor, limit)) = self.meta
+        if let Some((cursor, limit)) = self
+            .meta
             .find_next_available_hole(constants::BLOCK_CAPACITY, constants::SMALL_OBJECT_MIN)
         {
             self.cursor = unsafe { self.block.as_ptr().add(cursor) };
@@ -46,17 +47,17 @@ impl BumpBlock {
                 return Some(self.cursor);
             }
 
-            let block_relative_limit = unsafe { 
-                self.limit.sub(self.block.as_ptr() as usize) as usize
-            };
+            let block_relative_limit =
+                unsafe { self.limit.sub(self.block.as_ptr() as usize) as usize };
 
-            if let Some((cursor, limit)) = self.meta
+            if let Some((cursor, limit)) = self
+                .meta
                 .find_next_available_hole(block_relative_limit, alloc_size)
             {
                 self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                 self.limit = unsafe { self.block.as_ptr().add(limit) };
             } else {
-                return None
+                return None;
             }
         }
     }

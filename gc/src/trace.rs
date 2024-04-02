@@ -7,8 +7,7 @@ pub unsafe trait Trace {
     fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &T) {}
 }
 
-unsafe impl<O: Trace> Trace for Option<O> {
-}
+unsafe impl<O: Trace> Trace for Option<O> {}
 
 unsafe impl TraceLeaf for usize {}
 unsafe impl Trace for usize {}
@@ -18,7 +17,6 @@ unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {}
 
 unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {}
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {}
-
 
 // We need a type to allow for interior mutability of gc values, yet also helps
 // maintain the writer barrier when mutating nested gc refs.
@@ -33,7 +31,7 @@ unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {}
 // As well as the two traits TraceNode, TraceLeaf. Both traits are unsafe to impl
 // by hand but can safely be implemented via the macro trace.
 //
-// Now if we ever need to mutate a traceleaf type, we don't need to worry about 
+// Now if we ever need to mutate a traceleaf type, we don't need to worry about
 // the write barrier as that type contains no references.
 //
 // However, if a type is of type TraceNode, than we must make sure that updating

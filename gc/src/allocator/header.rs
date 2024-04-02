@@ -1,12 +1,15 @@
-use super::size_class::SizeClass;
 use super::constants::aligned_size;
+use super::size_class::SizeClass;
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum Mark {
-    New, Red, Green, Blue
+    New,
+    Red,
+    Green,
+    Blue,
 }
 
 impl Mark {
@@ -27,7 +30,7 @@ impl From<u8> for Mark {
             x if x == Mark::Red as u8 => Mark::Red,
             x if x == Mark::Green as u8 => Mark::Green,
             x if x == Mark::Blue as u8 => Mark::Blue,
-            _ => panic!("Bad mark")
+            _ => panic!("Bad mark"),
         }
     }
 }
@@ -35,7 +38,7 @@ impl From<u8> for Mark {
 pub struct Header {
     mark: AtomicU8,
     size_class: SizeClass, // includes header size
-    size: u16, // includes header size
+    size: u16,             // includes header size
 }
 
 impl Header {

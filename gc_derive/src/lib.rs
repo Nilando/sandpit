@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_quote, parse_macro_input, Data, DataStruct, DataEnum, DeriveInput, Fields, GenericParam, Generics};
+use syn::{
+    parse_macro_input, parse_quote, Data, DataEnum, DataStruct, DeriveInput, Fields, GenericParam,
+    Generics,
+};
 
 #[proc_macro_derive(Trace)]
 pub fn trace(input: TokenStream) -> TokenStream {
@@ -38,7 +41,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }
             })
             .collect::<Vec<_>>(),
-        _ => todo!("implement Derive(Trace) for union types")
+        _ => todo!("implement Derive(Trace) for union types"),
     };
 
     let expanded = quote! {

@@ -24,7 +24,7 @@ impl SizeClass {
             constants::SMALL_OBJECT_MIN..=constants::SMALL_OBJECT_MAX => SizeClass::Small,
             constants::MEDIUM_OBJECT_MIN..=constants::MEDIUM_OBJECT_MAX => SizeClass::Medium,
             constants::LARGE_OBJECT_MIN..=constants::LARGE_OBJECT_MAX => SizeClass::Large,
-            _ => panic!("An AllocObject's size is too large!")
+            _ => panic!("An AllocObject's size is too large!"),
         }
     }
 }

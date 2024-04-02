@@ -1,14 +1,14 @@
-mod allocator; 
 mod alloc_head;
+mod allocator;
 mod arena;
 mod block;
 mod block_meta;
+mod block_store;
 mod bump_block;
 mod constants;
-mod header;
 mod errors;
+mod header;
 mod size_class;
-mod block_store;
 
 #[cfg(test)]
 mod tests;

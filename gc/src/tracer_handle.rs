@@ -1,22 +1,22 @@
-use super::tracer_controller::{TracerController, UnscannedPtr, TracePacket};
+use super::allocate::Allocate;
 use super::trace::Trace;
 use super::tracer::TracerWorker;
-use super::allocate::Allocate;
-use std::sync::Arc;
+use super::tracer_controller::{TracePacket, TracerController, UnscannedPtr};
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 pub struct TracerHandle<A: Allocate> {
     controller: Arc<TracerController<A>>,
-    work_packet: TracePacket<TracerWorker<A>>
+    work_packet: TracePacket<TracerWorker<A>>,
 }
 
 // TODO: impl drop to send work packet to tracercontroller
 
 impl<T: Allocate> TracerHandle<T> {
     pub fn new(controller: Arc<TracerController<T>>) -> Self {
-        Self { 
+        Self {
             controller,
-            work_packet: TracePacket::new()
+            work_packet: TracePacket::new(),
         }
     }
 

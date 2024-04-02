@@ -1,12 +1,12 @@
-use super::bump_block::BumpBlock;
-use super::errors::AllocError;
-use super::constants::ALIGN;
 use super::block::Block;
+use super::bump_block::BumpBlock;
+use super::constants::ALIGN;
+use super::errors::AllocError;
 
-use std::sync::Mutex;
+use super::header::Mark;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use super::header::Mark;
+use std::sync::Mutex;
 
 pub struct BlockStore {
     block_count: AtomicUsize,
@@ -62,7 +62,8 @@ impl BlockStore {
     }
 
     pub fn count_large_space(&self) -> usize {
-        self.large.lock()
+        self.large
+            .lock()
             .unwrap()
             .iter()
             .map(|block| block.size())
@@ -82,7 +83,7 @@ impl BlockStore {
         // this should use tri color
         // reserve
         // new
-        // old 
+        // old
         //
         // partial
     }
