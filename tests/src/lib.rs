@@ -130,6 +130,8 @@ mod tests {
             }
         });
 
+        gc.collect();
+
         gc.mutate(|root, _| {
             let node = Node::find(*root, 420).unwrap();
 
