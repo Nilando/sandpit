@@ -1,8 +1,8 @@
 use super::allocate::{Allocate, GenerationalArena};
-use super::tracer_controller::{TRACE_PACKET_SIZE, TracePacket, TracerController};
+use super::tracer_controller::{TRACE_PACKET_SIZE, TracePacket};
+use super::trace::Trace;
 use std::sync::{Arc, Mutex};
 use std::ptr::NonNull;
-use super::trace::Trace;
 
 pub trait Tracer {
     fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -10,6 +10,21 @@ pub trait Tracer {
 
 impl<A: Allocate> Tracer for TracerWorker<A> {
     fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>) {
+        if A::get_mark(ptr) == self.mark { return; }
+
+        if self.new_packet.is_some() {
+            if self.new_packet.as_ref().unwrap().is_full() {
+                let packet = self.new_packet.take().unwrap();
+                self.send_packet(packet)
+            } else {
+                self.new_packet.as_mut().unwrap().push(Some((ptr.cast(), T::dyn_trace)));
+                return;
+            }
+        }
+
+        let mut packet = TracePacket::new();
+        packet.push(Some((ptr.cast(), T::dyn_trace)));
+        self.new_packet = Some(packet);
     }
 }
 
@@ -34,9 +49,24 @@ impl<A: Allocate> TracerWorker<A> {
         }
     }
 
-    pub fn trace_packet(&mut self, packet: TracePacket<TracerWorker<A>>) {
-        for i in 0..TRACE_PACKET_SIZE {
-            match packet.get(i) {
+    pub fn trace(&mut self) {
+        loop {
+            let packet = if self.new_packet.is_some() {
+                self.new_packet.take()
+            } else {
+                self.unscanned.lock().unwrap().pop()
+            };
+
+            match packet {
+                Some(packet) => self.trace_packet(packet),
+                None => break,
+            }
+        }
+    }
+
+    fn trace_packet(&mut self, mut packet: TracePacket<TracerWorker<A>>) {
+        for _ in 0..TRACE_PACKET_SIZE {
+            match packet.pop() {
                 Some((ptr, trace_fn)) => {
                     A::set_mark(ptr, self.mark);
                     trace_fn(ptr, self)
@@ -46,19 +76,7 @@ impl<A: Allocate> TracerWorker<A> {
         }
     }
 
-    pub fn trace(&mut self) {
-        loop {
-            let packet = self.unscanned.as_ref().lock().unwrap().pop();
-
-            match packet {
-                Some(packet) => self.trace_packet(packet),
-                None => {
-                    match self.new_packet.take() {
-                        Some(packet) => self.trace_packet(packet),
-                        None => break
-                    }
-                }
-            }
-        }
+    fn send_packet(&mut self, packet: TracePacket<TracerWorker<A>>) {
+        self.unscanned.lock().unwrap().push(packet);
     }
 }

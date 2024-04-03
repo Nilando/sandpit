@@ -74,17 +74,18 @@ impl BlockStore {
         let block = Block::new(alloc_size, ALIGN)?;
         let ptr = block.as_ptr();
         self.large.lock().unwrap().push_front(block);
-        // self.block_count.fetch_add(1, Ordering::SeqCst); // technically this is a block.. but
-        // really is being considered a 'large' instead
         Ok(ptr)
     }
 
-    pub fn refresh(&self) {
-        // this should use tri color
-        // reserve
-        // new
-        // old
-        //
-        // partial
+    pub fn refresh(&self, mark: Mark) {
+       for block in self.rest.lock().unwrap().iter_mut() {
+           block.reset_hole(mark);
+
+           // check if block is free or has hole?
+       }
+
+       for block in self.recycle.lock().unwrap().iter_mut() {
+           block.reset_hole(mark);
+       }
     }
 }

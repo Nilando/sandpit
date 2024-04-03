@@ -2,6 +2,7 @@ use super::block::Block;
 use super::block_meta::BlockMeta;
 use super::constants;
 use super::errors::AllocError;
+use super::header::Mark;
 
 pub struct BumpBlock {
     cursor: *const u8,
@@ -24,10 +25,10 @@ impl BumpBlock {
         Ok(block)
     }
 
-    pub fn reset_hole(&mut self) {
+    pub fn reset_hole(&mut self, mark: Mark) {
         if let Some((cursor, limit)) = self
             .meta
-            .find_next_available_hole(constants::BLOCK_CAPACITY, constants::SMALL_OBJECT_MIN)
+            .find_next_available_hole(constants::BLOCK_CAPACITY, constants::SMALL_OBJECT_MIN, mark)
         {
             self.cursor = unsafe { self.block.as_ptr().add(cursor) };
             self.limit = unsafe { self.block.as_ptr().add(limit) };
@@ -37,7 +38,7 @@ impl BumpBlock {
         }
     }
 
-    pub fn inner_alloc(&mut self, alloc_size: usize) -> Option<*const u8> {
+    pub fn inner_alloc(&mut self, alloc_size: usize, mark: Mark) -> Option<*const u8> {
         loop {
             let ptr = self.cursor as usize;
             let next_ptr = ptr.checked_sub(alloc_size)? & constants::ALLOC_ALIGN_MASK;
@@ -52,7 +53,7 @@ impl BumpBlock {
 
             if let Some((cursor, limit)) = self
                 .meta
-                .find_next_available_hole(block_relative_limit, alloc_size)
+                .find_next_available_hole(block_relative_limit, alloc_size, mark)
             {
                 self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                 self.limit = unsafe { self.block.as_ptr().add(limit) };
@@ -70,8 +71,8 @@ impl BumpBlock {
         self.meta.reset()
     }
 
-    pub fn is_marked(&self) -> bool {
-        self.meta.is_marked()
+    pub fn is_marked(&self, mark: Mark) -> bool {
+        self.meta.get_mark() == mark
     }
 }
 
@@ -87,7 +88,7 @@ mod tests {
         let mut index = 0;
 
         loop {
-            if let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE) {
+            if let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE, Mark::Red) {
                 let u32ptr = ptr as *mut u32;
 
                 assert!(!v.contains(&u32ptr));
@@ -125,7 +126,7 @@ mod tests {
         let mut b = BumpBlock::new().unwrap();
 
         for i in 0..(constants::LINE_COUNT / 2) {
-            b.meta.mark_line(i);
+            b.meta.mark_line(i, Mark::Red);
         }
         let occupied_bytes = (constants::LINE_COUNT / 2) * constants::LINE_SIZE;
 
@@ -144,7 +145,7 @@ mod tests {
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
-                b.meta.mark_line(i);
+                b.meta.mark_line(i, Mark::Red);
             }
         }
 

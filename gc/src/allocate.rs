@@ -1,4 +1,5 @@
 use std::ptr::NonNull;
+use std::fmt::Debug;
 
 pub trait Allocate {
     type Arena: GenerationalArena;
@@ -16,7 +17,7 @@ pub trait Allocate {
 }
 
 pub trait GenerationalArena {
-    type Mark: Copy + Clone;
+    type Mark: Copy + Clone + PartialEq + Eq + Debug;
 
     fn new() -> Self;
     fn refresh(&self);

@@ -10,23 +10,37 @@ use std::sync::{
 };
 
 pub const TRACE_PACKET_SIZE: usize = 100;
-pub const WORKER_COUNT: usize = 5;
+pub const WORKER_COUNT: usize = 1;
 
 pub type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &mut T));
-pub struct TracePacket<T>([Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE]);
+pub struct TracePacket<T> {
+    jobs: [Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE],
+    len: usize
+}
 use std::sync::{Arc, Mutex};
 
 impl<T: Tracer> TracePacket<T> {
     pub fn new() -> Self {
-        Self([None; TRACE_PACKET_SIZE])
+        Self {
+            jobs: [None; TRACE_PACKET_SIZE],
+            len: 0
+        }
     }
 
-    pub fn get(&self, idx: usize) -> Option<UnscannedPtr<T>> {
-        self.0[idx]
+    pub fn pop(&mut self) -> Option<UnscannedPtr<T>> {
+        if self.len == 0 { return None }
+
+        self.len -= 1;
+        self.jobs[self.len]
     }
 
-    pub fn set(&mut self, idx: usize, job: Option<UnscannedPtr<T>>) {
-        self.0[idx] = job;
+    pub fn push(&mut self, job: Option<UnscannedPtr<T>>) {
+        self.jobs[self.len] = job;
+        self.len += 1;
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.len == TRACE_PACKET_SIZE
     }
 }
 
@@ -61,7 +75,7 @@ impl<A: Allocate> TracerController<A> {
         let mut packet = TracePacket::<TracerWorker<A>>::new();
         let obj_ptr: NonNull<()> = root.as_ptr().cast();
         let job: UnscannedPtr<TracerWorker<A>> = (obj_ptr, T::dyn_trace);
-        packet.set(0, Some(job));
+        packet.push(Some(job));
         self.unscanned.lock().unwrap().push(packet);
 
         // TODO: Start a "space and time" manager

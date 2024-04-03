@@ -73,6 +73,10 @@ impl<T: Trace> GcCellPtr<T> {
         unsafe { self.unsafe_set(scope, new_ptr.downgrade()) }
     }
 
+    pub fn set_null(&self) {
+        self.cell.set(None)
+    }
+
     pub fn new_null() -> Self {
         Self {
             cell: Cell::new(None),

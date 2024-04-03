@@ -4,7 +4,7 @@ use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Mark {
     New,
     Red,

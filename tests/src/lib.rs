@@ -4,6 +4,7 @@ mod tests {
     use gc::{Gc, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
     use gc_derive::Trace;
     use std::ptr::NonNull;
+    use rand::Rng;
 
     #[derive(Trace)]
     struct Node {
@@ -23,6 +24,11 @@ mod tests {
                 right: GcCellPtr::new_null(),
                 val: GcCell::new(val),
             }
+        }
+
+        fn kill_children(this: GcPtr<Node>) {
+            this.left.set_null();
+            this.right.set_null();
         }
 
         fn set_left<M: Mutator>(this: GcPtr<Node>, mutator: &M, new_left: GcPtr<Node>) {
@@ -125,11 +131,18 @@ mod tests {
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         gc.mutate(|root, mutator| {
-            for i in 1..1_000 {
-                Node::insert(*root, mutator, i);
+            for i in 0..100_000 {
+                let num = rand::thread_rng().gen_range(0..10_000_000);
+
+                Node::insert(*root, mutator, num);
             }
+
+            Node::insert(*root, mutator, 420);
         });
 
+        gc.collect();
+        gc.collect();
+        gc.collect();
         gc.collect();
 
         gc.mutate(|root, _| {
@@ -143,11 +156,21 @@ mod tests {
     }
 
     #[test]
-    fn delete_and_collect() {
+    fn automatic_collection() {
+        assert!(true); // take this off if you want to check this works
+                       
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        // delete some stuff
+        loop {
+            gc.mutate(|root, mutator| {
+                Node::kill_children(*root);
 
-        gc.collect();
+                for _ in 0..100_000 {
+                    let num = rand::thread_rng().gen_range(0..10_000_000);
+
+                    Node::insert(*root, mutator, num);
+                }
+            });
+        }
     }
 }

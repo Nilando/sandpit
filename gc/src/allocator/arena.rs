@@ -28,7 +28,7 @@ impl GenerationalArena for Arena {
     }
 
     fn refresh(&self) {
-        self.block_store.refresh();
+        self.block_store.refresh(self.current_mark());
     }
 
     fn get_size(&self) -> usize {

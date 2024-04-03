@@ -6,7 +6,7 @@ use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
 use super::block_meta::BlockMeta;
-use crate::allocate::Allocate;
+use crate::allocate::{Allocate, GenerationalArena};
 use std::ptr::write;
 use std::ptr::NonNull;
 use std::slice::from_raw_parts_mut;
@@ -44,7 +44,7 @@ impl Allocate for Allocator {
 
     fn new(arena: &Self::Arena) -> Self {
         Self {
-            head: AllocHead::new(arena.get_block_store()),
+            head: AllocHead::new(arena.get_block_store(), arena.current_mark()),
         }
     }
 
@@ -102,6 +102,6 @@ impl Allocate for Allocator {
         if header.get_size_class() == SizeClass::Large { todo!() }
 
         header.set_mark(mark);
-        meta.mark(ptr.cast(), header.get_size_class(), header.get_size().into());
+        meta.mark(ptr.cast(), header.get_size_class(), header.get_size().into(), mark);
     }
 }

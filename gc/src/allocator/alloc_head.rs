@@ -2,6 +2,7 @@ use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
 use super::size_class::SizeClass;
+use super::header::Mark;
 use std::cell::Cell;
 use std::sync::Arc;
 
@@ -9,6 +10,7 @@ pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
     overflow: Cell<Option<BumpBlock>>,
     block_store: Arc<BlockStore>,
+    mark: Mark,
 }
 
 impl Drop for AllocHead {
@@ -24,11 +26,12 @@ impl Drop for AllocHead {
 }
 
 impl AllocHead {
-    pub fn new(block_store: Arc<BlockStore>) -> Self {
+    pub fn new(block_store: Arc<BlockStore>, mark: Mark) -> Self {
         Self {
             head: Cell::new(None),
             overflow: Cell::new(None),
             block_store,
+            mark 
         }
     }
 
@@ -96,7 +99,7 @@ impl AllocHead {
     fn head_alloc(&self, alloc_size: usize) -> Option<*const u8> {
         match self.head.take() {
             Some(mut head) => {
-                let result = head.inner_alloc(alloc_size);
+                let result = head.inner_alloc(alloc_size, self.mark);
                 self.head.set(Some(head));
                 result
             }
@@ -107,7 +110,7 @@ impl AllocHead {
     fn overflow_alloc(&self, alloc_size: usize) -> Option<*const u8> {
         match self.overflow.take() {
             Some(mut overflow) => {
-                let result = overflow.inner_alloc(alloc_size);
+                let result = overflow.inner_alloc(alloc_size, self.mark);
                 self.overflow.set(Some(overflow));
                 result
             }
@@ -124,7 +127,7 @@ mod tests {
     #[test]
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = AllocHead::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone(), Mark::Red);
 
         blocks
             .alloc(
@@ -178,7 +181,7 @@ mod tests {
     #[test]
     fn test_alloc_many_blocks() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = AllocHead::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone(), Mark::Red);
 
         for i in 1..100 {
             blocks
@@ -191,7 +194,7 @@ mod tests {
     #[test]
     fn test_alloc_into_overflow() {
         let store = Arc::new(BlockStore::new());
-        let mut blocks = AllocHead::new(store.clone());
+        let mut blocks = AllocHead::new(store.clone(), Mark::Red);
 
         blocks
             .alloc(

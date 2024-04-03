@@ -2,7 +2,7 @@ use super::constants;
 use super::errors::AllocError;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum SizeClass {
     Small,
     Medium,
