@@ -3,8 +3,8 @@ mod tests {
 
     use gc::{Gc, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
     use gc_derive::Trace;
-    use std::ptr::NonNull;
     use rand::Rng;
+    use std::ptr::NonNull;
 
     #[derive(Trace)]
     struct Node {
@@ -159,7 +159,7 @@ mod tests {
     fn automatic_collection() {
         return;
         assert!(false); // take this off if you want to check this works
-                       
+
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         loop {

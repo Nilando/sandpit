@@ -6,8 +6,7 @@ use super::Trace;
 use std::ptr::NonNull;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    RwLock, RwLockReadGuard,
-    Arc, Mutex
+    Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
 pub const WORKER_COUNT: usize = 2;
@@ -69,9 +68,7 @@ impl<A: Allocate> TracerController<A> {
                 let unscanned = self.unscanned.clone();
                 let mut worker = TracerWorker::new(unscanned, mark);
 
-                s.spawn(move || {
-                    worker.trace()
-                });
+                s.spawn(move || worker.trace());
             }
         });
     }

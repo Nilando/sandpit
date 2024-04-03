@@ -1,5 +1,5 @@
-use std::ptr::NonNull;
 use std::fmt::Debug;
+use std::ptr::NonNull;
 
 pub trait Allocate {
     type Arena: GenerationalArena;

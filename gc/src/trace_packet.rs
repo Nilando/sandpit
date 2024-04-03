@@ -1,6 +1,6 @@
-use super::tracer::Tracer;
-use super::trace::Trace;
 use super::gc_ptr::GcPtr;
+use super::trace::Trace;
+use super::tracer::Tracer;
 use std::ptr::NonNull;
 
 pub const TRACE_PACKET_SIZE: usize = 100;
@@ -8,19 +8,21 @@ pub const TRACE_PACKET_SIZE: usize = 100;
 pub type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &mut T));
 pub struct TracePacket<T> {
     jobs: [Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE],
-    len: usize
+    len: usize,
 }
 
 impl<T: Tracer> TracePacket<T> {
     pub fn new() -> Self {
         Self {
             jobs: [None; TRACE_PACKET_SIZE],
-            len: 0
+            len: 0,
         }
     }
 
     pub fn pop(&mut self) -> Option<UnscannedPtr<T>> {
-        if self.len == 0 { return None }
+        if self.len == 0 {
+            return None;
+        }
 
         self.len -= 1;
         self.jobs[self.len]

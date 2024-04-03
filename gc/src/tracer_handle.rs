@@ -1,8 +1,8 @@
 use super::allocate::Allocate;
 use super::trace::Trace;
+use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
 use super::tracer_controller::TracerController;
-use super::trace_packet::TracePacket;
 use std::sync::Arc;
 
 pub struct TracerHandle<A: Allocate> {

@@ -1,8 +1,8 @@
 use super::allocate::{Allocate, GenerationalArena};
-use super::trace_packet::{TRACE_PACKET_SIZE, TracePacket};
 use super::trace::Trace;
-use std::sync::{Arc, Mutex};
+use super::trace_packet::{TracePacket, TRACE_PACKET_SIZE};
 use std::ptr::NonNull;
+use std::sync::{Arc, Mutex};
 
 pub trait Tracer {
     fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -10,14 +10,19 @@ pub trait Tracer {
 
 impl<A: Allocate> Tracer for TracerWorker<A> {
     fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if A::get_mark(ptr) == self.mark { return; }
+        if A::get_mark(ptr) == self.mark {
+            return;
+        }
 
         if self.new_packet.is_some() {
             if self.new_packet.as_ref().unwrap().is_full() {
                 let packet = self.new_packet.take().unwrap();
                 self.send_packet(packet)
             } else {
-                self.new_packet.as_mut().unwrap().push(Some((ptr.cast(), T::dyn_trace)));
+                self.new_packet
+                    .as_mut()
+                    .unwrap()
+                    .push(Some((ptr.cast(), T::dyn_trace)));
                 return;
             }
         }
@@ -29,9 +34,9 @@ impl<A: Allocate> Tracer for TracerWorker<A> {
 }
 
 pub struct TracerWorker<A: Allocate> {
-        unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
-        mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
-        new_packet: Option<TracePacket<TracerWorker<A>>>
+    unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
+    mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
+    new_packet: Option<TracePacket<TracerWorker<A>>>,
 }
 
 unsafe impl<T: Allocate> Send for TracerWorker<T> {}
@@ -42,10 +47,10 @@ impl<A: Allocate> TracerWorker<A> {
         unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
         mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
     ) -> Self {
-        Self{ 
+        Self {
             unscanned,
             mark,
-            new_packet: None
+            new_packet: None,
         }
     }
 
@@ -70,8 +75,8 @@ impl<A: Allocate> TracerWorker<A> {
                 Some((ptr, trace_fn)) => {
                     A::set_mark(ptr, self.mark);
                     trace_fn(ptr, self)
-                },
-                None => break
+                }
+                None => break,
             }
         }
     }

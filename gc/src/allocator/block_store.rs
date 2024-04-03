@@ -78,14 +78,14 @@ impl BlockStore {
     }
 
     pub fn refresh(&self, mark: Mark) {
-       for block in self.rest.lock().unwrap().iter_mut() {
-           block.reset_hole(mark);
+        for block in self.rest.lock().unwrap().iter_mut() {
+            block.reset_hole(mark);
 
-           // check if block is free or has hole?
-       }
+            // check if block is free or has hole?
+        }
 
-       for block in self.recycle.lock().unwrap().iter_mut() {
-           block.reset_hole(mark);
-       }
+        for block in self.recycle.lock().unwrap().iter_mut() {
+            block.reset_hole(mark);
+        }
     }
 }

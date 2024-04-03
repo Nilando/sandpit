@@ -1,8 +1,8 @@
 use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
-use super::size_class::SizeClass;
 use super::header::Mark;
+use super::size_class::SizeClass;
 use std::cell::Cell;
 use std::sync::Arc;
 
@@ -31,7 +31,7 @@ impl AllocHead {
             head: Cell::new(None),
             overflow: Cell::new(None),
             block_store,
-            mark 
+            mark,
         }
     }
 
