@@ -3,20 +3,51 @@ use std::ptr::NonNull;
 
 pub unsafe trait TraceLeaf {}
 pub unsafe trait Trace {
-    fn trace<T: Tracer>(&self, tracer: &T) {}
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &T) {}
+    fn trace<T: Tracer>(&self, tracer: &mut T);
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T);
 }
 
-unsafe impl<O: Trace> Trace for Option<O> {}
+unsafe impl<O: Trace> Trace for Option<O> {
+    fn trace<T: Tracer>(&self, tracer: &mut T) {
+        match self {
+            Some(value) => value.trace(tracer),
+            None => {}
+        }
+    }
+
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {
+        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+    }
+}
 
 unsafe impl TraceLeaf for usize {}
-unsafe impl Trace for usize {}
+unsafe impl Trace for usize {
+    fn trace<T: Tracer>(&self, tracer: &mut T) {}
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {}
+}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {}
+unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {
+    fn trace<B: Tracer>(&self, tracer: &mut B) {}
+    fn dyn_trace<B: Tracer>(ptr: NonNull<()>, tracer: &mut B) {}
+}
 
-unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {}
-unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {}
+unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
+    fn trace<T: Tracer>(&self, tracer: &mut T) {
+        tracer.send_unscanned(self.as_ptr())
+    }
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {
+        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+    }
+}
+unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
+    fn trace<A: Tracer>(&self, tracer: &mut A) {
+        self.as_ptr().map(|ptr| tracer.send_unscanned(ptr));
+    }
+    fn dyn_trace<A: Tracer>(ptr: NonNull<()>, tracer: &mut A) {
+        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+    }
+}
 
 // We need a type to allow for interior mutability of gc values, yet also helps
 // maintain the writer barrier when mutating nested gc refs.

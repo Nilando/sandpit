@@ -89,6 +89,15 @@ impl<T: Trace> GcCellPtr<T> {
         !self.is_null()
     }
 
+    pub fn as_ptr(&self) -> Option<NonNull<T>> {
+        unsafe {
+            match self.cell.as_ptr().as_ref().unwrap() {
+                Some(ptr) => Some(ptr.as_ptr()),
+                None => None,
+            }
+        }
+    }
+
     // This is unsafe b/c tracing may be happening concurrently at time of swap.
     // Therefore the caller of this function must ensure either the new_ptr
     // is NOT reachable from the root by the end of this mutation scope, otherwise

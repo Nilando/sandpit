@@ -61,4 +61,12 @@ impl Header {
     pub fn swap_mark(&self, mark: Mark) -> Mark {
         self.mark.swap(mark as u8, Ordering::Relaxed).into()
     }
+
+    pub fn get_size_class(&self) -> SizeClass {
+        self.size_class
+    }
+
+    pub fn get_size(&self) -> u16 {
+        self.size
+    }
 }

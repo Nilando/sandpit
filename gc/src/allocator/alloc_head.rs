@@ -1,7 +1,6 @@
 use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
-use super::header::Mark;
 use super::size_class::SizeClass;
 use std::cell::Cell;
 use std::sync::Arc;

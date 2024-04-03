@@ -2,7 +2,6 @@ use super::allocate::Allocate;
 use super::trace::Trace;
 use super::tracer::TracerWorker;
 use super::tracer_controller::{TracePacket, TracerController, UnscannedPtr};
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 pub struct TracerHandle<A: Allocate> {
@@ -21,13 +20,11 @@ impl<T: Allocate> TracerHandle<T> {
     }
 
     pub fn send_to_unscanned<O: Trace>(&mut self, obj: &O) {
-        let obj_ptr: NonNull<()> = NonNull::from(obj).cast();
-        let job: UnscannedPtr<TracerWorker<T>> = (obj_ptr, O::dyn_trace);
-
-        //self.work_packet[0] = Some(job);
+        todo!()
     }
 
     pub fn do_work(&self) {
+        todo!()
         /*
         if let Some((ptr, trace_func)) = self.work_packet[0] {
             trace_func(ptr, &self.tracer.as_ref());

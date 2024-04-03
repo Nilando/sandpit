@@ -5,6 +5,7 @@ use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
+use super::block_meta::BlockMeta;
 use crate::allocate::Allocate;
 use std::ptr::write;
 use std::ptr::NonNull;
@@ -97,7 +98,10 @@ impl Allocate for Allocator {
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         let binding = ptr.cast();
         let header = Self::get_header(&binding);
+        let mut meta = BlockMeta::from_obj(ptr.cast());
+        if header.get_size_class() == SizeClass::Large { todo!() }
 
-        header.set_mark(mark)
+        header.set_mark(mark);
+        meta.mark(ptr.cast(), header.get_size_class(), header.get_size().into());
     }
 }

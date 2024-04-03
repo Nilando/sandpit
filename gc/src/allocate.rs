@@ -16,7 +16,7 @@ pub trait Allocate {
 }
 
 pub trait GenerationalArena {
-    type Mark: Copy + Clone + Send + Sync;
+    type Mark: Copy + Clone;
 
     fn new() -> Self;
     fn refresh(&self);

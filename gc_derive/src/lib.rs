@@ -46,11 +46,14 @@ pub fn trace(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
-            fn trace<T: gc::Tracer>(&self, tracer: &T) {
+            fn trace<T: gc::Tracer>(&self, tracer: &mut T) {
                 #(#trace_body)*
             }
-            fn dyn_trace<T: gc::Tracer>(ptr: NonNull<()>, tracer: &T) {
-                todo!()
+
+            fn dyn_trace<T: gc::Tracer>(ptr: NonNull<()>, tracer: &mut T) {
+                unsafe {
+                    ptr.cast::<#name>().as_ref().trace(tracer)
+                }
             }
         }
     };
