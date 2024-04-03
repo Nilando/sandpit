@@ -83,13 +83,6 @@ impl Allocate for Allocator {
         header.get_mark()
     }
 
-    fn swap_mark<T>(ptr: NonNull<T>, mark: Mark) -> Mark {
-        let binding = ptr.cast();
-        let header = Self::get_header(&binding);
-
-        header.swap_mark(mark)
-    }
-
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         let binding = ptr.cast();
         let header = Self::get_header(&binding);

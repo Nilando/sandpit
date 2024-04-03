@@ -1,6 +1,4 @@
-use super::constants::aligned_size;
 use super::size_class::SizeClass;
-
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
@@ -56,10 +54,6 @@ impl Header {
 
     pub fn set_mark(&self, mark: Mark) {
         self.mark.store(mark as u8, Ordering::Relaxed)
-    }
-
-    pub fn swap_mark(&self, mark: Mark) -> Mark {
-        self.mark.swap(mark as u8, Ordering::Relaxed).into()
     }
 
     pub fn get_size_class(&self) -> SizeClass {

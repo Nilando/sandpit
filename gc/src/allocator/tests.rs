@@ -2,6 +2,7 @@ use super::arena::Arena;
 use super::constants::{aligned_size, BLOCK_CAPACITY, BLOCK_SIZE};
 use super::header::Header;
 use super::Allocator;
+use super::size_class::SizeClass;
 use crate::allocate::{Allocate, GenerationalArena};
 
 #[test]
@@ -69,4 +70,13 @@ fn alloc_two_large_arrays() {
     assert_eq!(arena.get_size(), BLOCK_SIZE);
     allocator.alloc_sized((BLOCK_CAPACITY / 2) as u32).unwrap();
     assert_eq!(arena.get_size(), BLOCK_SIZE * 2);
+}
+
+#[test]
+fn clone_size_class() {
+    // this is just for test coverage
+    let foo = SizeClass::get_for_size(69);
+    let clone = foo.clone();
+
+    assert!(foo == clone);
 }

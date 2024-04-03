@@ -67,10 +67,6 @@ impl BumpBlock {
         self.cursor as usize - self.limit as usize
     }
 
-    pub fn reset_meta(&mut self) {
-        self.meta.reset()
-    }
-
     pub fn is_marked(&self, mark: Mark) -> bool {
         self.meta.get_mark() == mark
     }

@@ -1,5 +1,5 @@
 use super::allocate::{Allocate, GenerationalArena};
-use super::tracer_controller::{TRACE_PACKET_SIZE, TracePacket};
+use super::trace_packet::{TRACE_PACKET_SIZE, TracePacket};
 use super::trace::Trace;
 use std::sync::{Arc, Mutex};
 use std::ptr::NonNull;
@@ -78,5 +78,7 @@ impl<A: Allocate> TracerWorker<A> {
 
     fn send_packet(&mut self, packet: TracePacket<TracerWorker<A>>) {
         self.unscanned.lock().unwrap().push(packet);
+
+        // if we have an available worker, that is waiting, give it to them
     }
 }

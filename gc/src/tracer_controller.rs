@@ -1,5 +1,5 @@
 use super::allocate::{Allocate, GenerationalArena};
-use super::tracer::Tracer;
+use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
 use super::GcPtr;
 use super::Trace;
@@ -7,42 +7,10 @@ use std::ptr::NonNull;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     RwLock, RwLockReadGuard,
+    Arc, Mutex
 };
 
-pub const TRACE_PACKET_SIZE: usize = 100;
-pub const WORKER_COUNT: usize = 1;
-
-pub type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &mut T));
-pub struct TracePacket<T> {
-    jobs: [Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE],
-    len: usize
-}
-use std::sync::{Arc, Mutex};
-
-impl<T: Tracer> TracePacket<T> {
-    pub fn new() -> Self {
-        Self {
-            jobs: [None; TRACE_PACKET_SIZE],
-            len: 0
-        }
-    }
-
-    pub fn pop(&mut self) -> Option<UnscannedPtr<T>> {
-        if self.len == 0 { return None }
-
-        self.len -= 1;
-        self.jobs[self.len]
-    }
-
-    pub fn push(&mut self, job: Option<UnscannedPtr<T>>) {
-        self.jobs[self.len] = job;
-        self.len += 1;
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.len == TRACE_PACKET_SIZE
-    }
-}
+pub const WORKER_COUNT: usize = 2;
 
 pub struct TracerController<A: Allocate> {
     yield_flag: AtomicBool,
@@ -73,9 +41,7 @@ impl<A: Allocate> TracerController<A> {
 
         // create the first unscanned packet with the root as the only job
         let mut packet = TracePacket::<TracerWorker<A>>::new();
-        let obj_ptr: NonNull<()> = root.as_ptr().cast();
-        let job: UnscannedPtr<TracerWorker<A>> = (obj_ptr, T::dyn_trace);
-        packet.push(Some(job));
+        packet.push_gc_ptr(root);
         self.unscanned.lock().unwrap().push(packet);
 
         // TODO: Start a "space and time" manager
