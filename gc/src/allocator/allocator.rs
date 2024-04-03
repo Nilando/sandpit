@@ -24,11 +24,6 @@ impl Allocator {
         unsafe { &*(object.as_ptr() as *const Header).offset(-1) }
     }
 
-    fn get_object(header: &Header) -> NonNull<()> {
-        let obj_addr = unsafe { (header as *const Header).offset(1) as *mut () };
-        NonNull::new(obj_addr).unwrap()
-    }
-
     fn aligned_array_size(size: usize) -> usize {
         if size % ALIGN == 0 {
             size
