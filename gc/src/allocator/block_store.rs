@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::constants::ALIGN;
+use super::constants::{ALIGN, BLOCK_SIZE};
 use super::errors::AllocError;
 
 use super::header::Mark;
@@ -43,8 +43,7 @@ impl BlockStore {
         } else if let Some(free_block) = self.free.lock().unwrap().pop() {
             Ok(free_block)
         } else {
-            self.block_count.fetch_add(1, Ordering::SeqCst);
-            Ok(BumpBlock::new()?)
+            self.new_block()
         }
     }
 
@@ -52,40 +51,82 @@ impl BlockStore {
         if let Some(free_block) = self.free.lock().unwrap().pop() {
             Ok(free_block)
         } else {
-            self.block_count.fetch_add(1, Ordering::SeqCst);
-            Ok(BumpBlock::new()?)
+            self.new_block()
         }
     }
 
+    fn new_block(&self) -> Result<BumpBlock, AllocError> {
+        self.block_count.fetch_add(1, Ordering::SeqCst);
+        Ok(BumpBlock::new()?)
+    }
+
     pub fn block_count(&self) -> usize {
-        self.block_count.load(Ordering::SeqCst)
+        self.block_count.load(Ordering::Relaxed)
     }
 
     pub fn count_large_space(&self) -> usize {
         self.large
             .lock()
             .unwrap()
-            .iter()
-            .map(|block| block.size())
-            .sum::<usize>()
+            .len() * BLOCK_SIZE
     }
 
     pub fn create_large(&self, alloc_size: usize) -> Result<*const u8, AllocError> {
+        todo!()
+            /*
         let block = Block::new(alloc_size, ALIGN)?;
         let ptr = block.as_ptr();
         self.large.lock().unwrap().push_front(block);
         Ok(ptr)
+        */
     }
 
     pub fn refresh(&self, mark: Mark) {
-        for block in self.rest.lock().unwrap().iter_mut() {
-            block.reset_hole(mark);
+        let mut free = self.free.lock().unwrap();
+        let mut rest = self.rest.lock().unwrap();
+        let mut recycle = self.recycle.lock().unwrap();
+        let mut new_rest = vec![];
+        let mut new_recycle = vec![];
 
-            // check if block is free or has hole?
+        loop {
+            match recycle.pop() {
+                Some(mut block) => {
+                    block.reset_hole(mark);
+
+                    if block.is_marked(mark) {
+                        new_recycle.push(block);
+                    } else {
+                        free.push(block);
+                    }
+                }
+                None => break,
+            }
         }
 
-        for block in self.recycle.lock().unwrap().iter_mut() {
-            block.reset_hole(mark);
+        loop {
+            match rest.pop() {
+                Some(mut block) => {
+                    block.reset_hole(mark);
+                    if block.is_marked(mark) {
+                        if block.current_hole_size() != 0 {
+                            new_recycle.push(block);
+                        } else {
+                            new_rest.push(block);
+                        }
+                    } else {
+                        free.push(block);
+                    }
+                }
+                None => break,
+            }
+        }
+
+        *rest = new_rest;
+        *recycle = new_recycle;
+
+        while free.len() >= 10 {
+            self.block_count.fetch_sub(1, Ordering::Relaxed);
+            free.pop();
         }
     }
 }

@@ -150,16 +150,15 @@ mod tests {
 
             assert_eq!(node.val.get(), 420);
 
-            let node = Node::find(*root, 1_001);
+            let node = Node::find(node, 1_001);
+
             assert!(node.is_none());
         });
     }
 
+    /*
     #[test]
     fn automatic_collection() {
-        return;
-        assert!(false); // take this off if you want to check this works
-
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         loop {
@@ -172,6 +171,9 @@ mod tests {
                     Node::insert(*root, mutator, num);
                 }
             });
+
+            gc.collect();
         }
     }
+    */
 }

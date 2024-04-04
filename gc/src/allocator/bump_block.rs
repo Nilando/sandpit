@@ -13,7 +13,7 @@ pub struct BumpBlock {
 
 impl BumpBlock {
     pub fn new() -> Result<BumpBlock, AllocError> {
-        let inner_block = Block::default()?;
+        let inner_block = Block::new()?;
         let block_ptr = inner_block.as_ptr();
         let block = BumpBlock {
             cursor: unsafe { block_ptr.add(constants::BLOCK_CAPACITY) },
@@ -49,8 +49,7 @@ impl BumpBlock {
                 return Some(self.cursor);
             }
 
-            let block_relative_limit =
-                unsafe { self.limit.sub(self.block.as_ptr() as usize) as usize };
+            let block_relative_limit = self.limit as usize - self.block.as_ptr() as usize;
 
             if let Some((cursor, limit)) =
                 self.meta

@@ -1,5 +1,6 @@
 use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::cell::Cell;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -34,7 +35,7 @@ impl From<u8> for Mark {
 }
 
 pub struct Header {
-    mark: AtomicU8,
+    mark: Cell<Mark>,
     size_class: SizeClass, // includes header size
     size: u16,             // includes header size
 }
@@ -42,18 +43,18 @@ pub struct Header {
 impl Header {
     pub fn new(size_class: SizeClass, size: u16) -> Self {
         Header {
-            mark: AtomicU8::new(Mark::New as u8),
+            mark: Cell::new(Mark::New),
             size_class,
             size,
         }
     }
 
     pub fn get_mark(&self) -> Mark {
-        Mark::from(self.mark.load(Ordering::Relaxed))
+        self.mark.get()
     }
 
     pub fn set_mark(&self, mark: Mark) {
-        self.mark.store(mark as u8, Ordering::Relaxed)
+        self.mark.set(mark)
     }
 
     pub fn get_size_class(&self) -> SizeClass {

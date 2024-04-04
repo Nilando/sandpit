@@ -68,7 +68,10 @@ impl<A: Allocate> TracerController<A> {
                 let unscanned = self.unscanned.clone();
                 let mut worker = TracerWorker::new(unscanned, mark);
 
-                s.spawn(move || worker.trace());
+                let thread = s.spawn(move || worker.trace());
+                if thread.join().is_err() {
+                    panic!("A tracer panicked");
+                }
             }
         });
     }
