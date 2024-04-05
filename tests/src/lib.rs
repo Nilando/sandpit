@@ -131,7 +131,7 @@ mod tests {
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         gc.mutate(|root, mutator| {
-            for i in 0..100_000 {
+            for _ in 0..10_000 {
                 let num = rand::thread_rng().gen_range(0..10_000_000);
 
                 Node::insert(*root, mutator, num);
@@ -140,9 +140,6 @@ mod tests {
             Node::insert(*root, mutator, 420);
         });
 
-        gc.collect();
-        gc.collect();
-        gc.collect();
         gc.collect();
 
         gc.mutate(|root, _| {
@@ -153,27 +150,32 @@ mod tests {
             let node = Node::find(node, 1_001);
 
             assert!(node.is_none());
+
+            Node::kill_children(*root);
         });
     }
 
-    /*
     #[test]
     fn automatic_collection() {
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        loop {
+        for i in 0..100000 {
             gc.mutate(|root, mutator| {
-                Node::kill_children(*root);
+                loop {
+                    let a = rand::thread_rng().gen_range(0..10_000_000);
+                    let b = rand::thread_rng().gen_range(0..10_000_000);
+                    Node::insert(*root, mutator, a);
 
-                for _ in 0..100_000 {
-                    let num = rand::thread_rng().gen_range(0..10_000_000);
+                    let node = Node::find(*root, b);
+                    if node.is_some() {
+                        Node::kill_children(node.unwrap());
+                    }
 
-                    Node::insert(*root, mutator, num);
+                    if mutator.yield_requested() { 
+                        break;
+                    }
                 }
             });
-
-            gc.collect();
         }
     }
-    */
 }

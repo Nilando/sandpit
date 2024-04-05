@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn write_barrier<T: Trace>(&self, obj: NonNull<T>);
+    fn yield_requested(&mut self) -> bool;
     // fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, Self::Error>;
     // fn alloc_vec<T: Trace>(len, capacity, T) -> GcVec<T>;
     // fn alloc_grow
@@ -34,6 +35,10 @@ impl<A: Allocate> MutatorScope<A> {
 }
 
 impl<A: Allocate> Mutator for MutatorScope<A> {
+    fn yield_requested(&mut self) -> bool {
+        true
+    }
+
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
         match self.allocator.alloc(obj) {
             Ok(ptr) => Ok(GcPtr::new(ptr)),

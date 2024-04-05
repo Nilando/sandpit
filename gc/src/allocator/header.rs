@@ -1,5 +1,4 @@
 use super::size_class::SizeClass;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::cell::Cell;
 
 #[repr(u8)]
