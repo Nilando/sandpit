@@ -7,7 +7,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
-use std::ptr::NonNull;
 
 pub const WORKER_COUNT: usize = 2;
 

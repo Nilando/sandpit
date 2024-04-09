@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::constants::{ALIGN, BLOCK_SIZE};
+use super::constants::{BLOCK_SIZE};
 use super::errors::AllocError;
 
 use super::header::Mark;
