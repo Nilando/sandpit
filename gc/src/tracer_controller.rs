@@ -3,19 +3,19 @@ use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
 use super::GcPtr;
 use super::Trace;
-use std::ptr::NonNull;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
+use std::ptr::NonNull;
 
 pub const WORKER_COUNT: usize = 2;
 
 pub struct TracerController<A: Allocate> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
+    trace_flag: AtomicBool,
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
-                                                              // metrics?
 }
 
 impl<A: Allocate> TracerController<A> {
@@ -23,6 +23,7 @@ impl<A: Allocate> TracerController<A> {
         Self {
             yield_lock: RwLock::new(()),
             yield_flag: AtomicBool::new(false),
+            trace_flag: AtomicBool::new(false),
             unscanned: Arc::new(Mutex::new(vec![])),
         }
     }
@@ -36,6 +37,9 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
+        let is_tracing = self.yield_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if is_tracing.is_err() { return; }
+
         let current_mark = arena.current_mark();
 
         // create the first unscanned packet with the root as the only job
@@ -54,12 +58,20 @@ impl<A: Allocate> TracerController<A> {
         // there may be more work to do
         self.run_tracers(current_mark);
 
+        let n = arena.block_count();
         arena.refresh();
+        let b = arena.block_count();
+        println!("FREED_BLOCKS: {}", n - b);
+        self.yield_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
         arena.rotate_mark();
         self.eden_collection(arena, root);
+    }
+
+    pub fn push_packet(&self, packet: TracePacket::<TracerWorker<A>>) {
+        self.unscanned.lock().unwrap().push(packet);
     }
 
     fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {

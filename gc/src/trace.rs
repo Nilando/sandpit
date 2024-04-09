@@ -1,8 +1,8 @@
 use super::*;
 use std::ptr::NonNull;
 
-pub unsafe trait TraceLeaf {}
-pub unsafe trait Trace {
+pub unsafe trait TraceLeaf: 'static {}
+pub unsafe trait Trace: 'static {
     fn trace<T: Tracer>(&self, tracer: &mut T);
     fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T);
 }
@@ -22,14 +22,14 @@ unsafe impl<O: Trace> Trace for Option<O> {
 
 unsafe impl TraceLeaf for usize {}
 unsafe impl Trace for usize {
-    fn trace<T: Tracer>(&self, tracer: &mut T) {}
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {}
+    fn trace<T: Tracer>(&self, _tracer: &mut T) {}
+    fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _tracer: &mut T) {}
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {
-    fn trace<B: Tracer>(&self, tracer: &mut B) {}
-    fn dyn_trace<B: Tracer>(ptr: NonNull<()>, tracer: &mut B) {}
+    fn trace<B: Tracer>(&self, _tracer: &mut B) {}
+    fn dyn_trace<B: Tracer>(_ptr: NonNull<()>, _tracer: &mut B) {}
 }
 
 unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {

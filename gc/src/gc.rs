@@ -21,7 +21,9 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
     pub fn build(callback: fn(&mut MutatorScope<A>) -> GcPtr<T>) -> Self {
         let arena = Arc::new(A::Arena::new());
         let tracer = Arc::new(TracerController::<A>::new());
-        let mut scope = MutatorScope::new(arena.as_ref(), tracer.clone());
+        let binding = tracer.clone();
+        let yield_lock = binding.get_yield_lock();
+        let mut scope = MutatorScope::new(arena.as_ref(), tracer.clone(), yield_lock);
         let root = callback(&mut scope);
         let gc = Self {
             arena,
@@ -35,7 +37,8 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
     }
 
     pub fn mutate(&mut self, callback: fn(&GcPtr<T>, &mut MutatorScope<A>)) {
-        let mut scope = MutatorScope::new(self.arena.as_ref(), self.tracer.clone());
+        let yield_lock = self.tracer.get_yield_lock();
+        let mut scope = MutatorScope::new(self.arena.as_ref(), self.tracer.clone(), yield_lock);
 
         callback(&self.root, &mut scope);
     }
@@ -45,12 +48,14 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
     }
 
     fn monitor(&self) {
-        let monitor = Monitor::new(self.arena.clone());
+        let mut monitor = Monitor::new(
+            self.arena.clone(),
+            self.tracer.clone(),
+            self.root.clone()
+        );
 
-        thread::scope(|s| {
-            s.spawn(move || {
-                monitor.monitor();
-            });
+        thread::spawn(move || {
+            monitor.monitor();
         });
     }
 }

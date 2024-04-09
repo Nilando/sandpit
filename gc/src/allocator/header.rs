@@ -1,4 +1,5 @@
 use super::size_class::SizeClass;
+use crate::allocate::Marker;
 use std::cell::Cell;
 
 #[repr(u8)]
@@ -8,6 +9,12 @@ pub enum Mark {
     Red,
     Green,
     Blue,
+}
+
+impl Marker for Mark {
+    fn is_new(&self) -> bool {
+        *self == Mark::New
+    }
 }
 
 impl Mark {

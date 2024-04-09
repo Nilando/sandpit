@@ -38,6 +38,10 @@ impl GenerationalArena for Arena {
         block_space + large_space
     }
 
+    fn block_count(&self) -> usize {
+        self.block_store.block_count() + self.block_store.large_count()
+    }
+
     fn current_mark(&self) -> Self::Mark {
         *self.current_mark.lock().unwrap()
     }

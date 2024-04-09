@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::ptr::NonNull;
 
-pub trait Allocate {
+pub trait Allocate: 'static {
     type Arena: GenerationalArena;
     type Error;
 
@@ -13,11 +13,16 @@ pub trait Allocate {
 }
 
 pub trait GenerationalArena {
-    type Mark: Copy + Clone + PartialEq + Eq + Debug;
+    type Mark: Marker;
 
     fn new() -> Self;
     fn refresh(&self);
     fn get_size(&self) -> usize;
+    fn block_count(&self) -> usize;
     fn current_mark(&self) -> Self::Mark;
     fn rotate_mark(&self);
+}
+
+pub trait Marker: Copy + Clone + PartialEq + Eq + Debug {
+    fn is_new(&self) -> bool;
 }

@@ -64,6 +64,10 @@ impl BlockStore {
         self.block_count.load(Ordering::Relaxed)
     }
 
+    pub fn large_count(&self) -> usize {
+        self.large.lock().unwrap().len()
+    }
+
     pub fn count_large_space(&self) -> usize {
         self.large
             .lock()

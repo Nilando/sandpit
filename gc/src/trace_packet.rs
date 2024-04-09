@@ -6,6 +6,8 @@ use std::ptr::NonNull;
 pub const TRACE_PACKET_SIZE: usize = 100;
 
 pub type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &mut T));
+
+#[derive(Copy, Clone)]
 pub struct TracePacket<T> {
     jobs: [Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE],
     len: usize,

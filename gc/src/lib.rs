@@ -9,7 +9,6 @@ mod trace;
 mod trace_packet;
 mod tracer;
 mod tracer_controller;
-mod tracer_handle;
 mod monitor;
 
 pub use error::GcError;

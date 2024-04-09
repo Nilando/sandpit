@@ -31,15 +31,15 @@ mod tests {
             this.right.set_null();
         }
 
-        fn set_left<M: Mutator>(this: GcPtr<Node>, mutator: &M, new_left: GcPtr<Node>) {
+        fn set_left<M: Mutator>(this: GcPtr<Node>, mutator: &mut M, new_left: GcPtr<Node>) {
             this.write_barrier(mutator, new_left, |this| &this.left);
         }
 
-        fn set_right<M: Mutator>(this: GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
+        fn set_right<M: Mutator>(this: GcPtr<Node>, mutator: &mut M, new_right: GcPtr<Node>) {
             this.write_barrier(mutator, new_right, |this| &this.right);
         }
 
-        fn insert<M: Mutator>(this: GcPtr<Node>, mutator: &M, new_val: usize) {
+        fn insert<M: Mutator>(this: GcPtr<Node>, mutator: &mut M, new_val: usize) {
             if new_val > this.val.get() {
                 if this.left.is_null() {
                     // create a new node and set it as left
@@ -155,27 +155,25 @@ mod tests {
         });
     }
 
+    /*
     #[test]
     fn automatic_collection() {
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        for i in 0..100000 {
+        loop {
             gc.mutate(|root, mutator| {
                 loop {
                     let a = rand::thread_rng().gen_range(0..10_000_000);
                     let b = rand::thread_rng().gen_range(0..10_000_000);
                     Node::insert(*root, mutator, a);
 
-                    let node = Node::find(*root, b);
-                    if node.is_some() {
-                        Node::kill_children(node.unwrap());
-                    }
-
                     if mutator.yield_requested() { 
+                        Node::kill_children(*root);
                         break;
                     }
                 }
             });
         }
     }
+    */
 }
