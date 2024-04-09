@@ -155,12 +155,11 @@ mod tests {
         });
     }
 
-    /*
     #[test]
-    fn automatic_collection() {
+    fn monitor_requests_yield() {
         let mut gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        loop {
+        for i in 0..10000 {
             gc.mutate(|root, mutator| {
                 loop {
                     let a = rand::thread_rng().gen_range(0..10_000_000);
@@ -175,5 +174,4 @@ mod tests {
             });
         }
     }
-    */
 }

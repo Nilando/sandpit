@@ -113,7 +113,7 @@ mod tests {
         // A set of marked lines with a couple holes.
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
 
         meta.mark_block(Mark::Red);
@@ -127,7 +127,7 @@ mod tests {
         // A set of marked lines with a couple holes.
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
 
         meta.mark_line(0, Mark::Red);
@@ -143,7 +143,7 @@ mod tests {
         // A set of marked lines with a couple holes.
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
 
         meta.mark_line(0, Mark::Red);
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_find_next_hole_at_line_zero() {
         // Should find the hole starting at the beginning of the block
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
 
         meta.mark_line(3, Mark::Red);
@@ -189,7 +189,7 @@ mod tests {
     fn test_find_next_hole_at_block_end() {
         // The first half of the block is marked.
         // The second half of the block should be identified as a hole.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
         let halfway = constants::LINE_COUNT / 2;
 
@@ -212,7 +212,7 @@ mod tests {
     fn test_find_hole_all_conservatively_marked() {
         // Every other line is marked.
         // No hole should be found.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let mut meta = BlockMeta::new(block.as_ptr());
 
         for i in 0..constants::LINE_COUNT {
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn test_find_entire_block() {
         // No marked lines. Entire block is available.
-        let block = Block::new().unwrap();
+        let block = Block::default().unwrap();
         let meta = BlockMeta::new(block.as_ptr());
         let expect = Some((constants::BLOCK_CAPACITY, 0));
         let got = meta.find_next_available_hole(

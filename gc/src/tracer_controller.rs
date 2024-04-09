@@ -17,12 +17,6 @@ pub struct TracerController<A: Allocate> {
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
 }
 
-impl<A: Allocate> Default for TracerController<A> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<A: Allocate> TracerController<A> {
     pub fn new() -> Self {
         Self {

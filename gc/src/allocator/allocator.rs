@@ -86,17 +86,19 @@ impl Allocate for Allocator {
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         let binding = ptr.cast();
         let header = Self::get_header(&binding);
-        let mut meta = BlockMeta::from_obj(ptr.cast());
-        if header.get_size_class() == SizeClass::Large {
-            todo!()
-        }
+        let size_class = header.get_size_class();
 
         header.set_mark(mark);
-        meta.mark(
-            ptr.cast(),
-            header.get_size_class(),
-            header.get_size().into(),
-            mark,
-        );
+
+        if size_class != SizeClass::Large {
+            let mut meta = BlockMeta::from_obj(ptr.cast());
+
+            meta.mark(
+                ptr.cast(),
+                size_class,
+                header.get_size().into(),
+                mark,
+            );
+        }
     }
 }

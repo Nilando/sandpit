@@ -1,8 +1,10 @@
 use super::arena::Arena;
-use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
+use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE, ALIGN};
 use super::size_class::SizeClass;
 use super::Allocator;
 use crate::allocate::{Allocate, GenerationalArena};
+use crate::allocator::constants::aligned_size;
+use crate::allocator::header::Header;
 
 #[test]
 fn hello_alloc() {
@@ -23,7 +25,6 @@ fn hello_alloc() {
     assert_eq!(arena.get_size(), BLOCK_SIZE);
 }
 
-/*
 #[test]
 fn alloc_large() {
     let arena = Arena::new();
@@ -33,13 +34,7 @@ fn alloc_large() {
     assert_eq!(arena.get_size(), 0);
 
     allocator.alloc(data).unwrap();
-
-    assert_eq!(
-        arena.get_size(),
-        (BLOCK_SIZE * aligned_size::<usize>()) + aligned_size::<Header>()
-    );
 }
-*/
 
 #[test]
 fn alloc_many_single_bytes() {

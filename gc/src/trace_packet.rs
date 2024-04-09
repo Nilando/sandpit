@@ -13,12 +13,6 @@ pub struct TracePacket<T> {
     len: usize,
 }
 
-impl<T: Tracer> Default for TracePacket<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<T: Tracer> TracePacket<T> {
     pub fn new() -> Self {
         Self {

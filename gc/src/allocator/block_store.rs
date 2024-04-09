@@ -1,8 +1,7 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::constants::{BLOCK_SIZE};
+use super::constants::{BLOCK_SIZE, ALIGN};
 use super::errors::AllocError;
-
 use super::header::Mark;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,12 +14,6 @@ pub struct BlockStore {
     recycle: Mutex<Vec<BumpBlock>>,
     rest: Mutex<Vec<BumpBlock>>,
     large: Mutex<LinkedList<Block>>,
-}
-
-impl Default for BlockStore {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl BlockStore {
@@ -81,14 +74,12 @@ impl BlockStore {
             .len() * BLOCK_SIZE
     }
 
-    pub fn create_large(&self, alloc_size: usize) -> Result<*const u8, AllocError> {
-        todo!()
-            /*
-        let block = Block::new(alloc_size, ALIGN)?;
+    pub fn create_large(&self, size: usize) -> Result<*const u8, AllocError> {
+        let block = Block::new(size, ALIGN)?;
         let ptr = block.as_ptr();
+
         self.large.lock().unwrap().push_front(block);
         Ok(ptr)
-        */
     }
 
     pub fn refresh(&self, mark: Mark) {
@@ -117,6 +108,7 @@ impl BlockStore {
             match rest.pop() {
                 Some(mut block) => {
                     block.reset_hole(mark);
+
                     if block.is_marked(mark) {
                         if block.current_hole_size() != 0 {
                             new_recycle.push(block);

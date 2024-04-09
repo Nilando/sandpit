@@ -13,7 +13,7 @@ pub struct BumpBlock {
 
 impl BumpBlock {
     pub fn new() -> Result<BumpBlock, AllocError> {
-        let inner_block = Block::new()?;
+        let inner_block = Block::default()?;
         let block_ptr = inner_block.as_ptr();
         let block = BumpBlock {
             cursor: unsafe { block_ptr.add(constants::BLOCK_CAPACITY) },
