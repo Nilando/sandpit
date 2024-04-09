@@ -51,7 +51,7 @@ impl<A: Allocate, T: Trace> Gc<A, T> {
         let mut monitor = Monitor::new(
             self.arena.clone(),
             self.tracer.clone(),
-            self.root.clone()
+            self.root
         );
 
         thread::spawn(move || {

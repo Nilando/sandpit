@@ -12,7 +12,7 @@ pub struct GcPtr<T: Trace> {
 impl<T: Trace> From<GcPtr<T>> for GcCellPtr<T> {
     fn from(ptr: GcPtr<T>) -> Self {
         Self {
-            cell: Cell::new(Some(ptr.clone())),
+            cell: Cell::new(Some(ptr)),
         }
     }
 }
@@ -23,7 +23,7 @@ pub struct StrongGcPtr<'a, T: Trace> {
 
 impl<'a, T: Trace> StrongGcPtr<'a, T> {
     fn downgrade(self) -> GcPtr<T> {
-        self.ptr.clone()
+        *self.ptr
     }
 }
 
@@ -41,7 +41,7 @@ impl<T: Trace> GcPtr<T> {
     }
 
     pub fn as_ptr(&self) -> NonNull<T> {
-        self.ptr.clone()
+        self.ptr
     }
 
     pub fn write_barrier<V: Trace, M: Mutator>(
@@ -95,10 +95,7 @@ impl<T: Trace> GcCellPtr<T> {
 
     pub fn as_ptr(&self) -> Option<NonNull<T>> {
         unsafe {
-            match self.cell.as_ptr().as_ref().unwrap() {
-                Some(ptr) => Some(ptr.as_ptr()),
-                None => None,
-            }
+            self.cell.as_ptr().as_ref().unwrap().as_ref().map(|ptr| ptr.as_ptr())
         }
     }
 
@@ -123,7 +120,7 @@ impl<T: Trace> Clone for GcCellPtr<T> {
         let opt_ref = unsafe { &*self.cell.as_ptr() as &Option<GcPtr<T>> };
 
         Self {
-            cell: Cell::new(opt_ref.clone()),
+            cell: Cell::new(*opt_ref),
         }
     }
 }
@@ -131,7 +128,7 @@ impl<T: Trace> Clone for GcCellPtr<T> {
 impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
         Self {
-            ptr: self.ptr.clone().into(),
+            ptr: self.ptr,
         }
     }
 }

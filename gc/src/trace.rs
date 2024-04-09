@@ -42,7 +42,7 @@ unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
 }
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
     fn trace<A: Tracer>(&self, tracer: &mut A) {
-        self.as_ptr().map(|ptr| tracer.send_unscanned(ptr));
+        if let Some(ptr) = self.as_ptr() { tracer.send_unscanned(ptr) }
     }
     fn dyn_trace<A: Tracer>(ptr: NonNull<()>, tracer: &mut A) {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }

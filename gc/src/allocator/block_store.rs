@@ -17,6 +17,12 @@ pub struct BlockStore {
     large: Mutex<LinkedList<Block>>,
 }
 
+impl Default for BlockStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlockStore {
     pub fn new() -> Self {
         Self {
@@ -57,7 +63,7 @@ impl BlockStore {
 
     fn new_block(&self) -> Result<BumpBlock, AllocError> {
         self.block_count.fetch_add(1, Ordering::SeqCst);
-        Ok(BumpBlock::new()?)
+        BumpBlock::new()
     }
 
     pub fn block_count(&self) -> usize {

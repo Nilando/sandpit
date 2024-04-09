@@ -47,7 +47,7 @@ fn alloc_many_single_bytes() {
     let allocator = Allocator::new(&arena);
 
     for _ in 0..100_000 {
-        let ptr = allocator.alloc(3 as u8).unwrap();
+        let ptr = allocator.alloc(3_u8).unwrap();
         unsafe {
             let val = ptr.as_ref();
             assert_eq!(*val, 3);

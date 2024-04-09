@@ -40,7 +40,7 @@ impl<'a, A: Allocate + 'a> MutatorScope<'a, A> {
 
 impl<'a, A: Allocate> Drop for MutatorScope<'a, A> {
     fn drop(&mut self) {
-        self.new_packet.take().map(|packet| self.tracer_controller.push_packet(packet));
+        if let Some(packet) = self.new_packet.take() { self.tracer_controller.push_packet(packet) }
     }
 }
 

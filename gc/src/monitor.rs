@@ -52,12 +52,12 @@ impl<A: Allocate, R: Trace> Monitor<A, R> {
     }
 
     fn calculate_debt(&mut self) {
-        self.debt = self.debt * DEBT_INTEREST_RATE;
+        self.debt *= DEBT_INTEREST_RATE;
 
         if self.prev_block_count < self.arena.block_count() {
             let new_debt = self.arena.block_count() - self.prev_block_count;
 
-            self.debt = self.debt + new_debt as f64;
+            self.debt += new_debt as f64;
         }
     }
 
