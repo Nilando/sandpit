@@ -18,33 +18,31 @@ pub trait Mutator {
     // fn alloc_shrink
 }
 
-pub struct MutatorScope<'a, A: Allocate + 'a> {
+pub struct MutatorScope<A: Allocate> {
     allocator: A,
     tracer_controller: Arc<TracerController<A>>,
-    yield_lock: RwLockReadGuard<'a, ()>,
     new_packet: Option<TracePacket<TracerWorker<A>>>,
 }
 
-impl<'a, A: Allocate + 'a> MutatorScope<'a, A> {
-    pub fn new(arena: &A::Arena, tracer_controller: Arc<TracerController<A>>, yield_lock: RwLockReadGuard<'a, ()>) -> Self {
+impl<A: Allocate> MutatorScope<A> {
+    pub fn new(arena: &A::Arena, tracer_controller: Arc<TracerController<A>>) -> Self {
         let allocator = A::new(arena);
 
         Self {
             allocator,
-            tracer_controller: tracer_controller.clone(),
-            yield_lock,
+            tracer_controller,
             new_packet: None,
         }
     }
 }
 
-impl<'a, A: Allocate> Drop for MutatorScope<'a, A> {
+impl<A: Allocate> Drop for MutatorScope<A> {
     fn drop(&mut self) {
         if let Some(packet) = self.new_packet.take() { self.tracer_controller.push_packet(packet) }
     }
 }
 
-impl<'a, A: Allocate> Mutator for MutatorScope<'a, A> {
+impl<A: Allocate> Mutator for MutatorScope<A> {
     fn yield_requested(&mut self) -> bool {
         self.tracer_controller.get_yield_flag()
     }

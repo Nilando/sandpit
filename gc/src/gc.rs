@@ -1,61 +1,43 @@
 use super::allocate::{Allocate, GenerationalArena};
 use super::gc_ptr::GcPtr;
-use super::mutator::MutatorScope;
-use super::trace::Trace;
-use super::tracer_controller::TracerController;
 use super::monitor::Monitor;
-
+use super::collector::{Collect, GcController};
 use std::sync::Arc;
-use std::thread;
 
-pub struct Gc<A: Allocate, Root: Trace> {
-    arena: Arc<A::Arena>,
-    tracer: Arc<TracerController<A>>,
-    root: GcPtr<Root>,
+pub struct Gc<C: GcController, M: Monitor> {
+    controller: Arc<C>,
+    monitor: Arc<M>,
+    // config: Config
 }
 
-unsafe impl<T: Allocate, Root: Trace + Send> Send for Gc<T, Root> {}
-unsafe impl<T: Allocate, Root: Trace + Sync> Sync for Gc<T, Root> {}
+unsafe impl<C: GcController + Send, M: Monitor> Send for Gc<C, M> {}
+unsafe impl<C: GcController + Sync, M: Monitor> Sync for Gc<C, M> {}
 
-impl<A: Allocate, T: Trace> Gc<A, T> {
-    pub fn build(callback: fn(&mut MutatorScope<A>) -> GcPtr<T>) -> Self {
-        let arena = Arc::new(A::Arena::new());
-        let tracer = Arc::new(TracerController::<A>::new());
-        let binding = tracer.clone();
-        let yield_lock = binding.get_yield_lock();
-        let mut scope = MutatorScope::new(arena.as_ref(), tracer.clone(), yield_lock);
-        let root = callback(&mut scope);
-        let gc = Self {
-            arena,
-            tracer,
-            root,
-        };
+impl<C: GcController, M: Monitor> Gc<C, M> {
+    pub fn build<'a>(callback: fn(&mut C::Mutator) -> GcPtr<C::Root>) -> Self {
+        let controller = Arc::new(C::build(callback));
+        let monitor = Arc::new(M::new(controller.clone()));
 
-        gc.monitor();
-
-        gc
+        Self { controller, monitor }
     }
 
-    pub fn mutate(&mut self, callback: fn(&GcPtr<T>, &mut MutatorScope<A>)) {
-        let yield_lock = self.tracer.get_yield_lock();
-        let mut scope = MutatorScope::new(self.arena.as_ref(), self.tracer.clone(), yield_lock);
-
-        callback(&self.root, &mut scope);
+    pub fn mutate(&mut self, callback: fn(GcPtr<C::Root>, &mut C::Mutator)) {
+        self.controller.mutate(callback);
     }
 
     pub fn collect(&mut self) {
-        self.tracer.full_collection(self.arena.as_ref(), self.root);
+        self.controller.collect();
     }
 
-    fn monitor(&self) {
-        let mut monitor = Monitor::new(
-            self.arena.clone(),
-            self.tracer.clone(),
-            self.root
-        );
+    pub fn eden_collect(&mut self) {
+        self.controller.eden_collect();
+    }
 
-        thread::spawn(move || {
-            monitor.monitor();
-        });
+    pub fn start_monitor(&mut self) {
+        self.monitor.start();
+    }
+
+    pub fn stop_monitor(&mut self) {
+        self.monitor.stop();
     }
 }

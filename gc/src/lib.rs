@@ -10,6 +10,7 @@ mod trace_packet;
 mod tracer;
 mod tracer_controller;
 mod monitor;
+mod collector;
 
 pub use error::GcError;
 pub use gc_cell::GcCell;
@@ -18,7 +19,7 @@ pub use mutator::Mutator;
 pub use trace::Trace;
 pub use tracer::Tracer;
 
-pub type Gc<T> = gc::Gc<allocator::Allocator, T>;
+pub type Gc<T> = gc::Gc<collector::Controller<allocator::Allocator, T>, monitor::MonitorController>;
 
 #[cfg(test)]
 mod test;

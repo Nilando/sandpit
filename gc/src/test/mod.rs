@@ -5,7 +5,7 @@ fn create_rooted_arena() {
     let mut gc: Gc<usize> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
     gc.mutate(|root, _| {
-        assert_eq!(**root, 69);
+        assert_eq!(*root, 69);
     });
 }
 
