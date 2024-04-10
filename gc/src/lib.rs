@@ -4,6 +4,7 @@ mod error;
 mod gc;
 mod gc_cell;
 mod gc_ptr;
+mod gc_array;
 mod mutator;
 mod trace;
 mod trace_packet;

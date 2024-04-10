@@ -5,6 +5,8 @@ use super::gc_ptr::GcPtr;
 use super::tracer_controller::TracerController;
 use std::sync::Arc;
 
+// Collect is moved into a separate trait from the GcController, so that the monitor can work with
+// a dynamic Collect type without needing to define the associated types of root and mutator
 pub trait Collect: 'static {
     fn collect(&self);
     fn eden_collect(&self);
@@ -19,6 +21,8 @@ pub trait GcController: Collect {
     fn mutate(&self, callback: fn(GcPtr<Self::Root>, &mut Self::Mutator));
 }
 
+unsafe impl<A: Allocate, T: Trace + Send> Send for Controller<A, T> {}
+unsafe impl<A: Allocate, T: Trace + Sync> Sync for Controller<A, T> {}
 
 pub struct Controller<A: Allocate, T: Trace> {
     arena: Arc<A::Arena>,

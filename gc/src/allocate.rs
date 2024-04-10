@@ -18,7 +18,6 @@ pub trait GenerationalArena {
     fn new() -> Self;
     fn refresh(&self);
     fn get_size(&self) -> usize;
-    fn block_count(&self) -> usize;
     fn current_mark(&self) -> Self::Mark;
     fn rotate_mark(&self);
 }

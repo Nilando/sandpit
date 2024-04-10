@@ -9,3 +9,17 @@ edition = "2021"
 gc_derive = { path = "../gc_derive" }
 gc = { path = "../gc" }
 rand = "0.8.5"
+
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true
+
+[[bench]]
+name = "node_bench"
+harness = false

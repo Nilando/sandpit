@@ -8,7 +8,7 @@ use std::sync::{
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
-pub const WORKER_COUNT: usize = 2;
+pub const WORKER_COUNT: usize = 1;
 
 pub struct TracerController<A: Allocate> {
     yield_flag: AtomicBool,
@@ -44,8 +44,13 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
+        let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if is_tracing.is_err() { return; }
+
         arena.rotate_mark();
         self.eden_collection(arena, root);
+
+        self.trace_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn push_packet(&self, packet: TracePacket::<TracerWorker<A>>) {
@@ -77,6 +82,11 @@ impl<A: Allocate> TracerController<A> {
 
     fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
         // TODO: better divide work between threads
+        let unscanned = self.unscanned.clone();
+        let mut worker = TracerWorker::new(unscanned, mark);
+
+        worker.trace();
+        /*
         std::thread::scope(|s| {
             for _ in 0..WORKER_COUNT {
                 let unscanned = self.unscanned.clone();
@@ -84,9 +94,11 @@ impl<A: Allocate> TracerController<A> {
 
                 let thread = s.spawn(move || worker.trace());
                 if thread.join().is_err() {
+                    println!("tracer panicked");
                     panic!("A tracer panicked");
                 }
             }
         });
+        */
     }
 }

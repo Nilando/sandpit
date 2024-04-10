@@ -5,11 +5,13 @@ use super::trace::Trace;
 use super::tracer::TracerWorker;
 use super::trace_packet::TracePacket;
 use super::tracer_controller::TracerController;
+use super::gc_array::GcArray;
 use std::ptr::NonNull;
-use std::sync::{Arc, RwLockReadGuard};
+use std::sync::Arc;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
+    fn alloc_array<T: Trace>(&self, n: usize) -> Result<GcArray<T>, GcError>;
     fn write_barrier<T: Trace>(&mut self, obj: NonNull<T>);
     fn yield_requested(&mut self) -> bool;
     // fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, Self::Error>;
@@ -50,6 +52,18 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
         match self.allocator.alloc(obj) {
             Ok(ptr) => Ok(GcPtr::new(ptr)),
+            Err(_) => todo!(),
+        }
+    }
+
+    fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError> {
+        let alloc_size = std::mem::size_of::<T>() * capacity;
+
+        match self.allocator.alloc_sized(alloc_size as u32) {
+            Ok(ptr) => {
+                let ptr: GcPtr<T> = GcPtr::new(ptr.cast());
+                Ok(GcArray::new(ptr.into(), 0, capacity))
+            }
             Err(_) => todo!(),
         }
     }

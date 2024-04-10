@@ -4,7 +4,14 @@ use std::ptr::NonNull;
 pub unsafe trait TraceLeaf: 'static {}
 pub unsafe trait Trace: 'static {
     fn trace<T: Tracer>(&self, tracer: &mut T);
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T);
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) where Self: Sized {
+        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+    }
+}
+
+unsafe impl<T: TraceLeaf> Trace for T {
+    fn trace<A: Tracer>(&self, _tracer: &mut A) {}
+    fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {}
 }
 
 unsafe impl<O: Trace> Trace for Option<O> {
@@ -14,38 +21,25 @@ unsafe impl<O: Trace> Trace for Option<O> {
             None => {}
         }
     }
-
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {
-        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
-    }
 }
 
 unsafe impl TraceLeaf for usize {}
-unsafe impl Trace for usize {
-    fn trace<T: Tracer>(&self, _tracer: &mut T) {}
-    fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _tracer: &mut T) {}
-}
-
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for gc_cell::GcCell<T> {
-    fn trace<B: Tracer>(&self, _tracer: &mut B) {}
-    fn dyn_trace<B: Tracer>(_ptr: NonNull<()>, _tracer: &mut B) {}
-}
 
 unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
     fn trace<T: Tracer>(&self, tracer: &mut T) {
         tracer.send_unscanned(self.as_ptr())
-    }
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) {
-        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
     }
 }
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
     fn trace<A: Tracer>(&self, tracer: &mut A) {
         if let Some(ptr) = self.as_ptr() { tracer.send_unscanned(ptr) }
     }
-    fn dyn_trace<A: Tracer>(ptr: NonNull<()>, tracer: &mut A) {
-        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+}
+
+unsafe impl<T: Trace> Trace for gc_array::GcArray<T> {
+    fn trace<A: Tracer>(&self, tracer: &mut A) {
+        todo!()
     }
 }
 

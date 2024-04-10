@@ -6,7 +6,7 @@ use std::sync::Arc;
 pub struct Gc<C: GcController, M: Monitor> {
     controller: Arc<C>,
     monitor: Arc<M>,
-    // config: Config
+    // TODO: config: Config
 }
 
 unsafe impl<C: GcController + Send, M: Monitor> Send for Gc<C, M> {}
@@ -26,23 +26,23 @@ impl<C: GcController, M: Monitor> Gc<C, M> {
         Self { controller, monitor }
     }
 
-    pub fn mutate(&mut self, callback: fn(GcPtr<C::Root>, &mut C::Mutator)) {
+    pub fn mutate(&self, callback: fn(GcPtr<C::Root>, &mut C::Mutator)) {
         self.controller.mutate(callback);
     }
 
-    pub fn collect(&mut self) {
+    pub fn collect(&self) {
         self.controller.collect();
     }
 
-    pub fn eden_collect(&mut self) {
+    pub fn eden_collect(&self) {
         self.controller.eden_collect();
     }
 
-    pub fn start_monitor(&mut self) {
+    pub fn start_monitor(&self) {
         self.monitor.start();
     }
 
-    pub fn stop_monitor(&mut self) {
+    pub fn stop_monitor(&self) {
         self.monitor.stop();
     }
 }
