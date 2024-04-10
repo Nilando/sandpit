@@ -1,7 +1,6 @@
-use super::allocate::{Allocate, GenerationalArena};
 use super::gc_ptr::GcPtr;
 use super::monitor::Monitor;
-use super::collector::{Collect, GcController};
+use super::collector::GcController;
 use std::sync::Arc;
 
 pub struct Gc<C: GcController, M: Monitor> {
@@ -20,7 +19,7 @@ impl<C: GcController, M: Monitor> Drop for Gc<C, M> {
 }
 
 impl<C: GcController, M: Monitor> Gc<C, M> {
-    pub fn build<'a>(callback: fn(&mut C::Mutator) -> GcPtr<C::Root>) -> Self {
+    pub fn build(callback: fn(&mut C::Mutator) -> GcPtr<C::Root>) -> Self {
         let controller = Arc::new(C::build(callback));
         let monitor = Arc::new(M::new(controller.clone()));
 
