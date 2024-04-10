@@ -36,32 +36,11 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
-        let is_tracing = self.yield_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
         if is_tracing.is_err() { return; }
 
-        let current_mark = arena.current_mark();
-
-        // create the first unscanned packet with the root as the only job
-        let mut packet = TracePacket::<TracerWorker<A>>::new();
-        packet.push_gc_ptr(root);
-        self.unscanned.lock().unwrap().push(packet);
-
-        // TODO: Start a "space and time" manager
-        // ie we need a way to request a yield in case tracing is taking too long
-
-        self.run_tracers(current_mark);
-        self.yield_flag.store(true, Ordering::Relaxed);
-        let _lock = self.yield_lock.write().unwrap();
-
-        // we need to trace again, b/c now that the tracer handles have been dropped,
-        // there may be more work to do
-        self.run_tracers(current_mark);
-
-        let n = arena.block_count();
-        arena.refresh();
-        let b = arena.block_count();
-        println!("FREED_BLOCKS: {}", n - b);
-        self.yield_flag.store(false, Ordering::SeqCst);
+        self.trace(arena, root);
+        self.trace_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
@@ -73,7 +52,31 @@ impl<A: Allocate> TracerController<A> {
         self.unscanned.lock().unwrap().push(packet);
     }
 
+    fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
+        self.init_unscanned(root);
+        self.run_tracers(arena.current_mark());
+        self.final_trace(arena);
+    }
+
+    fn final_trace(&self, arena: &<A as Allocate>::Arena) {
+        self.yield_flag.store(true, Ordering::SeqCst);
+        let _lock = self.yield_lock.write().unwrap();
+
+        self.run_tracers(arena.current_mark());
+        arena.refresh();
+
+        self.yield_flag.store(false, Ordering::SeqCst);
+    }
+
+    fn init_unscanned<T: Trace>(&self, root: GcPtr<T>) {
+        let mut packet = TracePacket::<TracerWorker<A>>::new();
+
+        packet.push_gc_ptr(root);
+        self.unscanned.lock().unwrap().push(packet);
+    }
+
     fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
+        // TODO: better divide work between threads
         std::thread::scope(|s| {
             for _ in 0..WORKER_COUNT {
                 let unscanned = self.unscanned.clone();

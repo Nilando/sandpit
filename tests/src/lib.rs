@@ -161,19 +161,16 @@ mod tests {
 
         gc.start_monitor();
 
-        for i in 0..10000 {
-            gc.mutate(|root, mutator| {
-                loop {
-                    let a = rand::thread_rng().gen_range(0..10_000_000);
-                    let b = rand::thread_rng().gen_range(0..10_000_000);
-                    Node::insert(root, mutator, a);
+        gc.mutate(|root, mutator| {
+            loop {
+                let a = rand::thread_rng().gen_range(0..10_000_000);
+                Node::insert(root, mutator, a);
 
-                    if mutator.yield_requested() { 
-                        Node::kill_children(root);
-                        break;
-                    }
+                if mutator.yield_requested() { 
+                    Node::kill_children(root);
+                    break;
                 }
-            });
-        }
+            }
+        });
     }
 }

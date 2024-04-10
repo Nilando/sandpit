@@ -22,14 +22,14 @@ struct MonitorWorker {
 }
 
 struct MonitorMetrics {
-    prev_block_count: usize,
+    prev_arena_size: usize,
     debt: f64
 }
 
 impl MonitorMetrics {
     fn new() -> Self {
         Self {
-            prev_block_count: 0,
+            prev_arena_size: 0,
             debt: 0.0
         }
     }
@@ -50,7 +50,7 @@ impl MonitorWorker {
 unsafe impl Send for MonitorWorker {}
 unsafe impl Sync for MonitorWorker {}
 
-const DEBT_CEILING: f64 = 10.0;
+const DEBT_CEILING: f64 = 32_000.0 * 10.0;
 const DEBT_INTEREST_RATE: f64 = 1.5;
 
 impl Monitor for MonitorController {
@@ -84,13 +84,14 @@ impl MonitorWorker {
             let mut metrics = self.metrics.lock().unwrap();
             metrics.debt *= DEBT_INTEREST_RATE;
 
-            if metrics.prev_block_count < self.collector.arena_size() {
-                let new_debt = self.collector.arena_size() - metrics.prev_block_count;
+            if metrics.prev_arena_size < self.collector.arena_size() {
+                let new_debt = self.collector.arena_size() - metrics.prev_arena_size;
 
                 metrics.debt += new_debt as f64;
             }
 
             if metrics.debt >= DEBT_CEILING {
+                println!("STARTING COLLECTION");
                 self.collector.collect();
                 metrics.debt = 0.0;
             }
