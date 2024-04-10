@@ -13,6 +13,12 @@ pub struct Gc<C: GcController, M: Monitor> {
 unsafe impl<C: GcController + Send, M: Monitor> Send for Gc<C, M> {}
 unsafe impl<C: GcController + Sync, M: Monitor> Sync for Gc<C, M> {}
 
+impl<C: GcController, M: Monitor> Drop for Gc<C, M> {
+    fn drop(&mut self) {
+        self.stop_monitor()
+    }
+}
+
 impl<C: GcController, M: Monitor> Gc<C, M> {
     pub fn build<'a>(callback: fn(&mut C::Mutator) -> GcPtr<C::Root>) -> Self {
         let controller = Arc::new(C::build(callback));
