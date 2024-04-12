@@ -1,6 +1,6 @@
 use super::size_class::SizeClass;
 use crate::allocate::Marker;
-use std::cell::Cell;
+use std::cell::UnsafeCell;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -41,7 +41,7 @@ impl From<u8> for Mark {
 }
 
 pub struct Header {
-    mark: Cell<Mark>,
+    mark: UnsafeCell<Mark>,
     size_class: SizeClass, // includes header size
     size: u16,             // includes header size
 }
@@ -49,18 +49,18 @@ pub struct Header {
 impl Header {
     pub fn new(size_class: SizeClass, size: u16) -> Self {
         Header {
-            mark: Cell::new(Mark::New),
+            mark: UnsafeCell::new(Mark::New),
             size_class,
             size,
         }
     }
 
     pub fn get_mark(&self) -> Mark {
-        self.mark.get()
+        unsafe { *self.mark.get() }
     }
 
     pub fn set_mark(&self, mark: Mark) {
-        self.mark.set(mark)
+        unsafe { *self.mark.get() = mark }
     }
 
     pub fn get_size_class(&self) -> SizeClass {

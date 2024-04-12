@@ -211,20 +211,18 @@ mod tests {
             }
         });
     }
-
     #[test]
     fn bench() {
-        let gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+        let gc: Gc<Node> = Gc::build(|mutator| {
+            let root = Node::alloc(mutator, 0).unwrap();
+            for _ in 0..100_000 {
+                Node::insert_rand(root, mutator);
+            }
 
-        for _ in 0..1000000 {
-            gc.mutate(|root, mutator| {
-                Node::kill_children(root);
+            root
+        });
 
-                for _ in 0..1000 {
-                    Node::insert_rand(root, mutator);
-                }
-            });
-
+        for _ in 0..100 {
             gc.collect();
         }
     }

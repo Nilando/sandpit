@@ -21,7 +21,12 @@ impl Allocator {
     }
 
     fn get_header(object: &NonNull<()>) -> &Header {
-        unsafe { &*(object.as_ptr() as *const Header).offset(-1) }
+        unsafe {
+            let ptr = object.as_ptr().cast::<u8>();
+            let header_ptr = ptr.sub(aligned_size::<Header>()) as *mut Header;
+
+            &*header_ptr
+        }
     }
 
     fn aligned_array_size(size: usize) -> usize {

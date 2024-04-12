@@ -3,18 +3,17 @@ use tests::Node;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 fn bench() {
-    let gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+    let gc: Gc<Node> = Gc::build(|mutator| {
+        let root = Node::alloc(mutator, 0).unwrap();
+        for _ in 0..100_000 {
+            Node::insert_rand(root, mutator);
+        }
 
-    for _ in 0..10 {
-        gc.mutate(|root, mutator| {
-            Node::kill_children(root);
+        root
+    });
 
-            for _ in 0..10_000 {
-                Node::insert_rand(root, mutator);
-            }
-        });
-
-        //gc.collect();
+    for _ in 0..100 {
+        gc.collect();
     }
 }
 

@@ -91,7 +91,6 @@ impl MonitorWorker {
             }
 
             if metrics.debt >= DEBT_CEILING {
-                println!("STARTING COLLECTION");
                 self.collector.collect();
                 metrics.debt = 0.0;
             }

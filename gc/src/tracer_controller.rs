@@ -8,11 +8,9 @@ use std::sync::{
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
-pub const WORKER_COUNT: usize = 1;
-
 pub struct TracerController<A: Allocate> {
-    yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
+    yield_flag: AtomicBool,
     trace_flag: AtomicBool,
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
 }
@@ -48,8 +46,7 @@ impl<A: Allocate> TracerController<A> {
         if is_tracing.is_err() { return; }
 
         arena.rotate_mark();
-        self.eden_collection(arena, root);
-
+        self.trace(arena, root);
         self.trace_flag.store(false, Ordering::SeqCst);
     }
 
@@ -81,11 +78,12 @@ impl<A: Allocate> TracerController<A> {
     }
 
     fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
-        // TODO: better divide work between threads
         let unscanned = self.unscanned.clone();
         let mut worker = TracerWorker::new(unscanned, mark);
 
         worker.trace();
+
+        // TODO: better divide work between threads
         /*
         std::thread::scope(|s| {
             for _ in 0..WORKER_COUNT {
