@@ -42,8 +42,8 @@ impl From<u8> for Mark {
 
 pub struct Header {
     mark: UnsafeCell<Mark>,
-    size_class: SizeClass, // includes header size
-    size: u16,             // includes header size
+    size_class: SizeClass,
+    size: u16,
 }
 
 impl Header {

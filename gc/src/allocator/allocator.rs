@@ -50,6 +50,7 @@ impl Allocate for Allocator {
 
     fn alloc<T>(&self, object: T) -> Result<NonNull<T>, AllocError> {
         let alloc_size = aligned_size::<Header>() + aligned_size::<T>();
+
         let size_class = SizeClass::get_for_size(alloc_size)?;
         let header = Header::new(size_class, alloc_size as u16);
         let space = self.get_space(size_class, alloc_size)?;

@@ -211,19 +211,4 @@ mod tests {
             }
         });
     }
-    #[test]
-    fn bench() {
-        let gc: Gc<Node> = Gc::build(|mutator| {
-            let root = Node::alloc(mutator, 0).unwrap();
-            for _ in 0..100_000 {
-                Node::insert_rand(root, mutator);
-            }
-
-            root
-        });
-
-        for _ in 0..100 {
-            gc.collect();
-        }
-    }
 }

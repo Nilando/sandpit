@@ -17,3 +17,7 @@ criterion = { version = "0.4", features = ["html_reports"] }
 [[bench]]
 name = "node_bench"
 harness = false
+
+# set bench to debug when making flamegraph
+# [profile.bench]
+# debug = true

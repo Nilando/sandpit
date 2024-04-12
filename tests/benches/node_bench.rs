@@ -2,7 +2,7 @@ use gc::Gc;
 use tests::Node;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-fn bench() {
+fn full_collection() {
     let gc: Gc<Node> = Gc::build(|mutator| {
         let root = Node::alloc(mutator, 0).unwrap();
         for _ in 0..100_000 {
@@ -12,14 +12,30 @@ fn bench() {
         root
     });
 
-    for _ in 0..100 {
+    for _ in 0..200 {
         gc.collect();
+    }
+}
+
+fn eden_collection() {
+    let gc: Gc<Node> = Gc::build(|mutator| {
+        let root = Node::alloc(mutator, 0).unwrap();
+        for _ in 0..100_000 {
+            Node::insert_rand(root, mutator);
+        }
+
+        root
+    });
+
+    for _ in 0..200 {
+        gc.eden_collect();
     }
 }
 
 
 fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("node bench", |b| b.iter(|| bench()));
+    c.bench_function("full collection", |b| b.iter(|| full_collection()));
+    c.bench_function("eden collection", |b| b.iter(|| eden_collection()));
 }
 
 criterion_group!(benches, criterion_benchmark);
