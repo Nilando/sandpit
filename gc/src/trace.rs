@@ -9,10 +9,35 @@ pub unsafe trait Trace: 'static {
     }
 }
 
+
+// ****************************************************************************
+// TRACE LEAF IMPLS
+// ****************************************************************************
+
 unsafe impl<T: TraceLeaf> Trace for T {
     fn trace<A: Tracer>(&self, _tracer: &mut A) {}
     fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {}
 }
+
+unsafe impl TraceLeaf for bool  {}
+unsafe impl TraceLeaf for u8    {}
+unsafe impl TraceLeaf for u16   {}
+unsafe impl TraceLeaf for u32   {}
+unsafe impl TraceLeaf for u64   {}
+unsafe impl TraceLeaf for u128  {}
+unsafe impl TraceLeaf for usize {}
+unsafe impl TraceLeaf for i8    {}
+unsafe impl TraceLeaf for i16   {}
+unsafe impl TraceLeaf for i32   {}
+unsafe impl TraceLeaf for i64   {}
+unsafe impl TraceLeaf for i128  {}
+unsafe impl TraceLeaf for isize {}
+
+unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
+
+// ****************************************************************************
+// TRACE IMPLS
+// ****************************************************************************
 
 unsafe impl<O: Trace> Trace for Option<O> {
     fn trace<T: Tracer>(&self, tracer: &mut T) {
@@ -22,9 +47,6 @@ unsafe impl<O: Trace> Trace for Option<O> {
         }
     }
 }
-
-unsafe impl TraceLeaf for usize {}
-unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 
 unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
     fn trace<T: Tracer>(&self, tracer: &mut T) {

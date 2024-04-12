@@ -35,9 +35,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
             .map(|variant| {
                 let variant_name = &variant.ident;
                 quote! {
-                    #name::#variant_name { .. } => {
-                        println!("Trace {:?}", self);
-                    }
+                    println!("Trace enum");
                 }
             })
             .collect::<Vec<_>>(),

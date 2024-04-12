@@ -1,4 +1,3 @@
-use super::gc_ptr::GcPtr;
 use super::monitor::Monitor;
 use super::collector::GcController;
 use std::sync::Arc;
@@ -19,14 +18,14 @@ impl<C: GcController, M: Monitor> Drop for Gc<C, M> {
 }
 
 impl<C: GcController, M: Monitor> Gc<C, M> {
-    pub fn build(callback: fn(&mut C::Mutator) -> GcPtr<C::Root>) -> Self {
+    pub fn build(callback: fn(&mut C::Mutator) -> C::Root) -> Self {
         let controller = Arc::new(C::build(callback));
         let monitor = Arc::new(M::new(controller.clone()));
 
         Self { controller, monitor }
     }
 
-    pub fn mutate(&self, callback: fn(GcPtr<C::Root>, &mut C::Mutator)) {
+    pub fn mutate(&self, callback: fn(&C::Root, &mut C::Mutator)) {
         self.controller.mutate(callback);
     }
 

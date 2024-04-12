@@ -5,6 +5,9 @@ use std::ptr::NonNull;
 use super::mutator::Mutator;
 use super::trace::Trace;
 
+unsafe impl<T: Trace + Send> Send for GcPtr<T> {}
+unsafe impl<T: Trace + Sync> Sync for GcPtr<T> {}
+
 pub struct GcPtr<T: Trace> {
     ptr: NonNull<T>,
 }
@@ -97,6 +100,19 @@ impl<T: Trace> GcCellPtr<T> {
         unsafe {
             self.cell.as_ptr().as_ref().unwrap().as_ref().map(|ptr| ptr.as_ptr())
         }
+    }
+
+    pub fn write_barrier<V: Trace, M: Mutator>(
+        &self,
+        mutator: &mut M,
+        new_ptr: GcPtr<V>,
+        callback: fn(&T) -> &GcCellPtr<V>,
+    ) {
+        let gc_ptr = self.deref().unwrap();
+        let value_ref = gc_ptr.deref();
+        let old_ptr = callback(value_ref);
+        unsafe { old_ptr.unsafe_set(mutator, new_ptr) } // safe b/c we call write_barrier after
+        mutator.write_barrier(gc_ptr.as_ptr());
     }
 
     // This is unsafe b/c tracing may be happening concurrently at time of swap.

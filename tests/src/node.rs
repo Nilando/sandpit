@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn root_node() {
-        let gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 69).unwrap());
+        let gc = Gc::build(|mutator| Node::alloc(mutator, 69).unwrap());
 
         gc.mutate(|root, _| {
             root.val.set(69);
@@ -119,16 +119,16 @@ mod tests {
 
     #[test]
     fn insert() {
-        let gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         gc.mutate(|root, mutator| {
             for i in 1..1_000 {
-                Node::insert(root, mutator, i);
+                Node::insert(*root, mutator, i);
             }
         });
 
         gc.mutate(|root, _| {
-            let vals = Node::collect(root);
+            let vals = Node::collect(*root);
             let result: Vec<usize> = (0..1_000).collect();
 
             assert_eq!(vals, result);
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn find() {
-        let gc: Gc<Node> = Gc::build(|mutator| {
+        let gc = Gc::build(|mutator| {
             let root = Node::alloc(mutator, 0).unwrap();
             for _ in 0..1_000 {
                 Node::insert_rand(root, mutator);
@@ -151,7 +151,7 @@ mod tests {
         gc.collect();
 
         gc.mutate(|root, _| {
-            let node = Node::find(root, 420).unwrap();
+            let node = Node::find(*root, 420).unwrap();
 
             assert_eq!(node.val.get(), 420);
 
@@ -159,13 +159,13 @@ mod tests {
 
             assert!(node.is_none());
 
-            Node::kill_children(root);
+            Node::kill_children(*root);
         });
     }
 
     #[test]
     fn multiple_collects() {
-        let gc: Gc<Node> = Gc::build(|mutator| {
+        let gc: Gc<GcPtr<Node>> = Gc::build(|mutator| {
             let root = Node::alloc(mutator, 0).unwrap();
             for _ in 0..1_000 {
                 Node::insert_rand(root, mutator);
@@ -190,22 +190,22 @@ mod tests {
         });
 
         gc.mutate(|root, _mutator| {
-            assert!(Node::find(root, 69).is_some());
+            assert!(Node::find(*root, 69).is_some());
         });
     }
 
     #[test]
     fn monitor_requests_yield() {
-        let gc: Gc<Node> = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
         gc.start_monitor();
 
         gc.mutate(|root, mutator| {
             loop {
-                Node::insert_rand(root, mutator);
+                Node::insert_rand(*root, mutator);
 
                 if mutator.yield_requested() { 
-                    Node::kill_children(root);
+                    Node::kill_children(*root);
                     break;
                 }
             }

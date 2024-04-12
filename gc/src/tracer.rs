@@ -54,6 +54,10 @@ impl<A: Allocate> TracerWorker<A> {
         }
     }
 
+    pub fn init<T: Trace>(&mut self, root: &T) {
+        root.trace(self);
+    }
+
     pub fn trace(&mut self) {
         loop {
             let packet = if self.new_packet.is_some() {

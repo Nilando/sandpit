@@ -33,7 +33,7 @@ impl<A: Allocate> TracerController<A> {
         self.yield_flag.load(Ordering::Relaxed)
     }
 
-    pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
+    pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
         let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
         if is_tracing.is_err() { return; }
 
@@ -41,7 +41,7 @@ impl<A: Allocate> TracerController<A> {
         self.trace_flag.store(false, Ordering::SeqCst);
     }
 
-    pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
+    pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
         let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
         if is_tracing.is_err() { return; }
 
@@ -54,9 +54,13 @@ impl<A: Allocate> TracerController<A> {
         self.unscanned.lock().unwrap().push(packet);
     }
 
-    fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: GcPtr<T>) {
-        self.init_unscanned(root);
+    fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
         self.run_tracers(arena.current_mark());
+
+        let unscanned = self.unscanned.clone();
+        let mut worker = TracerWorker::new(unscanned, arena.current_mark());
+        worker.init(root);
+
         self.final_trace(arena);
     }
 
@@ -68,13 +72,6 @@ impl<A: Allocate> TracerController<A> {
         arena.refresh();
 
         self.yield_flag.store(false, Ordering::SeqCst);
-    }
-
-    fn init_unscanned<T: Trace>(&self, root: GcPtr<T>) {
-        let mut packet = TracePacket::<TracerWorker<A>>::new();
-
-        packet.push_gc_ptr(root);
-        self.unscanned.lock().unwrap().push(packet);
     }
 
     fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {

@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
-    fn alloc_array<T: Trace>(&self, n: usize) -> Result<GcArray<T>, GcError>;
+    fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError>;
     fn write_barrier<T: Trace>(&mut self, obj: NonNull<T>);
     fn yield_requested(&mut self) -> bool;
     // fn alloc_sized(&mut self, len: u32) -> Result<NonNull<u8>, Self::Error>;

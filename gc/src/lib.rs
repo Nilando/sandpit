@@ -16,6 +16,7 @@ mod collector;
 pub use error::GcError;
 pub use gc_cell::GcCell;
 pub use gc_ptr::{GcCellPtr, GcPtr, StrongGcPtr};
+pub use gc_array::GcArray;
 pub use mutator::Mutator;
 pub use trace::Trace;
 pub use tracer::Tracer;

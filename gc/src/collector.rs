@@ -1,7 +1,6 @@
 use super::trace::Trace;
 use super::mutator::{Mutator, MutatorScope};
 use super::allocate::{Allocate, GenerationalArena};
-use super::gc_ptr::GcPtr;
 use super::tracer_controller::TracerController;
 use std::sync::Arc;
 
@@ -17,8 +16,8 @@ pub trait GcController: Collect {
     type Root: Trace;
     type Mutator: Mutator;
 
-    fn build(callback: fn(&mut Self::Mutator) -> GcPtr<Self::Root>) -> Self;
-    fn mutate(&self, callback: fn(GcPtr<Self::Root>, &mut Self::Mutator));
+    fn build(callback: fn(&mut Self::Mutator) -> Self::Root) -> Self;
+    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator));
 }
 
 unsafe impl<A: Allocate, T: Trace + Send> Send for Controller<A, T> {}
@@ -27,16 +26,16 @@ unsafe impl<A: Allocate, T: Trace + Sync> Sync for Controller<A, T> {}
 pub struct Controller<A: Allocate, T: Trace> {
     arena: Arc<A::Arena>,
     tracer: Arc<TracerController<A>>,
-    root: GcPtr<T>,
+    root: T,
 }
 
 impl<A: Allocate, T: Trace> Collect for Controller<A, T> {
     fn collect(&self) {
-        self.tracer.full_collection(self.arena.as_ref(), self.root);
+        self.tracer.full_collection(self.arena.as_ref(), &self.root);
     }
 
     fn eden_collect(&self) {
-        self.tracer.eden_collection(self.arena.as_ref(), self.root);
+        self.tracer.eden_collection(self.arena.as_ref(), &self.root);
     }
 
     fn arena_size(&self) -> usize {
@@ -48,7 +47,7 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
     type Root = T;
     type Mutator = MutatorScope<A>;
 
-    fn build(callback: fn(&mut Self::Mutator) -> GcPtr<T>) -> Self {
+    fn build(callback: fn(&mut Self::Mutator) -> T) -> Self {
         let arena = Arc::new(A::Arena::new());
         let tracer = Arc::new(TracerController::<A>::new());
         let yield_lock = tracer.get_yield_lock();
@@ -64,10 +63,10 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
         gc
     }
 
-    fn mutate(&self, callback: fn(GcPtr<Self::Root>, &mut Self::Mutator)) {
+    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator)) {
         let _yield_lock = self.tracer.get_yield_lock();
         let mut mutator = Self::Mutator::new(self.arena.as_ref(), self.tracer.clone());
 
-        callback(self.root, &mut mutator);
+        callback(&self.root, &mut mutator);
     }
 }
