@@ -2,7 +2,6 @@ use super::trace::Trace;
 use super::mutator::{Mutator, MutatorScope};
 use super::allocate::{Allocate, GenerationalArena};
 use super::tracer_controller::TracerController;
-use super::gc_metrics::GcMetrics;
 use std::sync::Arc;
 use std::collections::HashMap;
 

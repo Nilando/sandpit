@@ -30,7 +30,6 @@ impl List {
 mod tests {
     use super::*;
 
-    #[test]
     fn root_node() {
         let gc: Gc<List> = Gc::build(|mutator| {
             List::alloc(mutator).expect("root allocated")

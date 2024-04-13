@@ -5,7 +5,6 @@ mod gc;
 mod gc_cell;
 mod gc_ptr;
 mod gc_array;
-mod gc_metrics;
 mod mutator;
 mod trace;
 mod trace_packet;
