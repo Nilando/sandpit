@@ -1,6 +1,7 @@
 use super::monitor::Monitor;
 use super::collector::GcController;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 pub struct Gc<C: GcController, M: Monitor> {
     controller: Arc<C>,
@@ -43,5 +44,9 @@ impl<C: GcController, M: Monitor> Gc<C, M> {
 
     pub fn stop_monitor(&self) {
         self.monitor.stop();
+    }
+
+    pub fn metrics(&self) -> HashMap<String, usize> {
+        self.controller.metrics()
     }
 }

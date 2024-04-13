@@ -1,7 +1,7 @@
 use super::allocate::{Allocate, GenerationalArena};
 use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
-use super::GcPtr;
+use super::trace_metrics::TraceMetrics;
 use super::Trace;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -13,6 +13,7 @@ pub struct TracerController<A: Allocate> {
     yield_flag: AtomicBool,
     trace_flag: AtomicBool,
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
+    metrics: Mutex<TraceMetrics>,
 }
 
 impl<A: Allocate> TracerController<A> {
@@ -22,6 +23,7 @@ impl<A: Allocate> TracerController<A> {
             yield_flag: AtomicBool::new(false),
             trace_flag: AtomicBool::new(false),
             unscanned: Arc::new(Mutex::new(vec![])),
+            metrics: Mutex::new(TraceMetrics::new()),
         }
     }
 
@@ -54,46 +56,24 @@ impl<A: Allocate> TracerController<A> {
         self.unscanned.lock().unwrap().push(packet);
     }
 
+    pub fn metrics(&self) -> TraceMetrics {
+        *self.metrics.lock().unwrap()
+    }
+
     fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-        self.run_tracers(arena.current_mark());
 
         let unscanned = self.unscanned.clone();
         let mut worker = TracerWorker::new(unscanned, arena.current_mark());
         worker.init(root);
+        worker.trace();
 
-        self.final_trace(arena);
-    }
-
-    fn final_trace(&self, arena: &<A as Allocate>::Arena) {
         self.yield_flag.store(true, Ordering::SeqCst);
         let _lock = self.yield_lock.write().unwrap();
 
-        self.run_tracers(arena.current_mark());
+        worker.trace();
         arena.refresh();
+        *self.metrics.lock().unwrap() = worker.get_metrics();
 
         self.yield_flag.store(false, Ordering::SeqCst);
-    }
-
-    fn run_tracers(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
-        let unscanned = self.unscanned.clone();
-        let mut worker = TracerWorker::new(unscanned, mark);
-
-        worker.trace();
-
-        // TODO: better divide work between threads
-        /*
-        std::thread::scope(|s| {
-            for _ in 0..WORKER_COUNT {
-                let unscanned = self.unscanned.clone();
-                let mut worker = TracerWorker::new(unscanned, mark);
-
-                let thread = s.spawn(move || worker.trace());
-                if thread.join().is_err() {
-                    println!("tracer panicked");
-                    panic!("A tracer panicked");
-                }
-            }
-        });
-        */
     }
 }

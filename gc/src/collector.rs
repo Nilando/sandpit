@@ -2,7 +2,9 @@ use super::trace::Trace;
 use super::mutator::{Mutator, MutatorScope};
 use super::allocate::{Allocate, GenerationalArena};
 use super::tracer_controller::TracerController;
+use super::gc_metrics::GcMetrics;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator
@@ -18,6 +20,7 @@ pub trait GcController: Collect {
 
     fn build(callback: fn(&mut Self::Mutator) -> Self::Root) -> Self;
     fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator));
+    fn metrics(&self) -> HashMap<String, usize>;
 }
 
 unsafe impl<A: Allocate, T: Trace + Send> Send for Controller<A, T> {}
@@ -68,5 +71,13 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
         let mut mutator = Self::Mutator::new(self.arena.as_ref(), self.tracer.clone());
 
         callback(&self.root, &mut mutator);
+    }
+
+    fn metrics(&self) -> HashMap<String, usize> {
+        let tracer_metrics = self.tracer.metrics();
+
+        HashMap::from([
+            ("prev_marked_objects".into(), tracer_metrics.objects_marked)
+        ])
     }
 }

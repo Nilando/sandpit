@@ -19,6 +19,7 @@ unsafe impl<T: TraceLeaf> Trace for T {
     fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {}
 }
 
+unsafe impl TraceLeaf for ()  {}
 unsafe impl TraceLeaf for bool  {}
 unsafe impl TraceLeaf for u8    {}
 unsafe impl TraceLeaf for u16   {}

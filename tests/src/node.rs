@@ -211,4 +211,34 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn objects_marked_metric() {
+        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+
+        gc.mutate(|root, mutator| {
+            for i in 0..99 {
+                Node::insert(*root, mutator, i);
+            }
+
+            assert_eq!(Node::collect(*root).len(), 100);
+        });
+
+        gc.collect();
+
+        assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 100);
+
+        gc.mutate(|root, _| {
+            let node = Node::find(*root, 48).unwrap();
+            Node::kill_children(node);
+
+            assert_eq!(Node::collect(*root).len(), 50);
+            assert!(Node::find(*root, 49).is_none());
+            assert!(Node::find(*root, 99).is_none());
+        });
+
+        gc.collect();
+
+        assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
+    }
 }
