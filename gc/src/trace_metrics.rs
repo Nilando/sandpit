@@ -2,6 +2,8 @@
 pub struct TraceMetrics {
     pub objects_marked: usize,
     pub space_marked: usize,
+    pub eden_collections: usize,
+    pub full_collections: usize,
 }
 
 impl TraceMetrics {
@@ -9,7 +11,8 @@ impl TraceMetrics {
         Self {
             objects_marked: 0,
             space_marked: 0,
-            //space_freed: 0
+            eden_collections: 0,
+            full_collections: 0,
         }
     }
 }

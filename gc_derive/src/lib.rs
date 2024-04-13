@@ -44,7 +44,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
-            fn trace<T: gc::Tracer>(&self, tracer: &mut T) {
+            fn trace<GC_INTERNAL_TRACER_GENERIC: gc::Tracer>(&self, tracer: &mut GC_INTERNAL_TRACER_GENERIC) {
                 #(#trace_body)*
             }
         }

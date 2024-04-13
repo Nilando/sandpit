@@ -18,7 +18,9 @@ pub unsafe trait Trace: 'static {
 
 unsafe impl<T: TraceLeaf> Trace for T {
     fn trace<A: Tracer>(&self, _tracer: &mut A) {}
-    fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {}
+    fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {
+        unimplemented!()
+    }
 }
 
 unsafe impl TraceLeaf for () {}
@@ -44,10 +46,7 @@ unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 
 unsafe impl<O: Trace> Trace for Option<O> {
     fn trace<T: Tracer>(&self, tracer: &mut T) {
-        match self {
-            Some(value) => value.trace(tracer),
-            None => {}
-        }
+        self.as_ref().map(|value| value.trace(tracer));
     }
 }
 

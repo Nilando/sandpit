@@ -3,7 +3,7 @@ use super::mutator::{Mutator, MutatorScope};
 use super::trace::Trace;
 use super::tracer_controller::TracerController;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator
@@ -75,6 +75,13 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
     fn metrics(&self) -> HashMap<String, usize> {
         let tracer_metrics = self.tracer.metrics();
 
-        HashMap::from([("prev_marked_objects".into(), tracer_metrics.objects_marked)])
+        HashMap::from([
+          ("prev_marked_objects".into(), tracer_metrics.objects_marked),
+          ("prev_marked_space".into(), tracer_metrics.objects_marked),
+          //("prev_objects_freed".into(), tracer_metrics.objects_marked),
+          ("arena_size".into(), self.arena.get_size()),
+          //("full_collections".into(), *self.full_collections.lock().unwrap()),
+          //("eden_collections".into(), *self.eden_collections.lock().unwrap())
+        ])
     }
 }

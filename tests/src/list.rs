@@ -1,26 +1,20 @@
-use gc::{Gc, GcArray, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
+use gc::{Trace, Gc, GcArray, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
 use gc_derive::Trace;
 
 #[derive(Trace)]
-struct GcString {
-    array: GcArray<u8>,
+struct List<T: Trace> {
+    array: GcArray<ListItem<T>>,
 }
 
 #[derive(Trace)]
-struct List {
-    array: GcArray<ListItem>,
+enum ListItem<T: Trace> {
+    Val(T),
+    List(List<T>),
 }
 
-#[derive(Trace)]
-enum ListItem {
-    Num(isize),
-    String(GcString),
-    List(List),
-}
-
-impl List {
+impl<T: Trace> List<T> {
     pub fn alloc<M: Mutator>(mutator: &mut M) -> Result<Self, GcError> {
-        let array = mutator.alloc_array::<ListItem>(0)?;
+        let array = mutator.alloc_array::<ListItem<T>>(0)?;
 
         Ok(Self { array })
     }
@@ -31,7 +25,7 @@ mod tests {
     use super::*;
 
     fn root_node() {
-        let gc: Gc<List> = Gc::build(|mutator| List::alloc(mutator).expect("root allocated"));
+        let gc: Gc<List<u8>> = Gc::build(|mutator| List::alloc(mutator).expect("root allocated"));
 
         gc.collect();
 

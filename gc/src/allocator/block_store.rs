@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::constants::{ALIGN, BLOCK_SIZE};
+use super::constants::ALIGN;
 use super::errors::AllocError;
 use super::header::Mark;
 use std::collections::LinkedList;
@@ -9,7 +9,6 @@ use std::sync::Mutex;
 
 pub struct BlockStore {
     block_count: AtomicUsize,
-    // alloc_size: AtomicUsize,
     free: Mutex<Vec<BumpBlock>>,
     recycle: Mutex<Vec<BumpBlock>>,
     rest: Mutex<Vec<BumpBlock>>,
@@ -63,12 +62,8 @@ impl BlockStore {
         self.block_count.load(Ordering::Relaxed)
     }
 
-    pub fn large_count(&self) -> usize {
-        self.large.lock().unwrap().len()
-    }
-
     pub fn count_large_space(&self) -> usize {
-        self.large.lock().unwrap().len() * BLOCK_SIZE
+        self.large.lock().unwrap().iter().fold(0, |sum, block| sum + block.get_size())
     }
 
     pub fn create_large(&self, size: usize) -> Result<*const u8, AllocError> {
