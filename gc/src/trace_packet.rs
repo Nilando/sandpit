@@ -1,5 +1,3 @@
-use super::gc_ptr::GcPtr;
-use super::trace::Trace;
 use super::tracer::Tracer;
 use std::ptr::NonNull;
 
@@ -32,14 +30,6 @@ impl<T: Tracer> TracePacket<T> {
 
     pub fn push(&mut self, job: Option<UnscannedPtr<T>>) {
         self.jobs[self.len] = job;
-        self.len += 1;
-    }
-
-    pub fn push_gc_ptr<P: Trace>(&mut self, ptr: GcPtr<P>) {
-        let obj_ptr: NonNull<()> = ptr.as_ptr().cast();
-        let job: UnscannedPtr<T> = (obj_ptr, P::dyn_trace);
-
-        self.jobs[self.len] = Some(job);
         self.len += 1;
     }
 
