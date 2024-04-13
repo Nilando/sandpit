@@ -1,11 +1,11 @@
 use super::allocate::{Allocate, Marker};
 use super::error::GcError;
+use super::gc_array::GcArray;
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
-use super::tracer::TracerWorker;
 use super::trace_packet::TracePacket;
+use super::tracer::TracerWorker;
 use super::tracer_controller::TracerController;
-use super::gc_array::GcArray;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -40,7 +40,9 @@ impl<A: Allocate> MutatorScope<A> {
 
 impl<A: Allocate> Drop for MutatorScope<A> {
     fn drop(&mut self) {
-        if let Some(packet) = self.new_packet.take() { self.tracer_controller.push_packet(packet) }
+        if let Some(packet) = self.new_packet.take() {
+            self.tracer_controller.push_packet(packet)
+        }
     }
 }
 

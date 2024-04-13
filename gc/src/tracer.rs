@@ -1,9 +1,9 @@
 use super::allocate::{Allocate, GenerationalArena};
 use super::trace::Trace;
+use super::trace_metrics::TraceMetrics;
 use super::trace_packet::{TracePacket, TRACE_PACKET_SIZE};
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
-use super::trace_metrics::TraceMetrics;
 
 pub trait Tracer {
     fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -38,7 +38,7 @@ pub struct TracerWorker<A: Allocate> {
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
     mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
     new_packet: Option<TracePacket<TracerWorker<A>>>,
-                                                                 metrics: TraceMetrics
+    metrics: TraceMetrics,
 }
 
 unsafe impl<T: Allocate> Send for TracerWorker<T> {}
@@ -53,7 +53,7 @@ impl<A: Allocate> TracerWorker<A> {
             unscanned,
             mark,
             new_packet: None,
-            metrics: TraceMetrics::new()
+            metrics: TraceMetrics::new(),
         }
     }
 
@@ -84,7 +84,6 @@ impl<A: Allocate> TracerWorker<A> {
         for _ in 0..TRACE_PACKET_SIZE {
             match packet.pop() {
                 Some((ptr, trace_fn)) => {
-
                     // TODO: COMPILE THIS CONDITIONALLY
                     self.metrics.objects_marked += 1;
 

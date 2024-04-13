@@ -1,7 +1,7 @@
-use super::monitor::Monitor;
 use super::collector::GcController;
-use std::sync::Arc;
+use super::monitor::Monitor;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct Gc<C: GcController, M: Monitor> {
     controller: Arc<C>,
@@ -23,7 +23,10 @@ impl<C: GcController, M: Monitor> Gc<C, M> {
         let controller = Arc::new(C::build(callback));
         let monitor = Arc::new(M::new(controller.clone()));
 
-        Self { controller, monitor }
+        Self {
+            controller,
+            monitor,
+        }
     }
 
     pub fn mutate(&self, callback: fn(&C::Root, &mut C::Mutator)) {

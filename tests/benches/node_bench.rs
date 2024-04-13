@@ -1,6 +1,6 @@
+use criterion::{criterion_group, criterion_main, Criterion};
 use gc::Gc;
 use tests::Node;
-use criterion::{criterion_group, criterion_main, Criterion};
 
 fn full_collection() {
     let gc = Gc::build(|mutator| {
@@ -31,7 +31,6 @@ fn eden_collection() {
         gc.eden_collect();
     }
 }
-
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("full collection", |b| b.iter(|| full_collection()));

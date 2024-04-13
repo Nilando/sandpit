@@ -98,7 +98,12 @@ impl<T: Trace> GcCellPtr<T> {
 
     pub fn as_ptr(&self) -> Option<NonNull<T>> {
         unsafe {
-            self.cell.as_ptr().as_ref().unwrap().as_ref().map(|ptr| ptr.as_ptr())
+            self.cell
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .map(|ptr| ptr.as_ptr())
         }
     }
 
@@ -143,9 +148,7 @@ impl<T: Trace> Clone for GcCellPtr<T> {
 
 impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
-        Self {
-            ptr: self.ptr,
-        }
+        Self { ptr: self.ptr }
     }
 }
 

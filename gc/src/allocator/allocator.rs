@@ -99,12 +99,7 @@ impl Allocate for Allocator {
         if size_class != SizeClass::Large {
             let mut meta = BlockMeta::from_obj(ptr.cast());
 
-            meta.mark(
-                ptr.cast(),
-                size_class,
-                header.get_size().into(),
-                mark,
-            );
+            meta.mark(ptr.cast(), size_class, header.get_size().into(), mark);
         }
     }
 }

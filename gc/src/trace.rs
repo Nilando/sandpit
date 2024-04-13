@@ -4,11 +4,13 @@ use std::ptr::NonNull;
 pub unsafe trait TraceLeaf: 'static {}
 pub unsafe trait Trace: 'static {
     fn trace<T: Tracer>(&self, tracer: &mut T);
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T) where Self: Sized {
+    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
+    where
+        Self: Sized,
+    {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
     }
 }
-
 
 // ****************************************************************************
 // TRACE LEAF IMPLS
@@ -19,19 +21,19 @@ unsafe impl<T: TraceLeaf> Trace for T {
     fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {}
 }
 
-unsafe impl TraceLeaf for ()  {}
-unsafe impl TraceLeaf for bool  {}
-unsafe impl TraceLeaf for u8    {}
-unsafe impl TraceLeaf for u16   {}
-unsafe impl TraceLeaf for u32   {}
-unsafe impl TraceLeaf for u64   {}
-unsafe impl TraceLeaf for u128  {}
+unsafe impl TraceLeaf for () {}
+unsafe impl TraceLeaf for bool {}
+unsafe impl TraceLeaf for u8 {}
+unsafe impl TraceLeaf for u16 {}
+unsafe impl TraceLeaf for u32 {}
+unsafe impl TraceLeaf for u64 {}
+unsafe impl TraceLeaf for u128 {}
 unsafe impl TraceLeaf for usize {}
-unsafe impl TraceLeaf for i8    {}
-unsafe impl TraceLeaf for i16   {}
-unsafe impl TraceLeaf for i32   {}
-unsafe impl TraceLeaf for i64   {}
-unsafe impl TraceLeaf for i128  {}
+unsafe impl TraceLeaf for i8 {}
+unsafe impl TraceLeaf for i16 {}
+unsafe impl TraceLeaf for i32 {}
+unsafe impl TraceLeaf for i64 {}
+unsafe impl TraceLeaf for i128 {}
 unsafe impl TraceLeaf for isize {}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
@@ -56,7 +58,9 @@ unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
 }
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
     fn trace<A: Tracer>(&self, tracer: &mut A) {
-        if let Some(ptr) = self.as_ptr() { tracer.send_unscanned(ptr) }
+        if let Some(ptr) = self.as_ptr() {
+            tracer.send_unscanned(ptr)
+        }
     }
 }
 

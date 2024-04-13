@@ -1,4 +1,4 @@
-use super::constants::{BLOCK_SIZE, ALIGN};
+use super::constants::{ALIGN, BLOCK_SIZE};
 use super::errors::BlockError;
 use std::ptr::NonNull;
 
@@ -33,7 +33,7 @@ impl Drop for Block {
 }
 
 mod internal {
-    use super::{BlockError, BlockPtr, BLOCK_SIZE, ALIGN};
+    use super::{BlockError, BlockPtr, ALIGN, BLOCK_SIZE};
     use std::alloc::{alloc, dealloc, Layout};
     use std::ptr::NonNull;
 
@@ -52,12 +52,11 @@ mod internal {
 
     pub fn dealloc_block(ptr: BlockPtr, size: usize) {
         unsafe {
-            let layout =
-                if size > BLOCK_SIZE {
-                    Layout::from_size_align_unchecked(size, ALIGN)
-                } else {
-                    Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE)
-                };
+            let layout = if size > BLOCK_SIZE {
+                Layout::from_size_align_unchecked(size, ALIGN)
+            } else {
+                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE)
+            };
 
             dealloc(ptr.as_ptr(), layout);
         }

@@ -1,7 +1,7 @@
 use gc::{Gc, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
 use gc_derive::Trace;
-use std::ptr::NonNull;
 use rand::Rng;
+use std::ptr::NonNull;
 
 unsafe impl Send for Node {}
 unsafe impl Sync for Node {}
@@ -174,7 +174,6 @@ mod tests {
             return root;
         });
 
-
         std::thread::scope(|s| {
             for _ in 0..10 {
                 s.spawn(|| {
@@ -200,14 +199,12 @@ mod tests {
 
         gc.start_monitor();
 
-        gc.mutate(|root, mutator| {
-            loop {
-                Node::insert_rand(*root, mutator);
+        gc.mutate(|root, mutator| loop {
+            Node::insert_rand(*root, mutator);
 
-                if mutator.yield_requested() { 
-                    Node::kill_children(*root);
-                    break;
-                }
+            if mutator.yield_requested() {
+                Node::kill_children(*root);
+                break;
             }
         });
     }

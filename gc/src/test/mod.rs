@@ -11,7 +11,7 @@ fn create_rooted_arena() {
 
 #[test]
 fn gc_cell_swap() {
-    let gc: Gc<GcCell<usize>> = Gc::build(|_| GcCell::new(69) );
+    let gc: Gc<GcCell<usize>> = Gc::build(|_| GcCell::new(69));
 
     gc.mutate(|root, _| {
         root.set(420);

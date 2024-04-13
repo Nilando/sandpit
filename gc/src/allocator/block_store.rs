@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::constants::{BLOCK_SIZE, ALIGN};
+use super::constants::{ALIGN, BLOCK_SIZE};
 use super::errors::AllocError;
 use super::header::Mark;
 use std::collections::LinkedList;
@@ -68,10 +68,7 @@ impl BlockStore {
     }
 
     pub fn count_large_space(&self) -> usize {
-        self.large
-            .lock()
-            .unwrap()
-            .len() * BLOCK_SIZE
+        self.large.lock().unwrap().len() * BLOCK_SIZE
     }
 
     pub fn create_large(&self, size: usize) -> Result<*const u8, AllocError> {

@@ -1,6 +1,9 @@
-use super::allocate::{GenerationalArena};
+use super::allocate::GenerationalArena;
 use super::collector::Collect;
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 use std::thread;
 use std::time;
@@ -23,14 +26,14 @@ struct MonitorWorker {
 
 struct MonitorMetrics {
     prev_arena_size: usize,
-    debt: f64
+    debt: f64,
 }
 
 impl MonitorMetrics {
     fn new() -> Self {
         Self {
             prev_arena_size: 0,
-            debt: 0.0
+            debt: 0.0,
         }
     }
 }
@@ -65,8 +68,15 @@ impl Monitor for MonitorController {
     }
 
     fn start(&self) {
-        let flag = self.worker.monitor_flag.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
-        if flag.is_err() { return }
+        let flag = self.worker.monitor_flag.compare_exchange(
+            false,
+            true,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+        if flag.is_err() {
+            return;
+        }
 
         let worker = self.worker.clone();
 
@@ -79,7 +89,9 @@ impl MonitorWorker {
         loop {
             self.sleep();
 
-            if !self.monitor_flag.load(Ordering::Relaxed) { break; }
+            if !self.monitor_flag.load(Ordering::Relaxed) {
+                break;
+            }
 
             let mut metrics = self.metrics.lock().unwrap();
             metrics.debt *= DEBT_INTEREST_RATE;

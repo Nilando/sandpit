@@ -1,7 +1,7 @@
 use super::allocate::{Allocate, GenerationalArena};
+use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
-use super::trace_metrics::TraceMetrics;
 use super::Trace;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -36,23 +36,31 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-        let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
-        if is_tracing.is_err() { return; }
+        let is_tracing =
+            self.trace_flag
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if is_tracing.is_err() {
+            return;
+        }
 
         self.trace(arena, root);
         self.trace_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-        let is_tracing = self.trace_flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
-        if is_tracing.is_err() { return; }
+        let is_tracing =
+            self.trace_flag
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if is_tracing.is_err() {
+            return;
+        }
 
         arena.rotate_mark();
         self.trace(arena, root);
         self.trace_flag.store(false, Ordering::SeqCst);
     }
 
-    pub fn push_packet(&self, packet: TracePacket::<TracerWorker<A>>) {
+    pub fn push_packet(&self, packet: TracePacket<TracerWorker<A>>) {
         self.unscanned.lock().unwrap().push(packet);
     }
 
@@ -61,7 +69,6 @@ impl<A: Allocate> TracerController<A> {
     }
 
     fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-
         let unscanned = self.unscanned.clone();
         let mut worker = TracerWorker::new(unscanned, arena.current_mark());
         worker.init(root);

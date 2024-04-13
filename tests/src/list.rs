@@ -1,14 +1,14 @@
-use gc::{Gc, GcCell, GcCellPtr, GcArray, GcError, GcPtr, Mutator};
+use gc::{Gc, GcArray, GcCell, GcCellPtr, GcError, GcPtr, Mutator};
 use gc_derive::Trace;
 
 #[derive(Trace)]
 struct GcString {
-    array: GcArray<u8>
+    array: GcArray<u8>,
 }
 
 #[derive(Trace)]
 struct List {
-    array: GcArray<ListItem>
+    array: GcArray<ListItem>,
 }
 
 #[derive(Trace)]
@@ -31,9 +31,7 @@ mod tests {
     use super::*;
 
     fn root_node() {
-        let gc: Gc<List> = Gc::build(|mutator| {
-            List::alloc(mutator).expect("root allocated")
-        });
+        let gc: Gc<List> = Gc::build(|mutator| List::alloc(mutator).expect("root allocated"));
 
         gc.collect();
 

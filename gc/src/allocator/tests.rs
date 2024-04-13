@@ -1,5 +1,5 @@
 use super::arena::Arena;
-use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE, ALIGN};
+use super::constants::{ALIGN, BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
 use crate::allocate::{Allocate, GenerationalArena};

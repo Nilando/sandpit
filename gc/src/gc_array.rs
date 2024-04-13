@@ -1,15 +1,19 @@
-use super::trace::Trace;
 use super::gc_ptr::GcCellPtr;
+use super::trace::Trace;
 
 pub struct GcArray<T: Trace> {
     start: GcCellPtr<T>,
     size: usize,
-    capacity: usize
+    capacity: usize,
 }
 
 impl<T: Trace> GcArray<T> {
     pub fn new(start: GcCellPtr<T>, size: usize, capacity: usize) -> Self {
-        Self { start, size, capacity }
+        Self {
+            start,
+            size,
+            capacity,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -21,7 +25,9 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn at(&self, idx: usize) -> &T {
-        if idx >= self.size { panic!("Out of bounds Array access" ); }
+        if idx >= self.size {
+            panic!("Out of bounds Array access");
+        }
 
         unsafe {
             let start = self.start.unwrap().as_ptr().as_ptr();
