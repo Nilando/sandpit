@@ -5,6 +5,7 @@ use super::header::Mark;
 use super::size_class::SizeClass;
 use std::cell::Cell;
 use std::sync::Arc;
+use std::alloc::Layout;
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
@@ -35,32 +36,33 @@ impl AllocHead {
         }
     }
 
-    pub fn alloc(&self, alloc_size: usize, size_class: SizeClass) -> Result<*const u8, AllocError> {
-        if let Some(space) = self.head_alloc(alloc_size) {
+    pub fn alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
+        if let Some(space) = self.head_alloc(layout) {
             return Ok(space);
         }
 
+        let size_class = SizeClass::get_for_size(layout.size()).expect("Exceeded Max Alloc Size");
         match size_class {
-            SizeClass::Small => self.small_alloc(alloc_size),
-            SizeClass::Medium => self.medium_alloc(alloc_size),
-            SizeClass::Large => self.block_store.create_large(alloc_size),
+            SizeClass::Small => self.small_alloc(layout),
+            SizeClass::Medium => self.medium_alloc(layout),
+            SizeClass::Large => self.block_store.create_large(layout),
         }
     }
 
-    fn small_alloc(&self, alloc_size: usize) -> Result<*const u8, AllocError> {
+    fn small_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
         loop {
             // this is okay be we already tried to alloc in head and didn't have space
             self.get_new_head()?;
 
-            if let Some(space) = self.head_alloc(alloc_size) {
+            if let Some(space) = self.head_alloc(layout) {
                 return Ok(space);
             }
         }
     }
 
-    fn medium_alloc(&self, alloc_size: usize) -> Result<*const u8, AllocError> {
+    fn medium_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
         loop {
-            if let Some(space) = self.overflow_alloc(alloc_size) {
+            if let Some(space) = self.overflow_alloc(layout) {
                 return Ok(space);
             }
 
@@ -96,10 +98,10 @@ impl AllocHead {
         Ok(())
     }
 
-    fn head_alloc(&self, alloc_size: usize) -> Option<*const u8> {
+    fn head_alloc(&self, layout: Layout) -> Option<*const u8> {
         match self.head.take() {
             Some(mut head) => {
-                let result = head.inner_alloc(alloc_size, self.mark);
+                let result = head.inner_alloc(layout, self.mark);
                 self.head.set(Some(head));
                 result
             }
@@ -107,10 +109,10 @@ impl AllocHead {
         }
     }
 
-    fn overflow_alloc(&self, alloc_size: usize) -> Option<*const u8> {
+    fn overflow_alloc(&self, layout: Layout) -> Option<*const u8> {
         match self.overflow.take() {
             Some(mut overflow) => {
-                let result = overflow.inner_alloc(alloc_size, self.mark);
+                let result = overflow.inner_alloc(layout, self.mark);
                 self.overflow.set(Some(overflow));
                 result
             }
@@ -128,53 +130,38 @@ mod tests {
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let medium_layout = Layout::from_size_align(
+            constants::BLOCK_CAPACITY - constants::LINE_SIZE,
+            8
+        ).unwrap();
+        let small_layout = Layout::from_size_align(
+            constants::LINE_SIZE,
+            8
+        ).unwrap();
 
-        blocks
-            .alloc(
-                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
-                SizeClass::Medium,
-            )
-            .unwrap();
+        blocks.alloc(medium_layout).unwrap();
         assert_eq!(store.block_count(), 1);
 
-        blocks
-            .alloc(
-                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
-                SizeClass::Medium,
-            )
-            .unwrap();
+        blocks.alloc(medium_layout).unwrap();
         assert_eq!(store.block_count(), 2);
 
-        blocks
-            .alloc(
-                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
-                SizeClass::Medium,
-            )
-            .unwrap();
+        blocks.alloc(medium_layout).unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the head
-        blocks
-            .alloc(constants::LINE_SIZE, SizeClass::Small)
-            .unwrap();
+        blocks.alloc(small_layout).unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the overflow head
-        blocks
-            .alloc(constants::LINE_SIZE, SizeClass::Small)
-            .unwrap();
+        blocks.alloc(small_layout).unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should fill the recycle
-        blocks
-            .alloc(constants::LINE_SIZE, SizeClass::Small)
-            .unwrap();
+        blocks.alloc(small_layout).unwrap();
         assert_eq!(store.block_count(), 3);
 
         // this alloc should alloc should need a new block
-        blocks
-            .alloc(constants::LINE_SIZE, SizeClass::Small)
-            .unwrap();
+        blocks.alloc(small_layout).unwrap();
         assert_eq!(store.block_count(), 4);
     }
 
@@ -182,11 +169,13 @@ mod tests {
     fn test_alloc_many_blocks() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let medium_layout = Layout::from_size_align(
+            constants::BLOCK_CAPACITY,
+            8
+        ).unwrap();
 
         for i in 1..100 {
-            blocks
-                .alloc(constants::BLOCK_CAPACITY, SizeClass::Medium)
-                .unwrap();
+            blocks.alloc(medium_layout).unwrap();
             assert_eq!(store.block_count(), i);
         }
     }
@@ -195,27 +184,22 @@ mod tests {
     fn test_alloc_into_overflow() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let medium_layout = Layout::from_size_align(
+            constants::BLOCK_CAPACITY,
+            8
+        ).unwrap();
+        let medium_layout_2 = Layout::from_size_align(
+            constants::BLOCK_CAPACITY / 2,
+            8
+        ).unwrap();
 
-        blocks
-            .alloc(
-                constants::BLOCK_CAPACITY - constants::LINE_SIZE,
-                SizeClass::Small,
-            )
-            .unwrap();
-        blocks
-            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
-            .unwrap();
-        blocks
-            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
-            .unwrap();
+        blocks.alloc(medium_layout).unwrap();
+        blocks.alloc(medium_layout_2).unwrap();
+        blocks.alloc(medium_layout_2).unwrap();
         assert_eq!(store.block_count(), 2);
 
-        blocks
-            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
-            .unwrap();
-        blocks
-            .alloc(constants::BLOCK_CAPACITY / 2, SizeClass::Medium)
-            .unwrap();
+        blocks.alloc(medium_layout_2).unwrap();
+        blocks.alloc(medium_layout_2).unwrap();
         assert_eq!(store.block_count(), 3);
     }
 }

@@ -1,6 +1,7 @@
 use super::constants::{ALIGN, BLOCK_SIZE};
 use super::errors::BlockError;
 use std::ptr::NonNull;
+use std::alloc::Layout;
 
 pub type BlockPtr = NonNull<u8>;
 
@@ -11,13 +12,17 @@ pub struct Block {
 
 impl Block {
     pub fn default() -> Result<Block, BlockError> {
-        Self::new(BLOCK_SIZE, BLOCK_SIZE)
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE);
+
+            Self::new(layout)
+        }
     }
 
-    pub fn new(size: usize, align: usize) -> Result<Block, BlockError> {
+    pub fn new(layout: Layout) -> Result<Block, BlockError> {
         Ok(Block {
-            ptr: internal::alloc_block(size, align)?,
-            size,
+            ptr: internal::alloc_block(layout)?,
+            size: layout.size(),
         })
     }
 
@@ -41,9 +46,8 @@ mod internal {
     use std::alloc::{alloc, dealloc, Layout};
     use std::ptr::NonNull;
 
-    pub fn alloc_block(size: usize, align: usize) -> Result<BlockPtr, BlockError> {
+    pub fn alloc_block(layout: Layout) -> Result<BlockPtr, BlockError> {
         unsafe {
-            let layout = Layout::from_size_align_unchecked(size, align);
             let ptr = alloc(layout);
 
             if ptr.is_null() {

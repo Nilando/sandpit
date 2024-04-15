@@ -3,6 +3,7 @@ use super::block_meta::BlockMeta;
 use super::constants;
 use super::errors::AllocError;
 use super::header::Mark;
+use std::alloc::Layout;
 
 pub struct BumpBlock {
     cursor: *const u8,
@@ -39,12 +40,12 @@ impl BumpBlock {
         }
     }
 
-    pub fn inner_alloc(&mut self, alloc_size: usize, mark: Mark) -> Option<*const u8> {
+    pub fn inner_alloc(&mut self, layout: Layout, mark: Mark) -> Option<*const u8> {
         loop {
             let ptr = self.cursor as usize;
-            let next_ptr = ptr.checked_sub(alloc_size)? & constants::ALLOC_ALIGN_MASK;
+            let next_ptr = ptr.checked_sub(layout.size())? & !(layout.align() - 1);
 
-            if self.current_hole_size() >= alloc_size {
+            if self.limit as usize <= next_ptr {
                 self.cursor = next_ptr as *const u8;
                 return Some(self.cursor);
             }
@@ -53,7 +54,7 @@ impl BumpBlock {
 
             if let Some((cursor, limit)) =
                 self.meta
-                    .find_next_available_hole(block_relative_limit, alloc_size, mark)
+                    .find_next_available_hole(block_relative_limit, layout.size(), mark)
             {
                 self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                 self.limit = unsafe { self.block.as_ptr().add(limit) };
@@ -81,9 +82,10 @@ mod tests {
     fn loop_check_allocate(b: &mut BumpBlock) -> usize {
         let mut v = Vec::new();
         let mut index = 0;
+        let layout = Layout::from_size_align(TEST_UNIT_SIZE, 8).unwrap();
 
         loop {
-            if let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE, Mark::Red) {
+            if let Some(ptr) = b.inner_alloc(layout, Mark::Red) {
                 let u32ptr = ptr as *mut u32;
 
                 assert!(!v.contains(&u32ptr));

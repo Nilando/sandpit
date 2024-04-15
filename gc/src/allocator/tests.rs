@@ -3,23 +3,25 @@ use super::constants::{ALIGN, BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
 use crate::allocate::{Allocate, GenerationalArena};
-use crate::allocator::constants::aligned_size;
-use crate::allocator::header::Header;
+use std::alloc::Layout;
+use std::ptr::write;
 
 #[test]
 fn hello_alloc() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
     let name = "Hello Alloc";
+    let layout = Layout::for_value(&name);
 
     assert_eq!(arena.get_size(), 0);
 
-    let ptr: std::ptr::NonNull<&str> = allocator.alloc(name).unwrap();
+    let ptr = allocator.alloc(layout).unwrap();
 
     unsafe {
-        let name_ref = ptr.as_ref();
+        write(ptr.as_ptr().cast(), name);
 
-        assert_eq!(name_ref, &name);
+        let expect = ptr.cast::<&str>().as_ref();
+        assert_eq!(expect, &name);
     }
 
     assert_eq!(arena.get_size(), BLOCK_SIZE);
@@ -30,20 +32,24 @@ fn alloc_large() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
     let data: [usize; BLOCK_SIZE] = [0; BLOCK_SIZE];
+    let layout = Layout::for_value(&data);
 
     assert_eq!(arena.get_size(), 0);
 
-    allocator.alloc(data).unwrap();
+    allocator.alloc(layout).unwrap();
 }
 
 #[test]
 fn alloc_many_single_bytes() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
+    let layout = Layout::new::<u8>();
 
     for _ in 0..100_000 {
-        let ptr = allocator.alloc(3_u8).unwrap();
+        let ptr = allocator.alloc(layout).unwrap();
+
         unsafe {
+            write(ptr.as_ptr(), 3_u8);
             let val = ptr.as_ref();
             assert_eq!(*val, 3);
         }
@@ -54,7 +60,8 @@ fn alloc_many_single_bytes() {
 fn alloc_too_big() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
-    let result = allocator.alloc_sized(std::u32::MAX);
+    let layout = Layout::from_size_align(std::u32::MAX as usize, 8).unwrap();
+    let result = allocator.alloc(layout);
     assert!(result.is_err());
 }
 
@@ -62,9 +69,10 @@ fn alloc_too_big() {
 fn alloc_two_large_arrays() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
-    allocator.alloc_sized((BLOCK_CAPACITY / 2) as u32).unwrap();
+    let layout = Layout::from_size_align(BLOCK_CAPACITY / 2, 8).unwrap();
+    allocator.alloc(layout).unwrap();
     assert_eq!(arena.get_size(), BLOCK_SIZE);
-    allocator.alloc_sized((BLOCK_CAPACITY / 2) as u32).unwrap();
+    allocator.alloc(layout).unwrap();
     assert_eq!(arena.get_size(), BLOCK_SIZE * 2);
 }
 
@@ -72,8 +80,9 @@ fn alloc_two_large_arrays() {
 fn refresh_arena() {
     let arena = Arena::new();
     let allocator = Allocator::new(&arena);
-    for i in 0..20 {
-        allocator.alloc_sized((BLOCK_CAPACITY / 2) as u32).unwrap();
+    let layout = Layout::from_size_align(BLOCK_CAPACITY / 2, 8).unwrap();
+    for _ in 0..20 {
+        allocator.alloc(layout).unwrap();
     }
     assert!(arena.get_size() > 10 * BLOCK_SIZE);
     arena.refresh();

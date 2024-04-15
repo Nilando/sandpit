@@ -15,6 +15,8 @@ impl<A: Allocate> Tracer for TracerWorker<A> {
             return;
         }
 
+        A::set_mark(ptr, self.mark);
+
         if self.new_packet.is_some() {
             if self.new_packet.as_ref().unwrap().is_full() {
                 let packet = self.new_packet.take().unwrap();
@@ -86,8 +88,6 @@ impl<A: Allocate> TracerWorker<A> {
                 Some((ptr, trace_fn)) => {
                     // TODO: COMPILE THIS CONDITIONALLY
                     self.metrics.objects_marked += 1;
-
-                    A::set_mark(ptr, self.mark);
                     trace_fn(ptr, self)
                 }
                 None => break,

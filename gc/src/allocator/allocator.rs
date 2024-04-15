@@ -9,21 +9,25 @@ use super::size_class::SizeClass;
 use crate::allocate::{Allocate, GenerationalArena};
 use std::ptr::write;
 use std::ptr::NonNull;
-use std::slice::from_raw_parts_mut;
+use std::mem::{align_of, size_of};
+use std::alloc::Layout;
 
 pub struct Allocator {
     head: AllocHead,
 }
 
 impl Allocator {
-    fn get_space(&self, size_class: SizeClass, alloc_size: usize) -> Result<*const u8, AllocError> {
-        self.head.alloc(alloc_size, size_class)
+    fn get_space(&self, layout: Layout) -> Result<*const u8, AllocError> {
+        self.head.alloc(layout)
     }
 
-    fn get_header(object: &NonNull<()>) -> &Header {
+    fn get_header<T>(object: &NonNull<T>) -> &Header {
         unsafe {
+            let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
+            let header_size = size_of::<Header>();
+            let padding = header_size % align;
             let ptr = object.as_ptr().cast::<u8>();
-            let header_ptr = ptr.sub(aligned_size::<Header>()) as *mut Header;
+            let header_ptr = ptr.sub(header_size + padding) as *mut Header;
 
             &*header_ptr
         }
@@ -48,50 +52,31 @@ impl Allocate for Allocator {
         }
     }
 
-    fn alloc<T>(&self, object: T) -> Result<NonNull<T>, AllocError> {
-        let alloc_size = aligned_size::<Header>() + aligned_size::<T>();
-
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        let align = std::cmp::max(align_of::<Header>(), layout.align());
+        let header_size = size_of::<Header>();
+        let padding = header_size % align;
+        let alloc_size = header_size + padding + layout.size();
         let size_class = SizeClass::get_for_size(alloc_size)?;
         let header = Header::new(size_class, alloc_size as u16);
-        let space = self.get_space(size_class, alloc_size)?;
 
         unsafe {
-            let object_space = space.add(aligned_size::<Header>());
+            let space = self.get_space(Layout::from_size_align_unchecked(alloc_size, align))?;
+            let object_space = space.add(header_size + padding);
             write(space as *mut Header, header);
-            write(object_space as *mut T, object);
-            Ok(NonNull::new(object_space as *mut T).unwrap())
-        }
-    }
-
-    fn alloc_sized(&self, len: u32) -> Result<NonNull<u8>, AllocError> {
-        let alloc_size = aligned_size::<Header>() + Self::aligned_array_size(len as usize);
-        let size_class = SizeClass::get_for_size(alloc_size)?;
-        let header = Header::new(size_class, alloc_size as u16);
-        let space = self.get_space(size_class, alloc_size)?;
-
-        unsafe {
-            let array_space = space.add(aligned_size::<Header>());
-            write(space as *mut Header, header);
-            let array = from_raw_parts_mut(array_space as *mut u8, len as usize);
-
-            for byte in array {
-                *byte = 0;
-            }
-
-            Ok(NonNull::new(array_space as *mut u8).unwrap())
+            // write(object_space as *mut T, object);
+            Ok(NonNull::new(object_space as *mut u8).unwrap())
         }
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        let binding = ptr.cast();
-        let header = Self::get_header(&binding);
+        let header = Self::get_header(&ptr);
 
         header.get_mark()
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        let binding = ptr.cast();
-        let header = Self::get_header(&binding);
+        let header = Self::get_header(&ptr);
         let size_class = header.get_size_class();
 
         header.set_mark(mark);
