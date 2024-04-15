@@ -1,6 +1,7 @@
 use super::size_class::SizeClass;
+use super::block_meta::BlockMeta;
 use crate::allocate::Marker;
-use std::cell::UnsafeCell;
+use std::cell::Cell;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -41,7 +42,7 @@ impl From<u8> for Mark {
 }
 
 pub struct Header {
-    mark: UnsafeCell<Mark>,
+    mark: Cell<Mark>,
     size_class: SizeClass,
     size: u16,
 }
@@ -49,18 +50,14 @@ pub struct Header {
 impl Header {
     pub fn new(size_class: SizeClass, size: u16) -> Self {
         Header {
-            mark: UnsafeCell::new(Mark::New),
+            mark: Cell::new(Mark::New),
             size_class,
             size,
         }
     }
 
     pub fn get_mark(&self) -> Mark {
-        unsafe { *self.mark.get() }
-    }
-
-    pub fn set_mark(&self, mark: Mark) {
-        unsafe { *self.mark.get() = mark }
+        self.mark.get()
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -69,5 +66,15 @@ impl Header {
 
     pub fn get_size(&self) -> u16 {
         self.size
+    }
+
+    pub fn set_mark(&self, mark: Mark) {
+        self.mark.set(mark);
+
+        if self.size_class != SizeClass::Large {
+            let mut meta = BlockMeta::from_header(self);
+
+            meta.mark(self, mark);
+        }
     }
 }

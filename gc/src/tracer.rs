@@ -97,7 +97,6 @@ impl<A: Allocate> TracerWorker<A> {
 
     fn send_packet(&mut self, packet: TracePacket<TracerWorker<A>>) {
         self.unscanned.lock().unwrap().push(packet);
-
         // if we have an available worker, that is waiting, give it to them
     }
 }

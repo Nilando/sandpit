@@ -1,4 +1,5 @@
 use super::constants;
+use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
 use core::ptr::NonNull;
@@ -20,24 +21,30 @@ impl BlockMeta {
         }
     }
 
-    pub fn from_obj(obj_ptr: NonNull<()>) -> Self {
-        let addr = obj_ptr.as_ptr() as usize;
+    pub fn from_header(header: &Header) -> Self {
+        let addr =  header as *const Header as usize;
         let block_start = (addr - (addr % constants::BLOCK_SIZE)) as *const u8;
 
         Self::from_block(block_start as *const u8)
     }
 
-    pub fn mark(&mut self, obj_ptr: NonNull<()>, size_class: SizeClass, size: u32, mark: Mark) {
-        let relative_ptr = (obj_ptr.as_ptr() as usize) % constants::BLOCK_SIZE;
+    pub fn mark(&mut self, header: &Header, mark: Mark) {
+        let addr =  header as *const Header as usize;
+
+        let relative_ptr = (addr as usize) % constants::BLOCK_SIZE;
+
         let line = relative_ptr / constants::LINE_SIZE;
-        if size_class == SizeClass::Small {
+
+        if header.get_size_class() == SizeClass::Small {
             self.mark_line(line, mark);
         } else {
-            let num_lines = size / constants::LINE_SIZE as u32;
+            let num_lines = header.get_size() / constants::LINE_SIZE as u16;
+
             for i in 0..num_lines {
                 self.mark_line(line + i as usize, mark);
             }
         }
+
         self.mark_block(mark);
     }
 
