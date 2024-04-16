@@ -34,7 +34,7 @@ impl Block {
         self.layout.size()
     }
 
-    pub fn alloc_block(layout: Layout) -> Result<BlockPtr, BlockError> {
+    fn alloc_block(layout: Layout) -> Result<BlockPtr, BlockError> {
         unsafe {
             let ptr = alloc(layout);
 
@@ -46,7 +46,7 @@ impl Block {
         }
     }
 
-    pub fn dealloc_block(ptr: BlockPtr, layout: Layout) {
+    fn dealloc_block(ptr: BlockPtr, layout: Layout) {
         unsafe { dealloc(ptr.as_ptr(), layout) }
     }
 }
