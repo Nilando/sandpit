@@ -7,7 +7,7 @@ pub type BlockPtr = NonNull<u8>;
 
 pub struct Block {
     ptr: BlockPtr,
-    size: usize,
+    layout: Layout,
 }
 
 impl Block {
@@ -22,7 +22,7 @@ impl Block {
     pub fn new(layout: Layout) -> Result<Block, BlockError> {
         Ok(Block {
             ptr: internal::alloc_block(layout)?,
-            size: layout.size(),
+            layout,
         })
     }
 
@@ -31,13 +31,13 @@ impl Block {
     }
 
     pub fn get_size(&self) -> usize {
-        self.size
+        self.layout.size()
     }
 }
 
 impl Drop for Block {
     fn drop(&mut self) {
-        internal::dealloc_block(self.ptr, self.size);
+        internal::dealloc_block(self.ptr, self.layout);
     }
 }
 
@@ -58,15 +58,7 @@ mod internal {
         }
     }
 
-    pub fn dealloc_block(ptr: BlockPtr, size: usize) {
-        unsafe {
-            let layout = if size > BLOCK_SIZE {
-                Layout::from_size_align_unchecked(size, ALIGN)
-            } else {
-                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE)
-            };
-
-            dealloc(ptr.as_ptr(), layout);
-        }
+    pub fn dealloc_block(ptr: BlockPtr, layout: Layout) {
+        unsafe { dealloc(ptr.as_ptr(), layout) }
     }
 }

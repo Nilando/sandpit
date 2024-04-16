@@ -111,3 +111,13 @@ fn clone_size_class() {
 
     assert!(foo == clone);
 }
+
+#[test]
+fn large_object_align() {
+    let arena = Arena::new();
+    let allocator = Allocator::new(&arena);
+    let layout = Layout::from_size_align(BLOCK_CAPACITY * 2, 128).unwrap();
+    let ptr = allocator.alloc(layout).unwrap();
+
+    assert!(((ptr.as_ptr() as usize) % 128) == 0)
+}

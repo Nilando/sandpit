@@ -1,6 +1,5 @@
 use super::alloc_head::AllocHead;
 use super::arena::Arena;
-use super::constants::{aligned_size, ALIGN};
 use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
