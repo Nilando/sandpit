@@ -54,6 +54,7 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
                 unsafe { write(ptr.as_ptr().cast(), obj) }
+
                 Ok(GcPtr::new(ptr.cast()))
             },
             Err(_) => todo!(),
@@ -61,7 +62,17 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
     fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError> {
-        todo!()
+        use std::mem::{size_of, align_of};
+
+        let layout = unsafe { Layout::from_size_align_unchecked(size_of::<T>() * capacity, align_of::<T>()) };
+        match self.allocator.alloc(layout) {
+            Ok(ptr) => {
+                let gc_ptr = GcPtr::new(ptr.cast::<T>());
+
+                Ok(GcArray::new(gc_ptr.into(), 0, capacity))
+            },
+            Err(_) => todo!(),
+        }
     }
 
     fn write_barrier<T: Trace>(&mut self, ptr: NonNull<T>) {

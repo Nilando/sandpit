@@ -10,6 +10,7 @@ pub unsafe trait Trace: 'static {
     {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
     }
+    fn needs_trace() -> bool { true }
 }
 
 // ****************************************************************************
@@ -17,10 +18,13 @@ pub unsafe trait Trace: 'static {
 // ****************************************************************************
 
 unsafe impl<T: TraceLeaf> Trace for T {
-    fn trace<A: Tracer>(&self, _tracer: &mut A) {}
-    fn dyn_trace<A: Tracer>(_ptr: NonNull<()>, _tracer: &mut A) {
+    fn trace<U: Tracer>(&self, _tracer: &mut U) {
+        // this will be called,but never
+    }
+    fn dyn_trace<U: Tracer>(_ptr: NonNull<()>, _tracer: &mut U) {
         unimplemented!()
     }
+    fn needs_trace() -> bool { false }
 }
 
 unsafe impl TraceLeaf for () {}
@@ -37,26 +41,25 @@ unsafe impl TraceLeaf for i32 {}
 unsafe impl TraceLeaf for i64 {}
 unsafe impl TraceLeaf for i128 {}
 unsafe impl TraceLeaf for isize {}
-
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 
 // ****************************************************************************
 // TRACE IMPLS
 // ****************************************************************************
 
-unsafe impl<O: Trace> Trace for Option<O> {
-    fn trace<T: Tracer>(&self, tracer: &mut T) {
+unsafe impl<T: Trace> Trace for Option<T> {
+    fn trace<U: Tracer>(&self, tracer: &mut U) {
         self.as_ref().map(|value| value.trace(tracer));
     }
 }
 
-unsafe impl<O: Trace> Trace for gc_ptr::GcPtr<O> {
-    fn trace<T: Tracer>(&self, tracer: &mut T) {
+unsafe impl<T: Trace> Trace for gc_ptr::GcPtr<T> {
+    fn trace<U: Tracer>(&self, tracer: &mut U) {
         tracer.send_unscanned(self.as_ptr())
     }
 }
 unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
-    fn trace<A: Tracer>(&self, tracer: &mut A) {
+    fn trace<U: Tracer>(&self, tracer: &mut U) {
         if let Some(ptr) = self.as_ptr() {
             tracer.send_unscanned(ptr)
         }
@@ -64,8 +67,10 @@ unsafe impl<T: Trace> Trace for gc_ptr::GcCellPtr<T> {
 }
 
 unsafe impl<T: Trace> Trace for gc_array::GcArray<T> {
-    fn trace<A: Tracer>(&self, tracer: &mut A) {
-        todo!()
+    fn trace<U: Tracer>(&self, tracer: &mut U) {
+        for i in 0..self.len() {
+            self.at(i).trace(tracer)
+        }
     }
 }
 

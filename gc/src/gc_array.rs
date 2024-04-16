@@ -41,10 +41,13 @@ impl<T: Trace> GcArray<T> {
         // if len is less than capacity
         // simply push
 
-        // if len == cap
-        // we need to grow/realloc the array
-        // this will change the start pointer and update the capacity
-        todo!()
+        if self.size == self.capacity {
+            todo!()
+            // we need to grow/realloc the array
+            // this might change the start pointer and will update the capacity
+        }
+
+
     }
 
     pub fn pop(&self) -> T {

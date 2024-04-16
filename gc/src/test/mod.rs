@@ -39,3 +39,15 @@ fn gc_cell_write_barrier() {
         assert_eq!(val, 420);
     });
 }
+
+#[test]
+fn dyn_trace_on_usize() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    gc.mutate(|root, _| {
+        assert_eq!(**root, 69);
+    });
+
+    gc.collect();
+}
+

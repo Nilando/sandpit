@@ -17,6 +17,8 @@ impl<A: Allocate> Tracer for TracerWorker<A> {
 
         A::set_mark(ptr, self.mark);
 
+        if !T::needs_trace() { return }
+
         if self.new_packet.is_some() {
             if self.new_packet.as_ref().unwrap().is_full() {
                 let packet = self.new_packet.take().unwrap();
