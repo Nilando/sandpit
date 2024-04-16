@@ -1,6 +1,5 @@
 use super::alloc_head::AllocHead;
 use super::arena::Arena;
-use super::block_meta::BlockMeta;
 use super::constants::{aligned_size, ALIGN};
 use super::errors::AllocError;
 use super::header::Header;
@@ -17,27 +16,13 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    fn get_space(&self, layout: Layout) -> Result<*const u8, AllocError> {
-        self.head.alloc(layout)
-    }
-
-    fn get_header<T>(object: &NonNull<T>) -> &Header {
+    fn get_header<'a, T>(object: NonNull<T>) -> &'a Header {
         unsafe {
             let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
-            let header_size = size_of::<Header>();
-            let padding = header_size % align;
             let ptr = object.as_ptr().cast::<u8>();
-            let header_ptr = ptr.sub(header_size + padding) as *mut Header;
+            let header_ptr = ptr.sub(align) as *mut Header;
 
             &*header_ptr
-        }
-    }
-
-    fn aligned_array_size(size: usize) -> usize {
-        if size % ALIGN == 0 {
-            size
-        } else {
-            size + (ALIGN - (size % ALIGN))
         }
     }
 }
@@ -55,28 +40,29 @@ impl Allocate for Allocator {
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         let align = std::cmp::max(align_of::<Header>(), layout.align());
         let header_size = size_of::<Header>();
-        let padding = header_size % align;
+        let padding = (align - (header_size % align)) % align;
         let alloc_size = header_size + padding + layout.size();
         let size_class = SizeClass::get_for_size(alloc_size)?;
         let header = Header::new(size_class, alloc_size as u16);
 
         unsafe {
-            let space = self.get_space(Layout::from_size_align_unchecked(alloc_size, align))?;
+            let layout = Layout::from_size_align_unchecked(alloc_size, align);
+            let space = self.head.alloc(layout)?;
             let object_space = space.add(header_size + padding);
+
             write(space as *mut Header, header);
-            // write(object_space as *mut T, object);
             Ok(NonNull::new(object_space as *mut u8).unwrap())
         }
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        let header = Self::get_header(&ptr);
+        let header = Self::get_header(ptr);
 
         header.get_mark()
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        let header = Self::get_header(&ptr);
+        let header = Self::get_header(ptr);
 
         header.set_mark(mark);
     }

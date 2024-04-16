@@ -1,4 +1,5 @@
 use super::arena::Arena;
+use super::header::Mark;
 use super::constants::{ALIGN, BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
@@ -87,6 +88,19 @@ fn refresh_arena() {
     assert!(arena.get_size() > 10 * BLOCK_SIZE);
     arena.refresh();
     assert_eq!(arena.get_size(), 10 * BLOCK_SIZE);
+}
+
+#[test]
+fn object_align() {
+    let arena = Arena::new();
+    let allocator = Allocator::new(&arena);
+    for i in 0..10 {
+        let align: usize = 2_usize.pow(i);
+        let layout = Layout::from_size_align(32, align).unwrap();
+        let ptr = allocator.alloc(layout).unwrap();
+
+        assert!(((ptr.as_ptr() as usize) % align) == 0)
+    }
 }
 
 #[test]
