@@ -1,7 +1,7 @@
 use super::size_class::SizeClass;
 use super::block_meta::BlockMeta;
 use crate::allocate::Marker;
-use std::cell::Cell;
+use std::sync::atomic::{Ordering, AtomicU8};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -21,10 +21,10 @@ impl Marker for Mark {
 impl Mark {
     pub fn rotate(&self) -> Self {
         match self {
-            Mark::New => panic!("The new mark cannot be rotated"),
             Mark::Red => Mark::Green,
             Mark::Green => Mark::Blue,
             Mark::Blue => Mark::Red,
+            Mark::New => panic!("The new mark cannot be rotated"),
         }
     }
 }
@@ -42,7 +42,7 @@ impl From<u8> for Mark {
 }
 
 pub struct Header {
-    mark: Cell<Mark>,
+    mark: AtomicU8,
     size_class: SizeClass,
     size: u16,
 }
@@ -50,14 +50,14 @@ pub struct Header {
 impl Header {
     pub fn new(size_class: SizeClass, size: u16) -> Self {
         Header {
-            mark: Cell::new(Mark::New),
+            mark: AtomicU8::new(Mark::New as u8),
             size_class,
             size,
         }
     }
 
     pub fn get_mark(&self) -> Mark {
-        self.mark.get()
+        self.mark.load(Ordering::Relaxed).into()
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -69,7 +69,7 @@ impl Header {
     }
 
     pub fn set_mark(&self, mark: Mark) {
-        self.mark.set(mark);
+        self.mark.store(mark as u8, Ordering::Relaxed);
 
         if self.size_class != SizeClass::Large {
             let mut meta = BlockMeta::from_header(self);
