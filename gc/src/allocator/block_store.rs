@@ -19,7 +19,6 @@ impl BlockStore {
     pub fn new() -> Self {
         Self {
             block_count: AtomicUsize::new(0),
-            //alloc_size: AtomicUsize::new(0),
             free: Mutex::new(vec![]),
             recycle: Mutex::new(vec![]),
             rest: Mutex::new(vec![]),
@@ -118,6 +117,7 @@ impl BlockStore {
         *rest = new_rest;
         *recycle = new_recycle;
 
+        // TODO: ADD 10 as a CONFIG
         while free.len() >= 10 {
             self.block_count.fetch_sub(1, Ordering::Relaxed);
             free.pop();

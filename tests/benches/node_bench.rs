@@ -6,7 +6,7 @@ fn full_collection() {
     let gc = Gc::build(|mutator| {
         let root = Node::alloc(mutator, 0).unwrap();
         for _ in 0..100_000 {
-            Node::insert_rand(root, mutator);
+            Node::insert_rand(&root, mutator);
         }
 
         root
@@ -21,7 +21,7 @@ fn eden_collection() {
     let gc = Gc::build(|mutator| {
         let root = Node::alloc(mutator, 0).unwrap();
         for _ in 0..100_000 {
-            Node::insert_rand(root, mutator);
+            Node::insert_rand(&root, mutator);
         }
 
         root

@@ -10,6 +10,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use std::alloc::Layout;
 use std::ptr::write;
+use std::mem::{size_of, align_of};
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
@@ -62,14 +63,17 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
     fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError> {
-        use std::mem::{size_of, align_of};
-
         let layout = unsafe { Layout::from_size_align_unchecked(size_of::<T>() * capacity, align_of::<T>()) };
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
-                let gc_ptr = GcPtr::new(ptr.cast::<T>());
+                if capacity == 0 {
+                    //return Ok(GcArray::new(GcPtr::new(None), 0, capacity))
+                    todo!()
+                }
 
-                Ok(GcArray::new(gc_ptr.into(), 0, capacity))
+                let gc_ptr: GcPtr<T> = GcPtr::new(ptr.cast());
+
+                Ok(GcArray::new(gc_ptr, 0, capacity))
             },
             Err(_) => todo!(),
         }

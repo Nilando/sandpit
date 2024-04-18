@@ -17,7 +17,7 @@ mod tracer_controller;
 pub use error::GcError;
 pub use gc_array::GcArray;
 pub use gc_cell::GcCell;
-pub use gc_ptr::{GcCellPtr, GcPtr, StrongGcPtr};
+pub use gc_ptr::{GcPtr};
 pub use mutator::Mutator;
 pub use trace::Trace;
 pub use tracer::Tracer;
