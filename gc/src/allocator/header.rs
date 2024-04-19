@@ -1,6 +1,6 @@
+use crate::allocate::Marker;
 use super::size_class::SizeClass;
 use super::block_meta::BlockMeta;
-use crate::allocate::Marker;
 use std::sync::atomic::{Ordering, AtomicU8};
 
 #[repr(u8)]
@@ -21,10 +21,11 @@ impl Marker for Mark {
 impl Mark {
     pub fn rotate(&self) -> Self {
         match self {
-            Mark::Red => Mark::Green,
+            Mark::Red   => Mark::Green,
             Mark::Green => Mark::Blue,
-            Mark::Blue => Mark::Red,
-            Mark::New => panic!("The new mark cannot be rotated"),
+            Mark::Blue  => Mark::Red,
+
+            Mark::New   => unreachable!(),
         }
     }
 }
@@ -32,11 +33,11 @@ impl Mark {
 impl From<u8> for Mark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == Mark::New as u8 => Mark::New,
-            x if x == Mark::Red as u8 => Mark::Red,
+            x if x == Mark::New   as u8 => Mark::New,
+            x if x == Mark::Red   as u8 => Mark::Red,
             x if x == Mark::Green as u8 => Mark::Green,
-            x if x == Mark::Blue as u8 => Mark::Blue,
-            _ => panic!("Bad mark"),
+            x if x == Mark::Blue  as u8 => Mark::Blue,
+            _ => panic!("Bad GC Mark"),
         }
     }
 }

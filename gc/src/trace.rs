@@ -41,6 +41,7 @@ unsafe impl TraceLeaf for i32 {}
 unsafe impl TraceLeaf for i64 {}
 unsafe impl TraceLeaf for i128 {}
 unsafe impl TraceLeaf for isize {}
+unsafe impl TraceLeaf for std::sync::atomic::AtomicUsize {}
 unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
 
 // ****************************************************************************
@@ -62,15 +63,5 @@ unsafe impl<T: Trace> Trace for gc_ptr::GcPtr<T> {
                 tracer.send_unscanned(NonNull::new_unchecked(ptr))
             }
         }
-    }
-}
-
-unsafe impl<T: Trace> Trace for gc_array::GcArray<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
-        todo!()
-        // mark the array
-        //for i in 0..self.len() {
-            //self.at(i).trace(tracer)
-        //}
     }
 }

@@ -14,7 +14,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alloc_and_collect_empty_list() {
+    fn empty_list() {
         let gc: Gc<List<u8>> = Gc::build(|mutator| mutator.alloc_array(0).expect("root allocated"));
 
         gc.collect();
@@ -22,11 +22,12 @@ mod tests {
         gc.mutate(|root, _| {
             assert_eq!(root.len(), 0);
             assert_eq!(root.cap(), 0);
+            assert!(root.pop().is_none());
         });
     }
 
     #[test]
-    fn alloc_and_collect_list_with_capacity() {
+    fn collect_list() {
         let gc: Gc<List<u8>> = Gc::build(|mutator| mutator.alloc_array(8).expect("root allocated"));
 
         gc.collect();
@@ -38,30 +39,18 @@ mod tests {
     }
 
     #[test]
-    fn push_zero_capacity_list() {
-        let gc: Gc<List<u8>> = Gc::build(|mutator| mutator.alloc_array(0).expect("root allocated"));
-
-        gc.mutate(|root, mutator| {
-            for i in 0..8 {
-                root.push(ListItem::Val(i));
-            }
-
-            assert_eq!(root.len(), 8);
-            assert_eq!(root.cap(), 8);
-        });
-    }
-
-    #[test]
-    fn push_list() {
+    fn fill_list() {
         let gc: Gc<List<u8>> = Gc::build(|mutator| mutator.alloc_array(8).expect("root allocated"));
 
         gc.mutate(|root, mutator| {
             for i in 0..8 {
-                root.push(ListItem::Val(i));
+                let item = mutator.alloc(ListItem::Val(i)).unwrap();
+                root.push(item);
             }
 
             assert_eq!(root.len(), 8);
             assert_eq!(root.cap(), 8);
         });
     }
+
 }

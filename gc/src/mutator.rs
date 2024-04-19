@@ -1,6 +1,6 @@
 use super::allocate::{Allocate, Marker};
 use super::error::GcError;
-use super::gc_array::GcArray;
+use super::gc_array::{GcArray, GcArrayMeta};
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
 use super::trace_packet::TracePacket;
@@ -63,21 +63,31 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
     fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError> {
-        let layout = unsafe { Layout::from_size_align_unchecked(size_of::<T>() * capacity, align_of::<T>()) };
-        match self.allocator.alloc(layout) {
+        let internal_layout = unsafe { Layout::from_size_align_unchecked(size_of::<GcPtr<T>>() * capacity, align_of::<GcPtr<T>>()) };
+
+        let internal_ptr = 
+        match self.allocator.alloc(internal_layout) {
             Ok(ptr) => {
-                if capacity == 0 {
-                    //return Ok(GcArray::new(GcPtr::new(None), 0, capacity))
-                    todo!()
+                for i in 0..capacity {
+                    unsafe {
+                        let offset_ptr = ptr.cast::<GcPtr<T>>().as_ptr().add(i);
+                        let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset_ptr));
+
+                        gc_ptr.set_null();
+                    }
                 }
 
-                let gc_ptr: GcPtr<T> = GcPtr::new(ptr.cast());
-
-                Ok(GcArray::new(gc_ptr, 0, capacity))
+                GcPtr::new(ptr.cast::<GcPtr<T>>())
             },
             Err(_) => todo!(),
-        }
+        };
+
+        let meta = GcArrayMeta::new(internal_ptr, 0, capacity);
+        let meta_ptr = self.alloc(meta)?;
+
+        Ok(GcArray::new(meta_ptr))
     }
+
 
     fn write_barrier<T: Trace>(&mut self, ptr: NonNull<T>) {
         if A::get_mark(ptr).is_new() {
