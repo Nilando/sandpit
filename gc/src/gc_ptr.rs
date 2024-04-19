@@ -57,7 +57,7 @@ impl<T: Trace> GcPtr<T> {
 
     pub fn write_barrier<V: Trace, M: Mutator>(
         &self,
-        mutator: &mut M,
+        mutator: &M,
         new_ptr: GcPtr<V>,
         callback: fn(&T) -> &GcPtr<V>,
     ) {

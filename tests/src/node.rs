@@ -30,20 +30,20 @@ impl Node {
         this.right.set_null();
     }
 
-    pub fn set_left<M: Mutator>(this: &GcPtr<Node>, mutator: &mut M, new_left: GcPtr<Node>) {
+    pub fn set_left<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_left: GcPtr<Node>) {
         this.write_barrier(mutator, new_left, |this| &this.left);
     }
 
-    pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &mut M, new_right: GcPtr<Node>) {
+    pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
         this.write_barrier(mutator, new_right, |this| &this.right);
     }
 
-    pub fn insert_rand<M: Mutator>(this: &GcPtr<Node>, mutator: &mut M) {
+    pub fn insert_rand<M: Mutator>(this: &GcPtr<Node>, mutator: &M) {
         let x = rand::thread_rng().gen_range(0..10_000_000);
         Node::insert(this, mutator, x);
     }
 
-    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &mut M, new_val: usize) {
+    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
@@ -90,6 +90,28 @@ impl Node {
             Some(this.clone())
         } else {
             None
+        }
+    }
+
+    pub fn create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mutator: &M, size: usize) {
+        Node::kill_children(this);
+        this.val.set(size / 2);
+        Node::inner_create_balanced_tree(this, mutator, 0, size)
+    }
+
+    fn inner_create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mutator: &M, low: usize, high: usize) {
+        if this.val.get() > low {
+            let right_val = low + ((this.val.get() - low) / 2);
+            let right = Node::alloc(mutator, right_val).unwrap();
+            Node::set_right(this, mutator, right.clone());
+            Node::inner_create_balanced_tree(&right, mutator, low, this.val.get());
+        }
+
+        if (this.val.get() + 1) < high {
+            let left_val = this.val.get() + ((high - this.val.get()) / 2);
+            let left = Node::alloc(mutator, left_val).unwrap();
+            Node::set_left(this, mutator, left.clone());
+            Node::inner_create_balanced_tree(&left, mutator, this.val.get() + 1, high);
         }
     }
 }

@@ -11,18 +11,19 @@ use std::sync::Arc;
 use std::alloc::Layout;
 use std::ptr::write;
 use std::mem::{size_of, align_of};
+use std::cell::UnsafeCell;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_array<T: Trace>(&self, capacity: usize) -> Result<GcArray<T>, GcError>;
-    fn write_barrier<T: Trace>(&mut self, obj: NonNull<T>);
-    fn yield_requested(&mut self) -> bool;
+    fn write_barrier<T: Trace>(&self, obj: NonNull<T>);
+    fn yield_requested(&self) -> bool;
 }
 
 pub struct MutatorScope<A: Allocate> {
     allocator: A,
     tracer_controller: Arc<TracerController<A>>,
-    new_packet: Option<TracePacket<TracerWorker<A>>>,
+    new_packet: UnsafeCell<TracePacket<TracerWorker<A>>>,
 }
 
 impl<A: Allocate> MutatorScope<A> {
@@ -32,21 +33,22 @@ impl<A: Allocate> MutatorScope<A> {
         Self {
             allocator,
             tracer_controller,
-            new_packet: None,
+            new_packet: UnsafeCell::new(TracePacket::new()),
         }
     }
 }
 
 impl<A: Allocate> Drop for MutatorScope<A> {
     fn drop(&mut self) {
-        if let Some(packet) = self.new_packet.take() {
-            self.tracer_controller.push_packet(packet)
+        unsafe {
+            let packet_ref = &mut *self.new_packet.get();
+            self.tracer_controller.push_packet(packet_ref.clone());
         }
     }
 }
 
 impl<A: Allocate> Mutator for MutatorScope<A> {
-    fn yield_requested(&mut self) -> bool {
+    fn yield_requested(&self) -> bool {
         self.tracer_controller.get_yield_flag()
     }
 
@@ -89,24 +91,19 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
 
-    fn write_barrier<T: Trace>(&mut self, ptr: NonNull<T>) {
+    fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
         if A::get_mark(ptr).is_new() {
             return;
         }
 
-        match self.new_packet.take() {
-            Some(mut packet) => {
-                if packet.is_full() {
-                    self.tracer_controller.push_packet(packet);
-                } else {
-                    packet.push(Some((ptr.cast(), T::dyn_trace)));
-                    self.new_packet = Some(packet);
-                }
-            }
-            None => {
-                let mut packet = TracePacket::new();
-                packet.push(Some((ptr.cast(), T::dyn_trace)));
-                self.new_packet = Some(packet);
+        unsafe {
+            let packet_ref = &mut *self.new_packet.get();
+
+            if packet_ref.is_full() {
+                self.tracer_controller.push_packet(packet_ref.clone());
+                *packet_ref = TracePacket::new();
+            } else {
+                packet_ref.push(Some((ptr.cast(), T::dyn_trace))); 
             }
         }
     }

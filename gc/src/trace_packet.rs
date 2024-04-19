@@ -5,7 +5,6 @@ pub const TRACE_PACKET_SIZE: usize = 100;
 
 pub type UnscannedPtr<T> = (NonNull<()>, fn(NonNull<()>, &mut T));
 
-#[derive(Copy, Clone)]
 pub struct TracePacket<T> {
     jobs: [Option<UnscannedPtr<T>>; TRACE_PACKET_SIZE],
     len: usize,
@@ -35,5 +34,14 @@ impl<T: Tracer> TracePacket<T> {
 
     pub fn is_full(&self) -> bool {
         self.len == TRACE_PACKET_SIZE
+    }
+}
+
+impl<T: Tracer> Clone for TracePacket<T> {
+    fn clone(&self) -> Self {
+        Self {
+            len: self.len,
+            jobs: self.jobs.clone()
+        }
     }
 }
