@@ -19,5 +19,5 @@ name = "node_bench"
 harness = false
 
 # set bench to debug when making flamegraph
-# [profile.bench]
-# debug = true
+[profile.bench]
+debug = true
