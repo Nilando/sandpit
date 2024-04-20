@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use gc::Gc;
+use gc::{Gc, Mutator};
 use tests::Node;
 
 const TREE_SIZE: usize = 10_000;
@@ -45,10 +45,34 @@ fn eden_collection() {
     });
 }
 
-fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("full collection", |b| b.iter(|| full_collection()));
-    c.bench_function("eden collection", |b| b.iter(|| eden_collection()));
+fn sync_collection() {
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
+
+    gc.mutate(|root, m| {
+        Node::create_balanced_tree(root, m, TREE_SIZE);
+    });
+
+    gc.collect();
 }
 
-criterion_group!(benches, criterion_benchmark);
+fn concurrent_collection() {
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
+
+    gc.start_monitor();
+
+    gc.mutate(|root, m| {
+        Node::create_balanced_tree(root, m, TREE_SIZE);
+    });
+
+    gc.collect();
+}
+
+fn node_benchmark(c: &mut Criterion) {
+    c.bench_function("full collection", |b| b.iter(|| full_collection()));
+    c.bench_function("eden collection", |b| b.iter(|| eden_collection()));
+    c.bench_function("sync collection", |b| b.iter(|| sync_collection()));
+    c.bench_function("concurrent collection", |b| b.iter(|| concurrent_collection()));
+}
+
+criterion_group!(benches, node_benchmark);
 criterion_main!(benches);

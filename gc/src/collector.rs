@@ -66,6 +66,9 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
     }
 
     fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator)) {
+        if self.tracer.get_yield_flag() {
+            self.tracer.wait_for_trace();
+        }
         let _yield_lock = self.tracer.get_yield_lock();
         let mut mutator = Self::Mutator::new(self.arena.as_ref(), self.tracer.clone());
 

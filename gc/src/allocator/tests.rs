@@ -5,6 +5,7 @@ use super::Allocator;
 use crate::allocate::{Allocate, GenerationalArena};
 use std::alloc::Layout;
 use std::ptr::write;
+use std::mem::{size_of, align_of};
 
 #[test]
 fn hello_alloc() {
@@ -119,4 +120,39 @@ fn large_object_align() {
     let ptr = allocator.alloc(layout).unwrap();
 
     assert!(((ptr.as_ptr() as usize) % 128) == 0)
+}
+
+#[test]
+fn arena_get_size() {
+    use super::header::{Mark, Header};
+    let arena = Arena::new();
+    let alloc = Allocator::new(&arena);
+
+    let small = Layout::from_size_align(1, align_of::<u8>()).unwrap();
+    let medium = Layout::from_size_align(512, align_of::<u8>()).unwrap();
+    let large = Layout::from_size_align(80_000, align_of::<u8>()).unwrap();
+
+    let p1 = alloc.alloc(small).unwrap();
+    let p2 = alloc.alloc(medium).unwrap();
+    let p3 = alloc.alloc(large).unwrap();
+    Allocator::set_mark(p1, Mark::Red);
+    Allocator::set_mark(p2, Mark::Red);
+    Allocator::set_mark(p3, Mark::Red);
+
+    let small_header = Allocator::get_header(p1);
+    let med_header = Allocator::get_header(p2);
+    let large_header = Allocator::get_header(p3);
+
+    unsafe {
+        assert_eq!((*small_header).get_size_class(), SizeClass::Small);
+        assert_eq!((*med_header).get_size_class(), SizeClass::Medium);
+        assert_eq!((*large_header).get_size_class(), SizeClass::Large);
+    }
+
+    let align = std::cmp::max(align_of::<Header>(), large.align());
+    let header_size = size_of::<Header>();
+    let padding = (align - (header_size % align)) % align;
+    let large_size = header_size + padding + large.size();
+
+    assert_eq!(arena.get_size(), (BLOCK_SIZE + large_size));
 }

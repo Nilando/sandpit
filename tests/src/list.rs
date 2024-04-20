@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use gc::{Mutator, Trace, GcArray};
+    use gc::{Mutator, Trace, GcArray, GcPtr};
     use gc_derive::Trace;
 
     type List<T> = GcArray<ListItem<T>>;
@@ -208,5 +208,32 @@ mod tests {
         gc.mutate(|root, _| {
             assert_eq!(root.len(), 10000);
         });
+    }
+
+
+    #[test]
+    fn get_size() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            let large_list = GcArray::alloc_with_capacity(mutator, 40_000).unwrap();
+            let large_item = mutator.alloc(ListItem::List(large_list)).unwrap();
+            root.push(mutator, large_item);
+
+            let medium_list = GcArray::alloc_with_capacity(mutator, 500).unwrap();
+            let medium_item = mutator.alloc(ListItem::List(medium_list)).unwrap();
+            root.push(mutator, medium_item);
+
+            let small = mutator.alloc(ListItem::Val(3)).unwrap();
+            root.push(mutator, small);
+        });
+
+        gc.collect();
+
+        let block_size = 1024 * 32; // the root, small, and medium objects should be stored here
+        let header_size = 8;
+        let large_size = (40_000 * std::mem::size_of::<GcPtr<ListItem<usize>>>()) + header_size;
+
+        assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
     }
 }

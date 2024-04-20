@@ -5,13 +5,13 @@ use super::tracer::TracerWorker;
 use super::Trace;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock, RwLockReadGuard,
+    Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
 pub struct TracerController<A: Allocate> {
     yield_lock: RwLock<()>,
     yield_flag: AtomicBool,
-    trace_flag: AtomicBool,
+    trace_lock: RwLock<()>,
     unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>, // TODO: store in GcArray instead of vec
     metrics: Mutex<TraceMetrics>,
 }
@@ -21,7 +21,7 @@ impl<A: Allocate> TracerController<A> {
         Self {
             yield_lock: RwLock::new(()),
             yield_flag: AtomicBool::new(false),
-            trace_flag: AtomicBool::new(false),
+            trace_lock: RwLock::new(()),
             unscanned: Arc::new(Mutex::new(vec![])),
             metrics: Mutex::new(TraceMetrics::new()),
         }
@@ -31,33 +31,30 @@ impl<A: Allocate> TracerController<A> {
         self.yield_lock.read().unwrap()
     }
 
+    pub fn is_tracing(&self) -> bool {
+        self.trace_lock.try_read().is_err()
+    }
+
+    pub fn wait_for_trace(&self) {
+        drop(self.trace_lock.read().unwrap());
+    }
+
     pub fn get_yield_flag(&self) -> bool {
         self.yield_flag.load(Ordering::Relaxed)
     }
 
     pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-        let is_tracing =
-            self.trace_flag
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
-        if is_tracing.is_err() {
-            return;
-        }
+        let _lock = self.start_trace();
 
         self.trace(arena, root);
-        self.trace_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn full_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
-        let is_tracing =
-            self.trace_flag
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
-        if is_tracing.is_err() {
-            return;
-        }
+        let _lock = self.start_trace();
 
         arena.rotate_mark();
+
         self.trace(arena, root);
-        self.trace_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn push_packet(&self, packet: TracePacket<TracerWorker<A>>) {
@@ -66,6 +63,14 @@ impl<A: Allocate> TracerController<A> {
 
     pub fn metrics(&self) -> TraceMetrics {
         *self.metrics.lock().unwrap()
+    }
+
+    fn start_trace(&self) -> Result<RwLockWriteGuard<()>, ()> {
+        if self.is_tracing() {
+            Err(()) 
+        } else {
+            Ok(self.trace_lock.write().unwrap())
+        }
     }
 
     fn trace<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {

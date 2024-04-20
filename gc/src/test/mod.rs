@@ -1,4 +1,5 @@
 use crate::{Gc, GcCell, GcPtr, Mutator};
+use std::alloc::Layout;
 
 #[test]
 fn create_rooted_arena() {
@@ -59,3 +60,30 @@ fn deref_null_prt() {
     });
 }
 
+#[test]
+fn alloc_into_free_blocks() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    gc.mutate(|_, m| {
+        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+        for _ in 0..10_000 {
+            m.alloc(420).unwrap();
+            m.alloc_layout(medium_layout).unwrap();
+        }
+    });
+
+    gc.collect();
+
+    gc.mutate(|_, m| {
+        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+        for _ in 0..10_000 {
+            m.alloc(420).unwrap();
+            m.alloc_layout(medium_layout).unwrap();
+        }
+    });
+    gc.collect();
+
+    gc.mutate(|root, _| {
+        assert!(**root == 69);
+    });
+}
