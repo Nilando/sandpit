@@ -49,3 +49,13 @@ fn dyn_trace_on_usize() {
     gc.collect();
 }
 
+#[test]
+#[should_panic]
+fn deref_null_prt() {
+    Gc::build(|_| {
+        let ptr: GcPtr<usize> = GcPtr::null();
+
+        assert!(*ptr == 123);
+    });
+}
+

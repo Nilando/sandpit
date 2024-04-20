@@ -53,8 +53,8 @@ impl MonitorWorker {
 unsafe impl Send for MonitorWorker {}
 unsafe impl Sync for MonitorWorker {}
 
-const DEBT_CEILING: f64 = 32_000.0 * 10.0;
-const DEBT_INTEREST_RATE: f64 = 1.5;
+const DEBT_CEILING: f64 = 32_000.0 * 1000.0;
+const DEBT_INTEREST_RATE: f64 = 1.3;
 
 impl Monitor for MonitorController {
     fn new<C: Collect>(collector: Arc<C>) -> Self {
@@ -96,11 +96,14 @@ impl MonitorWorker {
             let mut metrics = self.metrics.lock().unwrap();
             metrics.debt *= DEBT_INTEREST_RATE;
 
-            if metrics.prev_arena_size < self.collector.arena_size() {
+            let new_arena_size = self.collector.arena_size();
+            if metrics.prev_arena_size < new_arena_size {
                 let new_debt = self.collector.arena_size() - metrics.prev_arena_size;
 
                 metrics.debt += new_debt as f64;
             }
+
+            metrics.prev_arena_size = new_arena_size;
 
             if metrics.debt >= DEBT_CEILING {
                 self.collector.collect();

@@ -65,6 +65,38 @@ mod tests {
     }
 
     #[test]
+    fn set_array() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            for _ in 0..10_000 {
+                let new_list = GcArray::alloc_with_capacity(mutator, 200).unwrap();
+                let item = mutator.alloc(ListItem::List(new_list)).unwrap();
+                root.push(mutator, item);
+            }
+
+            assert_eq!(root.len(), 10000);
+
+            for i in 0..10_000 {
+                let item = mutator.alloc(ListItem::Val(i)).unwrap();
+                root.set(mutator, i, item);
+            }
+        });
+
+        gc.collect();
+
+        gc.mutate(|root, _| {
+            assert_eq!(root.len(), 10000);
+            for (i, item) in root.iter().enumerate() {
+                match *item {
+                    ListItem::Val(val) => assert!(val == i),
+                    ListItem::List(_) => assert!(false),
+                }
+            }
+        });
+    }
+
+    #[test]
     fn overfill_list_capacity_and_iter() {
         let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
 
@@ -145,7 +177,7 @@ mod tests {
 
         gc.collect();
 
-        gc.mutate(|root, mutator| {
+        gc.mutate(|root, _| {
             for item in root.iter() {
                 match *item {
                     ListItem::Val(_) => assert!(false),
@@ -154,46 +186,7 @@ mod tests {
                     },
                 }
             }
-
-            for i in 0..5000 {
-                let n = mutator.alloc(ListItem::Val(69)).unwrap();
-                root.set(mutator, i, n);
-            }
         });
-
-        gc.collect();
-
-        gc.mutate(|root, mutator| {
-            for item in root.iter() {
-                match *item {
-                    ListItem::Val(val) => assert!(val == 69),
-                    ListItem::List(ref list) => {
-                        assert!(list.len() == 1_000);
-                    },
-                }
-            }
-
-            for _ in 0..5000 {
-                mutator.alloc(ListItem::Val(69)).unwrap();
-            }
-        });
-
-        gc.collect();
-
-        gc.mutate(|root, _| {
-            for _ in 0..root.len() {
-                root.pop();
-            }
-        });
-
-        gc.collect();
-
-        gc.mutate(|_, mutator| {
-            for _ in 0..5000 {
-                mutator.alloc(ListItem::Val(69)).unwrap();
-            }
-        });
-
     }
 
     #[test]
