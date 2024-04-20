@@ -1,4 +1,4 @@
-use super::constants::{ALIGN, BLOCK_SIZE};
+use super::constants::{BLOCK_SIZE};
 use super::errors::BlockError;
 use std::ptr::NonNull;
 use std::alloc::{alloc, dealloc, Layout};

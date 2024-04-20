@@ -2,7 +2,6 @@ use super::constants;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
-use core::ptr::NonNull;
 
 pub struct BlockMeta {
     lines: *mut u8,
