@@ -8,9 +8,6 @@ use super::trace::Trace;
 unsafe impl<T: Trace + Send> Send for GcPtr<T> {}
 unsafe impl<T: Trace + Sync> Sync for GcPtr<T> {}
 
-//unsafe impl<T: Trace + Send> Send for GcNonNull<T> {}
-//unsafe impl<T: Trace + Sync> Sync for GcNonNull<T> {}
-
 pub struct GcPtr<T: Trace> {
     ptr: AtomicPtr<T>,
 }
@@ -45,6 +42,10 @@ impl<T: Trace> GcPtr<T> {
         self.ptr.load(Ordering::Relaxed)
     }
 
+    pub unsafe fn cast<V: Trace>(&self) -> GcPtr<V> {
+        GcPtr::new(NonNull::new_unchecked(self.as_ptr().cast()))
+    }
+
     pub unsafe fn deref_unchecked(&self) -> &T {
         debug_assert!(self.is_null());
 
@@ -53,6 +54,10 @@ impl<T: Trace> GcPtr<T> {
 
     pub fn is_null(&self) -> bool {
         unsafe { self.as_ptr().is_null() }
+    }
+
+    pub fn trigger_write_barrier<M: Mutator>(&self, mutator: &M) {
+        mutator.write_barrier(NonNull::from(self.deref()));
     }
 
     pub fn write_barrier<V: Trace, M: Mutator>(

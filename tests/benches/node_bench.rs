@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use gc::Gc;
 use tests::Node;
 
-const TREE_SIZE: usize = 100_000;
+const TREE_SIZE: usize = 10_000;
 
 fn full_collection() {
     let gc = Gc::build(|mutator| {
