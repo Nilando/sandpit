@@ -46,12 +46,6 @@ impl<T: Trace> GcPtr<T> {
         GcPtr::new(NonNull::new_unchecked(self.as_ptr().cast()))
     }
 
-    pub unsafe fn deref_unchecked(&self) -> &T {
-        debug_assert!(self.is_null());
-
-        NonNull::new_unchecked(self.as_ptr()).as_ref()
-    }
-
     pub fn is_null(&self) -> bool {
         unsafe { self.as_ptr().is_null() }
     }
