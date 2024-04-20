@@ -89,4 +89,69 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn pop() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            for i in 0..100 {
+                let item = mutator.alloc(ListItem::Val(i)).unwrap();
+                root.push(mutator, item);
+            }
+
+            assert_eq!(root.len(), 100);
+
+            for i in 0..100 {
+                assert_eq!(root.len(), 100 - i);
+                root.pop();
+            }
+
+            assert_eq!(root.len(), 0);
+        });
+    }
+
+    #[test]
+    fn nested_arrays() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            for _ in 0..10 {
+                let new_list = GcArray::alloc(mutator).unwrap();
+                let item = mutator.alloc(ListItem::List(new_list)).unwrap();
+                root.push(mutator, item);
+            }
+
+            assert_eq!(root.len(), 10);
+        });
+
+        gc.collect();
+
+        gc.mutate(|root, mutator| {
+            for item in root.iter() {
+                for k in 0..10 {
+                    let n = mutator.alloc(ListItem::Val(k)).unwrap();
+                    match *item {
+                        ListItem::Val(_) => assert!(false),
+                        ListItem::List(ref list) => {
+                            list.push(mutator, n);
+                        },
+                    }
+                }
+            }
+        });
+
+        gc.collect();
+
+        gc.mutate(|root, _| {
+            for item in root.iter() {
+                match *item {
+                    ListItem::Val(_) => assert!(false),
+                    ListItem::List(ref list) => {
+                        assert!(list.len() == 10);
+                    },
+                }
+            }
+        });
+    }
 }
