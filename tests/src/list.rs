@@ -236,4 +236,24 @@ mod tests {
 
         assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
     }
+
+    #[test]
+    #[should_panic]
+    fn out_of_bounds_at() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            root.at(0);
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    fn out_of_bounds_set() {
+        let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+        gc.mutate(|root, mutator| {
+            root.set(mutator, 0, GcPtr::null());
+        });
+    }
 }

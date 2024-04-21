@@ -182,7 +182,7 @@ impl<T: Trace> Iterator for GcArrayIter<T> {
     type Item = GcPtr<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos > self.array.len() {
+        if self.pos < self.array.len() {
             self.pos += 1;
 
             Some(self.array.at(self.pos - 1))

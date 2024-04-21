@@ -87,3 +87,46 @@ fn alloc_into_free_blocks() {
         assert!(**root == 69);
     });
 }
+
+#[test]
+fn wait_for_trace() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    gc.start_monitor();
+
+    for _ in 0..10 {
+        gc.mutate(|_, m| {
+            loop {
+                let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+                m.alloc(420).unwrap();
+
+                if m.yield_requested() {
+                    break;
+                }
+            }
+        });
+    }
+}
+
+#[test]
+fn start_monitor_multiple_times() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    gc.start_monitor();
+    gc.start_monitor();
+    gc.start_monitor();
+    gc.start_monitor();
+    gc.start_monitor();
+    gc.start_monitor();
+
+    gc.mutate(|_, m| {
+        loop {
+            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+            m.alloc(420).unwrap();
+
+            if m.yield_requested() {
+                break;
+            }
+        }
+    });
+}
