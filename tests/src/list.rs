@@ -1,17 +1,16 @@
+use gc::{Gc, Mutator, Trace, GcArray, GcPtr};
+use gc_derive::Trace;
+
+type List<T> = GcArray<ListItem<T>>;
+
+#[derive(Trace)]
+pub enum ListItem<T: Trace> {
+    Val(T),
+    List(List<T>),
+}
 #[cfg(test)]
 mod tests {
-    use gc::{Mutator, Trace, GcArray, GcPtr};
-    use gc_derive::Trace;
-
-    type List<T> = GcArray<ListItem<T>>;
-
-    #[derive(Trace)]
-    pub enum ListItem<T: Trace> {
-        Val(T),
-        List(List<T>),
-    }
-
-    use gc::Gc;
+    use super::*;
 
     #[test]
     fn empty_list() {

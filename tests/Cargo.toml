@@ -9,6 +9,7 @@ edition = "2021"
 gc_derive = { path = "../gc_derive" }
 gc = { path = "../gc" }
 rand = "0.8.5"
+expand = "0.3.0"
 
 
 [dev-dependencies]

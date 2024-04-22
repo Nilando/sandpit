@@ -180,6 +180,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
 
 [[package]]
+name = "expand"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d073bf59a5b9bb23d930c9d668d5be4c092b41c5b23f1c10318b7c4fca07f9c"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "gc"
 version = "0.1.0"
 
@@ -188,6 +198,7 @@ name = "gc_derive"
 version = "0.1.0"
 dependencies = [
  "gc",
+ "proc-macro2",
  "quote",
  "syn",
 ]
@@ -349,9 +360,9 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.79"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
+checksum = "3d1597b0c024618f09a9c3b8655b7e430397a36d23fdafec26d6965e9eec3eba"
 dependencies = [
  "unicode-ident",
 ]
@@ -506,6 +517,7 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "expand",
  "gc",
  "gc_derive",
  "rand",

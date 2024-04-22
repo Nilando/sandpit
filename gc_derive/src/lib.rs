@@ -1,4 +1,5 @@
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{
     parse_macro_input, parse_quote, Data, DataEnum, DataStruct, DeriveInput, Fields, GenericParam,
@@ -21,6 +22,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
             .iter()
             .map(|field| {
                 let field_name = &field.ident;
+
                 quote! {
                     gc::Trace::trace(&self.#field_name, tracer);
                 }
@@ -29,16 +31,55 @@ pub fn trace(input: TokenStream) -> TokenStream {
         Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
-        }) => vec![quote! { println!("Trace {:?}", self) }],
-        Data::Enum(DataEnum { variants, .. }) => variants
-            .iter()
-            .map(|variant| {
-                let variant_name = &variant.ident;
-                quote! {
-                    println!("Trace enum");
+        }) => vec![quote! {}],
+        Data::Enum(DataEnum { variants, .. }) => {
+            let arms = variants.iter().map(|variant| {
+                let variant_ident = &variant.ident;
+
+                match &variant.fields {
+                    Fields::Unnamed(fields) => {
+                        let body = fields
+                            .unnamed
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, _)| {
+                                let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                                quote! {
+                                    gc::Trace::trace( #ident , tracer);
+                                }
+                            });
+
+                        let args = fields
+                            .unnamed
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, _)| {
+                                let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+
+                               quote! { #ident }
+                            });
+
+                        quote! {
+                            #name::#variant_ident(#(#args)*) => { #(#body)* }
+                        }
+                    }
+                    Fields::Named(_) => {
+                        quote! {}
+                    }
+                    Fields::Unit => {
+                        quote! {
+                            #name::#variant_ident => {}
+                        }
+                    }
                 }
-            })
-            .collect::<Vec<_>>(),
+            });
+
+            vec![
+                quote! {
+                    match self { #(#arms)* }
+                }
+            ]
+        }
         _ => todo!("implement Derive(Trace) for union types"),
     };
 
