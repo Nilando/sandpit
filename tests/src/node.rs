@@ -1,4 +1,4 @@
-use gc::{GcCell, GcError, GcPtr, Mutator};
+use gc::{Gc, GcCell, GcError, GcPtr, Mutator};
 use gc_derive::Trace;
 use rand::Rng;
 
@@ -116,143 +116,139 @@ impl Node {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gc::Gc;
+// TESTS BELOW
 
-    #[test]
-    fn root_node() {
-        let gc = Gc::build(|mutator| Node::alloc(mutator, 69).unwrap());
+#[test]
+fn root_node() {
+    let gc = Gc::build(|mutator| Node::alloc(mutator, 69).unwrap());
 
-        gc.mutate(|root, _| {
-            root.val.set(69);
-            assert_eq!(root.val.get(), 69);
+    gc.mutate(|root, _| {
+        root.val.set(69);
+        assert_eq!(root.val.get(), 69);
 
-            root.val.set(420);
-            assert_eq!(root.val.get(), 420);
-        });
-    }
+        root.val.set(420);
+        assert_eq!(root.val.get(), 420);
+    });
+}
 
-    #[test]
-    fn insert() {
-        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+#[test]
+fn insert() {
+    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        gc.mutate(|root, mutator| {
-            for i in 1..1_000 {
-                Node::insert(root, mutator, i);
-            }
-        });
+    gc.mutate(|root, mutator| {
+        for i in 1..1_000 {
+            Node::insert(root, mutator, i);
+        }
+    });
 
-        gc.mutate(|root, _| {
-            let vals = Node::collect(root);
-            let result: Vec<usize> = (0..1_000).collect();
+    gc.mutate(|root, _| {
+        let vals = Node::collect(root);
+        let result: Vec<usize> = (0..1_000).collect();
 
-            assert_eq!(vals, result);
-        });
-    }
+        assert_eq!(vals, result);
+    });
+}
 
-    #[test]
-    fn find() {
-        let gc = Gc::build(|mutator| {
-            let root = Node::alloc(mutator, 0).unwrap();
-            for _ in 0..1_000 {
-                Node::insert_rand(&root, mutator);
-            }
+#[test]
+fn find() {
+    let gc = Gc::build(|mutator| {
+        let root = Node::alloc(mutator, 0).unwrap();
+        for _ in 0..1_000 {
+            Node::insert_rand(&root, mutator);
+        }
 
-            Node::insert(&root, mutator, 420);
+        Node::insert(&root, mutator, 420);
 
-            return root;
-        });
+        return root;
+    });
 
-        gc.collect();
+    gc.collect();
 
-        gc.mutate(|root, _| {
-            let node = Node::find(root, 420).unwrap();
+    gc.mutate(|root, _| {
+        let node = Node::find(root, 420).unwrap();
 
-            assert_eq!(node.val.get(), 420);
+        assert_eq!(node.val.get(), 420);
 
-            let node = Node::find(&node, 1_001);
+        let node = Node::find(&node, 1_001);
 
-            assert!(node.is_none());
+        assert!(node.is_none());
 
-            Node::kill_children(root);
-        });
-    }
+        Node::kill_children(root);
+    });
+}
 
-    #[test]
-    fn multiple_collects() {
-        let gc: Gc<GcPtr<Node>> = Gc::build(|mutator| {
-            let root = Node::alloc(mutator, 0).unwrap();
-            for _ in 0..1_000 {
-                Node::insert_rand(&root, mutator);
-            }
-            Node::insert(&root, mutator, 69);
-            return root;
-        });
+#[test]
+fn multiple_collects() {
+    let gc: Gc<GcPtr<Node>> = Gc::build(|mutator| {
+        let root = Node::alloc(mutator, 0).unwrap();
+        for _ in 0..1_000 {
+            Node::insert_rand(&root, mutator);
+        }
+        Node::insert(&root, mutator, 69);
+        return root;
+    });
 
-        std::thread::scope(|s| {
-            for _ in 0..10 {
-                s.spawn(|| {
-                    for i in 0..10 {
-                        if i % 2 == 0 {
-                            gc.eden_collect();
-                        } else {
-                            gc.collect();
-                        }
+    std::thread::scope(|s| {
+        for _ in 0..10 {
+            s.spawn(|| {
+                for i in 0..10 {
+                    if i % 2 == 0 {
+                        gc.eden_collect();
+                    } else {
+                        gc.collect();
                     }
-                });
-            }
-        });
+                }
+            });
+        }
+    });
 
-        gc.mutate(|root, _mutator| {
-            assert!(Node::find(root, 69).is_some());
-        });
-    }
+    gc.mutate(|root, _mutator| {
+        assert!(Node::find(root, 69).is_some());
+    });
+}
 
-    #[test]
-    fn monitor_requests_yield() {
-        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+#[test]
+fn monitor_requests_yield() {
+    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        gc.start_monitor();
+    gc.start_monitor();
 
-        gc.mutate(|root, mutator| loop {
-            Node::insert_rand(root, mutator);
+    gc.mutate(|root, mutator| loop {
+        Node::insert_rand(root, mutator);
 
-            if mutator.yield_requested() {
-                Node::kill_children(root);
-                break;
-            }
-        });
-    }
+        if mutator.yield_requested() {
+            Node::kill_children(root);
+            break;
+        }
+    });
+}
 
-    #[test]
-    fn objects_marked_metric() {
-        let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+#[test]
+fn objects_marked_metric() {
+    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-        gc.mutate(|root, mutator| {
-            for i in 0..99 {
-                Node::insert(root, mutator, i);
-            }
+    gc.mutate(|root, mutator| {
+        for i in 0..99 {
+            Node::insert(root, mutator, i);
+        }
 
-            assert_eq!(Node::collect(root).len(), 100);
-        });
+        assert_eq!(Node::collect(root).len(), 100);
+    });
 
-        gc.collect();
+    gc.collect();
 
-        assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 100);
+    assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 100);
 
-        gc.mutate(|root, _| {
-            let node = Node::find(root, 48).unwrap();
-            Node::kill_children(&node);
+    gc.mutate(|root, _| {
+        let node = Node::find(root, 48).unwrap();
+        Node::kill_children(&node);
 
-            assert_eq!(Node::collect(root).len(), 50);
-            assert!(Node::find(root, 49).is_none());
-            assert!(Node::find(root, 99).is_none());
-        });
+        assert_eq!(Node::collect(root).len(), 50);
+        assert!(Node::find(root, 49).is_none());
+        assert!(Node::find(root, 99).is_none());
+    });
 
-        gc.collect();
+    gc.collect();
 
-        assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
-    }
+    assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
 }
