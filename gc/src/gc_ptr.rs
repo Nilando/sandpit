@@ -57,7 +57,7 @@ impl<T: Trace> GcPtr<T> {
     }
 
     pub fn trigger_write_barrier<M: Mutator>(&self, mutator: &M) {
-        mutator.write_barrier(NonNull::from(self.deref()));
+        unsafe { mutator.write_barrier(self.as_nonnull()) }
     }
 
     pub fn write_barrier<V: Trace, M: Mutator>(

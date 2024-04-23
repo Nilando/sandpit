@@ -50,7 +50,7 @@ impl<T: Trace> GcArrayMeta<T> {
         }
     }
 
-    pub fn set<M: Mutator>(this: &GcPtr<Self>, mutator: &M, idx: usize, item: GcPtr<T>) {
+    pub fn set<M: Mutator>(this: GcPtr<Self>, mutator: &M, idx: usize, item: GcPtr<T>) {
         this.internal_set(idx, item);
         this.trigger_write_barrier(mutator);
     }
@@ -69,7 +69,7 @@ impl<T: Trace> GcArrayMeta<T> {
         }
     }
 
-    pub fn push<M: Mutator>(this: &GcPtr<Self>, mutator: &M, obj: GcPtr<T>) {
+    pub fn push<M: Mutator>(this: GcPtr<Self>, mutator: &M, obj: GcPtr<T>) {
         let len = this.len.load(Ordering::Relaxed);
         let cap = this.cap.load(Ordering::Relaxed);
 
@@ -146,7 +146,7 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn push<M: Mutator>(&self, mutator: &M, obj: GcPtr<T>) {
-        GcArrayMeta::push(&self.meta, mutator, obj);
+        GcArrayMeta::push(self.meta.clone(), mutator, obj);
     }
 
     pub fn pop(&self) -> Option<GcPtr<T>> {
@@ -158,7 +158,7 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn set<M: Mutator>(&self, mutator: &M, idx: usize, item: GcPtr<T>) {
-        GcArrayMeta::set(&self.meta, mutator, idx, item)
+        GcArrayMeta::set(self.meta.clone(), mutator, idx, item)
     }
 
     pub fn iter(&self) -> GcArrayIter<T> {
