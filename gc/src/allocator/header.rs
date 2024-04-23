@@ -69,13 +69,15 @@ impl Header {
         self.size
     }
 
-    pub fn set_mark(&self, mark: Mark) {
-        self.mark.store(mark as u8, Ordering::Relaxed);
+    pub fn set_mark(ptr: *const Header, mark: Mark) {
+        let self_ref = unsafe { &*ptr };
 
-        if self.size_class != SizeClass::Large {
-            let mut meta = BlockMeta::from_header(self);
+        self_ref.mark.store(mark as u8, Ordering::Relaxed);
 
-            meta.mark(self, mark);
+        if self_ref.size_class != SizeClass::Large {
+            let mut meta = BlockMeta::from_header(ptr);
+
+            meta.mark(self_ref, mark);
         }
     }
 }

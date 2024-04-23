@@ -8,6 +8,7 @@ pub enum ListItem<T: Trace> {
     Val(T),
     List(List<T>),
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,9 +146,8 @@ mod tests {
     fn nested_arrays() {
         let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
 
-
         gc.mutate(|root, mutator| {
-            let outer_len = 10_000_usize;
+            let outer_len = 100;
             for _ in 0..outer_len {
                 let new_list = GcArray::alloc(mutator).unwrap();
                 let item = mutator.alloc(ListItem::List(new_list)).unwrap();
@@ -159,11 +159,15 @@ mod tests {
 
         gc.collect();
 
+        let num_objs = ((1 + 100) * 3) - 1; // -1 b/c root isnt marked
+        assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), num_objs);
+
         gc.mutate(|root, mutator| {
-            let inner_len = 1_000;
+            let inner_len = 100;
             for item in root.iter() {
                 for k in 0..inner_len {
                     let n = mutator.alloc(ListItem::Val(k)).unwrap();
+
                     match *item {
                         ListItem::Val(_) => assert!(false),
                         ListItem::List(ref list) => {
@@ -181,7 +185,14 @@ mod tests {
                 match *item {
                     ListItem::Val(_) => assert!(false),
                     ListItem::List(ref list) => {
-                        assert!(list.len() == 1_000);
+                        assert_eq!(list.len(), 100);
+
+                        for (idx, nested_item) in list.iter().enumerate() {
+                            match *nested_item {
+                                ListItem::Val(val) => assert_eq!(val, idx),
+                                ListItem::List(_) => assert!(false),
+                            }
+                        }
                     },
                 }
             }
@@ -241,7 +252,7 @@ mod tests {
     fn out_of_bounds_at() {
         let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
 
-        gc.mutate(|root, mutator| {
+        gc.mutate(|root, _| {
             root.at(0);
         });
     }

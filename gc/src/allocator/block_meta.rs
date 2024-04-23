@@ -20,15 +20,15 @@ impl BlockMeta {
         }
     }
 
-    pub fn from_header(header: &Header) -> Self {
-        let addr =  header as *const Header as usize;
-        let block_start = (addr - (addr % constants::BLOCK_SIZE)) as *const u8;
+    pub fn from_header(header: *const Header) -> Self {
+        let offset = (header as usize) % constants::BLOCK_SIZE;
+        let block_ptr = unsafe { (header as *const u8).sub(offset) };
 
-        Self::from_block(block_start as *const u8)
+        Self::from_block(block_ptr)
     }
 
     pub fn mark(&mut self, header: &Header, mark: Mark) {
-        let addr =  header as *const Header as usize;
+        let addr = header as *const Header as usize;
 
         let relative_ptr = (addr as usize) % constants::BLOCK_SIZE;
 

@@ -10,6 +10,7 @@ gc_derive = { path = "../gc_derive" }
 gc = { path = "../gc" }
 rand = "0.8.5"
 expand = "0.3.0"
+cargo-expand = "1.0.85"
 
 
 [dev-dependencies]

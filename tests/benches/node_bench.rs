@@ -5,17 +5,17 @@ use tests::Node;
 const TREE_SIZE: usize = 10_000;
 
 fn full_collection() {
-    let gc = Gc::build(|mutator| {
-        let root = Node::alloc(mutator, 0).unwrap();
+    let gc = Gc::build(|m| {
+        let root = Node::alloc(m, 0).unwrap();
 
-        Node::create_balanced_tree(&root, mutator, TREE_SIZE);
+        for _ in 0..10 {
+            Node::create_balanced_tree(&root, m, TREE_SIZE);
+        }
 
         root
     });
 
-    for _ in 0..200 {
-        gc.collect();
-    }
+    gc.collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -34,9 +34,7 @@ fn eden_collection() {
         root
     });
 
-    for _ in 0..200 {
-        gc.eden_collect();
-    }
+    gc.eden_collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -53,6 +51,12 @@ fn sync_collection() {
     });
 
     gc.collect();
+
+    gc.mutate(|root, _| {
+        let actual: Vec<usize> = Node::collect(root);
+        let expected: Vec<usize> = (0..TREE_SIZE).collect();
+        assert_eq!(actual, expected)
+    });
 }
 
 fn concurrent_collection() {
@@ -61,10 +65,18 @@ fn concurrent_collection() {
     gc.start_monitor();
 
     gc.mutate(|root, m| {
-        Node::create_balanced_tree(root, m, TREE_SIZE);
+        for _ in 0..10 {
+            Node::create_balanced_tree(root, m, TREE_SIZE);
+        }
     });
 
     gc.collect();
+
+    gc.mutate(|root, _| {
+        let actual: Vec<usize> = Node::collect(root);
+        let expected: Vec<usize> = (0..TREE_SIZE).collect();
+        assert_eq!(actual, expected)
+    });
 }
 
 fn node_benchmark(c: &mut Criterion) {

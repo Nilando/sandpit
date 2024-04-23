@@ -1,7 +1,6 @@
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::ptr::NonNull;
 use super::tracer::Tracer;
 use super::mutator::Mutator;
 use std::mem::{size_of, align_of};
@@ -45,10 +44,9 @@ impl<T: Trace> GcArrayMeta<T> {
         }
 
         unsafe {
-            let offset = self.data.as_ptr().add(idx);
-            let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset));
+            let ptr = self.data.as_ptr().add(idx);
 
-            (*gc_ptr).clone()
+            (*ptr).clone()
         }
     }
 
@@ -65,10 +63,9 @@ impl<T: Trace> GcArrayMeta<T> {
         }
 
         unsafe {
-            let offset = self.data.as_ptr().add(idx);
-            let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset));
+            let ptr = self.data.as_ptr().add(idx);
 
-            (*gc_ptr).unsafe_set(item);
+            (*ptr).unsafe_set(item);
         }
     }
 
@@ -78,25 +75,27 @@ impl<T: Trace> GcArrayMeta<T> {
 
         if len == cap {
             let new_cap = (cap / 2) + cap;
+
             unsafe {
                 let layout = Layout::from_size_align_unchecked(size_of::<GcPtr<T>>() * new_cap, align_of::<GcPtr<T>>());
-                let new_data = mutator.alloc_layout(layout).expect("failed to grow array");
-                let new_meta = Self::new(new_data.cast(), len, new_cap);
+                let new_data: GcPtr<GcPtr<T>> = mutator.alloc_layout(layout).expect("failed to grow array").cast();
+                let new_meta: GcArrayMeta<T> = Self::new(new_data.clone(), len, new_cap);
+
                 for i in 0..len {
                     new_meta.internal_set(i, this.at(i));
                 }
+
                 this.cap.store(new_cap, Ordering::Relaxed);
-                this.data.unsafe_set(new_data.cast());
+                this.data.unsafe_set(new_data);
             }
         }
 
         this.len.fetch_add(1, Ordering::Relaxed);
 
         unsafe {
-            let offset = this.data.as_ptr().add(len);
-            let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset));
+            let ptr = this.data.as_ptr().add(len);
 
-            (*gc_ptr).unsafe_set(obj);
+            (*ptr).unsafe_set(obj);
         }
 
         this.trigger_write_barrier(mutator);
@@ -106,16 +105,15 @@ impl<T: Trace> GcArrayMeta<T> {
         let len = self.len.load(Ordering::Relaxed);
 
         if len == 0 {
-            None
-        } else {
-            let len = self.len.fetch_sub(1, Ordering::Relaxed);
+            return None
+        }
 
-            unsafe {
-                let offset = self.data.as_ptr().add(len - 1);
-                let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset));
+        let len = self.len.fetch_sub(1, Ordering::Relaxed);
 
-                Some((*gc_ptr).clone())
-            }
+        unsafe {
+            let ptr = self.data.as_ptr().add(len - 1);
+
+            Some((*ptr).clone())
         }
     }
 }
@@ -136,9 +134,7 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn new(meta: GcPtr<GcArrayMeta<T>>) -> Self {
-        Self {
-            meta
-        }
+        Self { meta }
     }
 
     pub fn len(&self) -> usize {
@@ -183,9 +179,10 @@ impl<T: Trace> Iterator for GcArrayIter<T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos < self.array.len() {
+            let item = Some(self.array.at(self.pos));
             self.pos += 1;
 
-            Some(self.array.at(self.pos - 1))
+            item
         } else {
             None
         }
@@ -202,13 +199,10 @@ unsafe impl<T: Trace> Trace for GcArrayMeta<T> {
     fn trace<U: Tracer>(&self, tracer: &mut U) {
         let len = self.len.load(Ordering::Relaxed);
 
-        for i in 0..len {
-            unsafe {
-                let offset = self.data.as_ptr().add(i);
-                let gc_ptr = GcPtr::new(NonNull::new_unchecked(offset));
+        self.data.trace(tracer);
 
-                (*gc_ptr).trace(tracer)
-            }
+        for i in 0..len {
+            self.at(i).trace(tracer)
         }
     }
 }

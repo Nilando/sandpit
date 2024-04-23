@@ -42,6 +42,12 @@ impl<T: Trace> GcPtr<T> {
         self.ptr.load(Ordering::Relaxed)
     }
 
+    pub unsafe fn as_nonnull(&self) -> NonNull<T> {
+        let ptr = self.ptr.load(Ordering::Relaxed);
+
+        NonNull::new(ptr).unwrap()
+    }
+
     pub unsafe fn cast<V: Trace>(&self) -> GcPtr<V> {
         GcPtr::new(NonNull::new_unchecked(self.as_ptr().cast()))
     }
@@ -60,15 +66,13 @@ impl<T: Trace> GcPtr<T> {
         new_ptr: GcPtr<V>,
         callback: fn(&T) -> &GcPtr<V>,
     ) {
-        let self_ref = self.deref();
-
         unsafe {
-            let old_ptr = callback(self_ref);
+            let ptr = self.as_nonnull();
+            let old_ptr = callback(ptr.as_ref());
 
-            old_ptr.unsafe_set(new_ptr)
+            old_ptr.unsafe_set(new_ptr);
+            mutator.write_barrier(ptr);
         }
-
-        mutator.write_barrier(NonNull::from(self_ref));
     }
 
     pub unsafe fn unsafe_set(&self, new_ptr: GcPtr<T>) {

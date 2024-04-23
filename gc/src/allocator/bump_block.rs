@@ -46,7 +46,8 @@ impl BumpBlock {
             let next_ptr = ptr.checked_sub(layout.size())? & !(layout.align() - 1);
 
             if self.limit as usize <= next_ptr {
-                self.cursor = next_ptr as *const u8;
+                let diff = ptr - next_ptr;
+                self.cursor = unsafe { self.cursor.sub(diff) };
                 return Some(self.cursor);
             }
 

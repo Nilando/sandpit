@@ -15,14 +15,14 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub fn get_header<'a, T>(object: NonNull<T>) -> *mut Header {
+    pub fn get_header<'a, T>(object: NonNull<T>) -> *const Header {
         unsafe {
             let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
             let header_size = size_of::<Header>();
             let padding = (align - (header_size % align)) % align;
             let ptr: *mut u8 = object.as_ptr().cast::<u8>();
 
-            ptr.sub(header_size + padding) as *mut Header
+            ptr.sub(header_size + padding) as *const Header
         }
     }
 }
@@ -56,14 +56,10 @@ impl Allocate for Allocator {
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        let header = Self::get_header(ptr);
-
-        unsafe { (*header).get_mark() }
+        unsafe { (&*Self::get_header(ptr)).get_mark() }
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        let header = Self::get_header(ptr);
-
-        unsafe { (*header).set_mark(mark) }
+        Header::set_mark(Self::get_header(ptr), mark);
     }
 }
