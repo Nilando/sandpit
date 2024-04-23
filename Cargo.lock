@@ -548,7 +548,6 @@ version = "0.1.0"
 name = "gc_derive"
 version = "0.1.0"
 dependencies = [
- "gc",
  "proc-macro2",
  "quote",
  "syn",
