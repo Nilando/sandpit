@@ -42,6 +42,7 @@ impl From<u8> for Mark {
     }
 }
 
+#[repr(C)]
 pub struct Header {
     mark: AtomicU8,
     size_class: SizeClass,
@@ -57,8 +58,9 @@ impl Header {
         }
     }
 
-    pub fn get_mark(&self) -> Mark {
-        self.mark.load(Ordering::Relaxed).into()
+    pub fn get_mark(ptr: *const Header) -> Mark {
+        let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
+        unsafe { (&*mark_ptr).load(Ordering::SeqCst).into() }
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -69,10 +71,15 @@ impl Header {
         self.size
     }
 
+    pub fn mark_new(ptr: *const Header) {
+        let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
+        unsafe { (&*mark_ptr).store(Mark::New as u8, Ordering::SeqCst) }
+    }
+
     pub fn set_mark(ptr: *const Header, mark: Mark) {
         let self_ref = unsafe { &*ptr };
 
-        self_ref.mark.store(mark as u8, Ordering::Relaxed);
+        self_ref.mark.store(mark as u8, Ordering::SeqCst);
 
         if self_ref.size_class != SizeClass::Large {
             let mut meta = BlockMeta::from_header(ptr);

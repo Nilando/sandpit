@@ -35,15 +35,15 @@ impl<T: Trace> GcPtr<T> {
     }
 
     pub fn set_null(&self) {
-        self.ptr.store(std::ptr::null_mut(), Ordering::Relaxed)
+        self.ptr.store(std::ptr::null_mut(), Ordering::SeqCst)
     }
 
     pub unsafe fn as_ptr(&self) -> *mut T {
-        self.ptr.load(Ordering::Relaxed)
+        self.ptr.load(Ordering::SeqCst)
     }
 
     pub unsafe fn as_nonnull(&self) -> NonNull<T> {
-        let ptr = self.ptr.load(Ordering::Relaxed);
+        let ptr = self.ptr.load(Ordering::SeqCst);
 
         NonNull::new(ptr).unwrap()
     }
@@ -76,12 +76,12 @@ impl<T: Trace> GcPtr<T> {
     }
 
     pub unsafe fn unsafe_set(&self, new_ptr: GcPtr<T>) {
-        self.ptr.store(new_ptr.ptr.load(Ordering::Relaxed), Ordering::Relaxed)
+        self.ptr.store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
     }
 }
 
 impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
-        Self { ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)) }
+        Self { ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)) }
     }
 }

@@ -51,12 +51,13 @@ impl Allocate for Allocator {
             let object_space = space.add(header_size + padding);
 
             write(space as *mut Header, header);
+            Header::mark_new(space as *const Header);
             Ok(NonNull::new(object_space as *mut u8).unwrap())
         }
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        unsafe { (&*Self::get_header(ptr)).get_mark() }
+        Header::get_mark(Self::get_header(ptr))
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {

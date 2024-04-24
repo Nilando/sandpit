@@ -40,7 +40,7 @@ impl<A: Allocate> TracerController<A> {
     }
 
     pub fn get_yield_flag(&self) -> bool {
-        self.yield_flag.load(Ordering::Relaxed)
+        self.yield_flag.load(Ordering::SeqCst)
     }
 
     pub fn eden_collection<T: Trace>(&self, arena: &<A as Allocate>::Arena, root: &T) {
