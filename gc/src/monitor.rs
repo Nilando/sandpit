@@ -1,4 +1,3 @@
-use super::allocate::GenerationalArena;
 use super::collector::Collect;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

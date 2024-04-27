@@ -78,12 +78,10 @@ impl BumpBlock {
 mod tests {
     use super::*;
 
-    const TEST_UNIT_SIZE: usize = constants::ALLOC_ALIGN_BYTES;
-
     fn loop_check_allocate(b: &mut BumpBlock) -> usize {
         let mut v = Vec::new();
         let mut index = 0;
-        let layout = Layout::from_size_align(TEST_UNIT_SIZE, 8).unwrap();
+        let layout = Layout::from_size_align(16, 8).unwrap();
 
         loop {
             if let Some(ptr) = b.inner_alloc(layout, Mark::Red) {
@@ -114,7 +112,7 @@ mod tests {
         let mut b = BumpBlock::new().unwrap();
 
         let count = loop_check_allocate(&mut b);
-        let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
+        let expect = constants::BLOCK_CAPACITY / 16;
 
         assert_eq!(count, expect);
     }
@@ -132,7 +130,7 @@ mod tests {
 
         let count = loop_check_allocate(&mut b);
         let expect =
-            (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / TEST_UNIT_SIZE;
+            (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / 16;
 
         assert_eq!(count, expect);
     }
