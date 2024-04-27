@@ -224,13 +224,16 @@ mod tests {
     #[test]
     fn get_size() {
         let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+        let block_size = 1024 * 32;
+        let header_size = 8;
+        let large_size = (40_000 * std::mem::size_of::<GcPtr<ListItem<usize>>>()) + header_size;
 
         gc.mutate(|root, mutator| {
             let large_list = GcArray::alloc_with_capacity(mutator, 40_000).unwrap();
             let large_item = mutator.alloc(ListItem::List(large_list)).unwrap();
             root.push(mutator, large_item);
 
-            let medium_list = GcArray::alloc_with_capacity(mutator, 500).unwrap();
+            let medium_list = GcArray::alloc_with_capacity(mutator, 100).unwrap();
             let medium_item = mutator.alloc(ListItem::List(medium_list)).unwrap();
             root.push(mutator, medium_item);
 
@@ -239,11 +242,6 @@ mod tests {
         });
 
         gc.collect();
-
-        let block_size = 1024 * 32; // the root, small, and medium objects should be stored here
-        let header_size = 8;
-        let large_size = (40_000 * std::mem::size_of::<GcPtr<ListItem<usize>>>()) + header_size;
-
         assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
     }
 

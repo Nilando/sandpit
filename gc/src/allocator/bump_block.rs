@@ -70,7 +70,7 @@ impl BumpBlock {
     }
 
     pub fn is_marked(&self, mark: Mark) -> bool {
-        self.meta.get_mark() == mark
+        self.meta.get_block() == mark
     }
 }
 
@@ -124,7 +124,7 @@ mod tests {
         let mut b = BumpBlock::new().unwrap();
 
         for i in 0..(constants::LINE_COUNT / 2) {
-            b.meta.mark_line(i, Mark::Red);
+            b.meta.set_line(i, Mark::Red);
         }
         let occupied_bytes = (constants::LINE_COUNT / 2) * constants::LINE_SIZE;
 
@@ -143,7 +143,7 @@ mod tests {
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
-                b.meta.mark_line(i, Mark::Red);
+                b.meta.set_line(i, Mark::Red);
             }
         }
 

@@ -16,14 +16,12 @@ pub struct Allocator {
 
 impl Allocator {
     pub fn get_header<'a, T>(object: NonNull<T>) -> *const Header {
-        unsafe {
-            let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
-            let header_size = size_of::<Header>();
-            let padding = (align - (header_size % align)) % align;
-            let ptr: *mut u8 = object.as_ptr().cast::<u8>();
+        let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
+        let header_size = size_of::<Header>();
+        let padding = (align - (header_size % align)) % align;
+        let ptr: *mut u8 = object.as_ptr().cast::<u8>();
 
-            ptr.sub(header_size + padding) as *const Header
-        }
+        unsafe { ptr.sub(header_size + padding) as *const Header }
     }
 }
 

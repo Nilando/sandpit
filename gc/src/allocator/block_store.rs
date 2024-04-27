@@ -119,8 +119,8 @@ impl BlockStore {
 
         // TODO: ADD 10 as a CONFIG
         while free.len() >= 10 {
+            self.block_count.fetch_sub(1, Ordering::Relaxed);
             free.pop();
         }
-        self.block_count.store(10, Ordering::Relaxed);
     }
 }

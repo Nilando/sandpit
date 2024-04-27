@@ -2,21 +2,22 @@ use super::constants;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 pub struct BlockMeta {
-    lines: *mut u8,
+    lines: *const AtomicU8,
 }
 
 impl BlockMeta {
     pub fn new(block_ptr: *const u8) -> BlockMeta {
-        let mut meta = Self::from_block(block_ptr);
+        let meta = Self::from_block(block_ptr);
         meta.reset();
         meta
     }
 
     pub fn from_block(block_ptr: *const u8) -> Self {
         Self {
-            lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *mut u8 },
+            lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *const AtomicU8 },
         }
     }
 
@@ -27,7 +28,7 @@ impl BlockMeta {
         Self::from_block(block_ptr)
     }
 
-    pub fn mark(&mut self, header: &Header, mark: Mark) {
+    pub fn mark(&self, header: &Header, mark: Mark) {
         let addr = header as *const Header as usize;
 
         let relative_ptr = (addr as usize) % constants::BLOCK_SIZE;
@@ -35,39 +36,41 @@ impl BlockMeta {
         let line = relative_ptr / constants::LINE_SIZE;
 
         if header.get_size_class() == SizeClass::Small {
-            self.mark_line(line, mark);
+            self.set_line(line, mark);
         } else {
             let num_lines = header.get_size() / constants::LINE_SIZE as u16;
 
             for i in 0..num_lines {
-                self.mark_line(line + i as usize, mark);
+                self.set_line(line + i as usize, mark);
             }
         }
 
-        self.mark_block(mark);
+        self.set_block(mark);
     }
 
-    pub fn get_mark(&self) -> Mark {
-        unsafe { Mark::from(*self.lines.add(constants::LINE_COUNT - 1)) }
+    pub fn get_block(&self) -> Mark {
+        self.get_line(constants::LINE_COUNT - 1)
     }
 
-    unsafe fn as_line_mark(&mut self, line: usize) -> &mut u8 {
-        &mut *self.lines.add(line)
+    fn get_line(&self, line: usize) -> Mark {
+        self.mark_at(line).load(Ordering::SeqCst).into()
     }
 
-    pub fn mark_line(&mut self, index: usize, mark: Mark) {
-        unsafe { *self.as_line_mark(index) = mark as u8 };
+    fn mark_at(&self, line: usize) -> &AtomicU8 {
+        unsafe { &*self.lines.add(line) }
     }
 
-    pub fn mark_block(&mut self, mark: Mark) {
-        unsafe { *self.lines.add(constants::LINE_COUNT - 1) = mark as u8 }
+    pub fn set_line(&self, index: usize, mark: Mark) {
+        self.mark_at(index).store(mark as u8, Ordering::SeqCst)
     }
 
-    pub fn reset(&mut self) {
-        unsafe {
-            for i in 0..constants::LINE_COUNT {
-                *self.lines.add(i) = Mark::New as u8;
-            }
+    pub fn set_block(&self, mark: Mark) {
+        self.set_line(constants::LINE_COUNT - 1, mark)
+    }
+
+    pub fn reset(&self) {
+        for i in 0..constants::LINE_COUNT {
+            self.set_line(i, Mark::New);
         }
     }
 
@@ -83,9 +86,9 @@ impl BlockMeta {
         let mut end = starting_line;
 
         for index in (0..starting_line).rev() {
-            let line_mark = unsafe { *self.lines.add(index) };
+            let line_mark = self.get_line(index);
 
-            if line_mark != mark as u8 {
+            if line_mark != mark {
                 count += 1;
 
                 if index == 0 && count >= lines_required {
@@ -120,10 +123,10 @@ mod tests {
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
 
-        meta.mark_block(Mark::Red);
-        let got = meta.get_mark();
+        meta.set_block(Mark::Red);
+        let got = meta.get_block();
 
         assert_eq!(got, Mark::Red);
     }
@@ -134,14 +137,14 @@ mod tests {
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
 
-        meta.mark_line(0, Mark::Red);
+        meta.set_line(0, Mark::Red);
 
-        let expect = 1;
-        let got = unsafe { meta.as_line_mark(0) };
+        let expect = Mark::Red;
+        let got = meta.get_line(0);
 
-        assert_eq!(*got, expect);
+        assert_eq!(got, expect);
     }
 
     #[test]
@@ -150,13 +153,13 @@ mod tests {
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
 
-        meta.mark_line(0, Mark::Red);
-        meta.mark_line(1, Mark::Red);
-        meta.mark_line(2, Mark::Red);
-        meta.mark_line(4, Mark::Red);
-        meta.mark_line(10, Mark::Red);
+        meta.set_line(0, Mark::Red);
+        meta.set_line(1, Mark::Red);
+        meta.set_line(2, Mark::Red);
+        meta.set_line(4, Mark::Red);
+        meta.set_line(10, Mark::Red);
 
         // line 5 should be conservatively marked
         let expect = Some((10 * constants::LINE_SIZE, 6 * constants::LINE_SIZE));
@@ -174,11 +177,11 @@ mod tests {
     fn test_find_next_hole_at_line_zero() {
         // Should find the hole starting at the beginning of the block
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
 
-        meta.mark_line(3, Mark::Red);
-        meta.mark_line(4, Mark::Red);
-        meta.mark_line(5, Mark::Red);
+        meta.set_line(3, Mark::Red);
+        meta.set_line(4, Mark::Red);
+        meta.set_line(5, Mark::Red);
 
         let expect = Some((3 * constants::LINE_SIZE, 0));
 
@@ -196,11 +199,11 @@ mod tests {
         // The first half of the block is marked.
         // The second half of the block should be identified as a hole.
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
         let halfway = constants::LINE_COUNT / 2;
 
         for i in halfway..constants::LINE_COUNT {
-            meta.mark_line(i, Mark::Red);
+            meta.set_line(i, Mark::Red);
         }
 
         // because halfway line should be conservatively marked
@@ -219,12 +222,12 @@ mod tests {
         // Every other line is marked.
         // No hole should be found.
         let block = Block::default().unwrap();
-        let mut meta = BlockMeta::new(block.as_ptr());
+        let meta = BlockMeta::new(block.as_ptr());
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
                 // there is no stable step function for range
-                meta.mark_line(i, Mark::Red);
+                meta.set_line(i, Mark::Red);
             }
         }
 

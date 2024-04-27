@@ -24,7 +24,6 @@ impl Mark {
             Mark::Red   => Mark::Green,
             Mark::Green => Mark::Blue,
             Mark::Blue  => Mark::Red,
-
             Mark::New   => unreachable!(),
         }
     }
@@ -82,7 +81,7 @@ impl Header {
         self_ref.mark.store(mark as u8, Ordering::SeqCst);
 
         if self_ref.size_class != SizeClass::Large {
-            let mut meta = BlockMeta::from_header(ptr);
+            let meta = BlockMeta::from_header(ptr);
 
             meta.mark(self_ref, mark);
         }
