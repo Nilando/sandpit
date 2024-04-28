@@ -1,7 +1,7 @@
 use super::gc_ptr::GcPtr;
 use super::trace::Trace;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use super::tracer::Tracer;
+use super::trace::Tracer;
 use super::mutator::Mutator;
 use std::mem::{size_of, align_of};
 use std::alloc::Layout;

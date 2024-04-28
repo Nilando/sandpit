@@ -1,7 +1,7 @@
 use super::block_store::BlockStore;
 use super::constants::BLOCK_SIZE;
 use super::header::Mark;
-use crate::allocate::GenerationalArena;
+use super::allocate::GenerationalArena;
 use std::sync::Arc;
 use std::sync::Mutex;
 

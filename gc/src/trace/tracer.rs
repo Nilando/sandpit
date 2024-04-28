@@ -1,4 +1,4 @@
-use super::allocate::{Allocate, GenerationalArena};
+use crate::allocator::{Allocate, GenerationalArena};
 use super::trace::Trace;
 use super::trace_metrics::TraceMetrics;
 use super::trace_packet::{TracePacket, TRACE_PACKET_SIZE};

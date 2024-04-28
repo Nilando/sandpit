@@ -1,10 +1,8 @@
-use super::allocate::{Allocate, Marker};
+use super::allocator::{Allocate, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::Trace;
-use super::trace_packet::TracePacket;
-use super::tracer::TracerWorker;
-use super::tracer_controller::TracerController;
+use super::trace::{Trace, TracePacket, TracerWorker, TracerController};
+
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::alloc::Layout;

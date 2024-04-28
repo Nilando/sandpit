@@ -1,8 +1,8 @@
-use super::allocate::{Allocate, GenerationalArena};
+use crate::allocator::{Allocate, GenerationalArena};
 use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
 use super::tracer::TracerWorker;
-use super::Trace;
+use super::trace::Trace;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,

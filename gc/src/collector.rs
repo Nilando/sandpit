@@ -1,9 +1,8 @@
-use super::allocate::{Allocate, GenerationalArena};
+use super::allocator::{Allocate, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
-use super::trace::Trace;
-use super::tracer_controller::TracerController;
+use super::trace::{Trace, TracerController};
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator

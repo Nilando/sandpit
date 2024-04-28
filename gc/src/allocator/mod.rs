@@ -1,5 +1,6 @@
 mod alloc_head;
 mod allocator;
+mod allocate;
 mod arena;
 mod block;
 mod block_meta;
@@ -14,3 +15,4 @@ mod size_class;
 mod tests;
 
 pub use allocator::Allocator;
+pub use allocate::{Marker, Allocate, GenerationalArena};

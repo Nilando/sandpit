@@ -4,7 +4,7 @@ use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
-use crate::allocate::{Allocate, GenerationalArena};
+use super::allocate::{Allocate, GenerationalArena};
 use std::ptr::write;
 use std::ptr::NonNull;
 use std::mem::{align_of, size_of};

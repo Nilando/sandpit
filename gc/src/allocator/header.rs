@@ -1,4 +1,4 @@
-use crate::allocate::Marker;
+use super::allocate::Marker;
 use super::size_class::SizeClass;
 use super::block_meta::BlockMeta;
 use std::sync::atomic::{Ordering, AtomicU8};

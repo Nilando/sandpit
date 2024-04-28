@@ -1,5 +1,5 @@
-use super::*;
 use std::ptr::NonNull;
+use super::tracer::Tracer;
 
 pub unsafe trait TraceLeaf: 'static {}
 pub unsafe trait Trace: 'static {
@@ -42,7 +42,7 @@ unsafe impl TraceLeaf for i64 {}
 unsafe impl TraceLeaf for i128 {}
 unsafe impl TraceLeaf for isize {}
 unsafe impl TraceLeaf for std::sync::atomic::AtomicUsize {}
-unsafe impl<T: TraceLeaf> TraceLeaf for gc_cell::GcCell<T> {}
+unsafe impl<T: TraceLeaf> TraceLeaf for crate::gc_cell::GcCell<T> {}
 
 // ****************************************************************************
 // TRACE IMPLS
@@ -54,7 +54,7 @@ unsafe impl<T: Trace> Trace for Option<T> {
     }
 }
 
-unsafe impl<T: Trace> Trace for gc_ptr::GcPtr<T> {
+unsafe impl<T: Trace> Trace for crate::gc_ptr::GcPtr<T> {
     fn trace<U: Tracer>(&self, tracer: &mut U) {
         unsafe {
             let ptr = self.as_ptr();

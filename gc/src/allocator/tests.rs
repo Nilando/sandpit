@@ -2,7 +2,7 @@ use super::arena::Arena;
 use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
-use crate::allocate::{Allocate, GenerationalArena};
+use super::allocate::{Allocate, GenerationalArena};
 use std::alloc::Layout;
 use std::ptr::write;
 use std::mem::{size_of, align_of};
