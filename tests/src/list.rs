@@ -262,16 +262,40 @@ fn out_of_bounds_set() {
 }
 
 #[test]
-fn cyclic_list() {
+fn push_zero_cap() {
     let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
 
     gc.mutate(|root, mx| {
-        let list = GcArray::alloc(mx).unwrap();
+        let val = mx.alloc(ListItem::Val(9)).unwrap();
 
+        for i in 0..10 {
+            root.push(mx, val.clone());
+        }
+    });
+
+    gc.collect();
+
+    gc.mutate(|root, mx| {
+        assert!(root.len() == 10);
+        assert!(root.cap() == 12);
+        for i in 0..10 {
+            match *root.at(i) {
+                ListItem::Val(val) => assert_eq!(val, 9),
+                ListItem::List(_) => assert!(false),
+            }
+        }
+    });
+}
+
+#[test]
+fn cyclic_list() {
+    let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
+
+    gc.mutate(|root, mx| {
+        let list = GcArray::alloc(mx).unwrap();
         let list_item = mx.alloc(ListItem::List(list.clone())).unwrap();
 
         list.push(mx, list_item.clone());
-
         root.push(mx, list_item);
     });
 

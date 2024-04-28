@@ -34,6 +34,14 @@ impl Node {
         this.write_barrier(mutator, new_left, |this| &this.left);
     }
 
+    pub fn right_val(this: &GcPtr<Node>) -> usize {
+        this.right.val.get()
+    }
+
+    pub fn left_val(this: &GcPtr<Node>) -> usize {
+        this.left.val.get()
+    }
+
     pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
         this.write_barrier(mutator, new_right, |this| &this.right);
     }
@@ -69,6 +77,7 @@ impl Node {
         result
     }
 
+    // don't call this on a cyclic graph
     pub fn traverse(this: &GcPtr<Node>, vals: &mut Vec<usize>) {
         if !this.right.is_null() {
             Self::traverse(&this.right, vals)
@@ -251,4 +260,21 @@ fn objects_marked_metric() {
     gc.collect();
 
     assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
+}
+
+#[test]
+fn cyclic_graph() {
+    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+
+    gc.mutate(|root, mutator| {
+        let root_clone = root.clone();
+
+        Node::set_right(root, mutator, root.clone());
+        Node::set_left(root, mutator, root.clone());
+
+        assert!(Node::right_val(root) == 0);
+        assert!(Node::left_val(root) == 0);
+    });
+
+    gc.collect();
 }

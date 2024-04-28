@@ -37,7 +37,7 @@ impl<T: Trace> GcArrayMeta<T> {
     }
 
     pub fn at(&self, idx: usize) -> GcPtr<T> {
-        let len = self.len.load(Ordering::Relaxed);
+        let len = self.len.load(Ordering::SeqCst);
 
         if len <= idx {
             panic!("Out of Bounds GcArray Index");
@@ -56,7 +56,7 @@ impl<T: Trace> GcArrayMeta<T> {
     }
 
     pub fn internal_set(&self, idx: usize, item: GcPtr<T>) {
-        let len = self.len.load(Ordering::Relaxed);
+        let len = self.len.load(Ordering::SeqCst);
 
         if len <= idx {
             panic!("Out of Bounds GcArray Index");
@@ -70,11 +70,16 @@ impl<T: Trace> GcArrayMeta<T> {
     }
 
     pub fn push<M: Mutator>(this: GcPtr<Self>, mutator: &M, obj: GcPtr<T>) {
-        let len = this.len.load(Ordering::Relaxed);
-        let cap = this.cap.load(Ordering::Relaxed);
+        let len = this.len.load(Ordering::SeqCst);
+        let cap = this.cap.load(Ordering::SeqCst);
 
         if len == cap {
-            let new_cap = (cap / 2) + cap;
+            let new_cap = 
+                if cap == 0 {
+                    8
+                } else {
+                    (cap / 2) + cap
+                };
 
             unsafe {
                 let layout = Layout::from_size_align_unchecked(size_of::<GcPtr<T>>() * new_cap, align_of::<GcPtr<T>>());
@@ -85,12 +90,12 @@ impl<T: Trace> GcArrayMeta<T> {
                     new_meta.internal_set(i, this.at(i));
                 }
 
-                this.cap.store(new_cap, Ordering::Relaxed);
+                this.cap.store(new_cap, Ordering::SeqCst);
                 this.data.unsafe_set(new_data);
             }
         }
 
-        this.len.fetch_add(1, Ordering::Relaxed);
+        this.len.fetch_add(1, Ordering::SeqCst);
 
         unsafe {
             let ptr = this.data.as_ptr().add(len);
@@ -102,13 +107,13 @@ impl<T: Trace> GcArrayMeta<T> {
     }
 
     pub fn pop(&self) -> Option<GcPtr<T>> {
-        let len = self.len.load(Ordering::Relaxed);
+        let len = self.len.load(Ordering::SeqCst);
 
         if len == 0 {
             return None
         }
 
-        let len = self.len.fetch_sub(1, Ordering::Relaxed);
+        let len = self.len.fetch_sub(1, Ordering::SeqCst);
 
         unsafe {
             let ptr = self.data.as_ptr().add(len - 1);
@@ -138,11 +143,11 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn len(&self) -> usize {
-        self.meta.len.load(Ordering::Relaxed)
+        self.meta.len.load(Ordering::SeqCst)
     }
 
     pub fn cap(&self) -> usize {
-        self.meta.cap.load(Ordering::Relaxed)
+        self.meta.cap.load(Ordering::SeqCst)
     }
 
     pub fn push<M: Mutator>(&self, mutator: &M, obj: GcPtr<T>) {
@@ -197,7 +202,7 @@ unsafe impl<T: Trace> Trace for GcArray<T> {
 
 unsafe impl<T: Trace> Trace for GcArrayMeta<T> {
     fn trace<U: Tracer>(&self, tracer: &mut U) {
-        let len = self.len.load(Ordering::Relaxed);
+        let len = self.len.load(Ordering::SeqCst);
 
         self.data.trace(tracer);
 
