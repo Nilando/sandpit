@@ -1,5 +1,5 @@
 use gc::{Gc, GcCell, GcError, GcPtr, Mutator};
-use gc_derive::Trace;
+use gc::gc_derive::Trace;
 use rand::Rng;
 
 unsafe impl Send for Node {}

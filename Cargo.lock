@@ -1139,7 +1139,6 @@ dependencies = [
  "criterion",
  "expand",
  "gc",
- "gc_derive",
  "rand",
 ]
 

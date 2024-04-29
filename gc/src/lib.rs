@@ -23,12 +23,15 @@
 //! not impl Drop. This is because the trace and sweep collector by design doesn't keep track of
 //! what has been freed and more so what is still reachable by the root.
 //! ```compile_fail
-//! use gc_derive::Trace;
+//! use gc::{gc_derive::Trace, Trace};
 //!
 //! #[derive(Trace)]
-//! struct Foo;
+//! struct Foo<T: Trace> {
+//!     t: T
+//! }
 //!
-//! impl Drop for Foo {
+//!
+//! impl<T: Trace> Drop for Foo<T> {
 //!     fn drop(&mut self) {}
 //! }
 //! ```
@@ -65,6 +68,7 @@ pub use gc_cell::GcCell;
 pub use gc_ptr::GcPtr;
 pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
+pub use gc_derive;
 
 pub type Gc<T> = gc::Gc<collector::Controller<allocator::Allocator, T>, monitor::MonitorController>;
 

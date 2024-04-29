@@ -11,6 +11,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let generics = add_trait_bounds(input.generics);
+    let has_generics = !generics.params.is_empty();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let trace_body = match input.data {
@@ -83,9 +84,25 @@ pub fn trace(input: TokenStream) -> TokenStream {
         _ => todo!("implement Derive(Trace) for union types"),
     };
 
+    // This assert still applies to types with generics, b/c
+    // the generics types are bound by the Trace trait. So for any generic trace type, 
+    // eventually there must be some concrete Trace type being passed in with the static,
+    // assert of 
+    let no_drop_assert = 
+        if has_generics {
+            // Some how we still need to assert that a generic type does not impl drop
+            quote! {}
+        } else {
+            quote! {
+                const _: () = assert!(!std::mem::needs_drop::<#name>());
+            }
+        };
+
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
             fn trace<GC_INTERNAL_TRACER_GENERIC: gc::Tracer>(&self, tracer: &mut GC_INTERNAL_TRACER_GENERIC) {
+                #no_drop_assert
+
                 #(#trace_body)*
             }
         }

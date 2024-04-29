@@ -1,5 +1,5 @@
 use gc::{Gc, Mutator, Trace, collections::GcArray, GcPtr};
-use gc_derive::Trace;
+use gc::gc_derive::Trace;
 
 type List<T> = GcArray<ListItem<T>>;
 
