@@ -2,3 +2,6 @@
 name = "gc"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+gc_derive = { path = "../gc_derive" }

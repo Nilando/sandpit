@@ -1,10 +1,16 @@
 //! A generational, concurrent, and parallel garbage collected arena that is
 //! still under development.
 //!
+//! A GcArena holds a single generic Root object which must implement the Trace trait.
+//! When the GcArena peforms a collection, all memory that is unreachable from the root
+//! will be freed.
+//!
+//! To build a GcArena, you must pass a callback to the Gc::build method which must return the arena's root object. The Gc::build method also provides a mutator as an argument to allow for the option of allocating the root object within the GcArena.
 //! ```rust
 //! use gc::{Gc, Mutator};
 //!
-//! let gc = Gc::build(|mutator| {
+//! // This creates an arena with a usize as the root.
+//! let gc: Gc<usize> = Gc::build(|mutator| {
 //!     *mutator.alloc(123).unwrap()
 //! });
 //!
@@ -13,14 +19,31 @@
 //! });
 //! ```
 //!
+//! To allocate a type in a GcArena it must meet a few guarantees. First, the type must
+//! not impl Drop. This is because the trace and sweep collector by design doesn't keep track of
+//! what has been freed and more so what is still reachable by the root.
+//! ```compile_fail
+//! use gc_derive::Trace;
+//!
+//! #[derive(Trace)]
+//! struct Foo;
+//!
+//! impl Drop for Foo {
+//!     fn drop(&mut self) {}
+//! }
+//! ```
+//!
 //! TODO:
-//! - Fixing Bugs is the #1 priority!
-//!     - Miri is detecting a few concurrency issues
+//! - Fixing Bugs and adding tests is the #1 priority!
 //! - Right now the monitor is essentially just a placeholder. Actuall experiementing
 //!   and work needs to be done in order to make an actual acceptable monitor.
 //! - Organize the code into modules
+//!     - make the modules more loosley coupled
 //! - the exposed Gc type does not need to be generic 
 //! - add a way to pass in config to the gc when building
+//! - static assert that gc types cannot implement Drop
+//! - make gc_ptr send only if its pointed type is send
+//! - multi threading tests
 
 mod allocator;
 mod collector;
