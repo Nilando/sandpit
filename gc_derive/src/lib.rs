@@ -88,21 +88,9 @@ pub fn trace(input: TokenStream) -> TokenStream {
     // the generics types are bound by the Trace trait. So for any generic trace type, 
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of 
-    let no_drop_assert = 
-        if has_generics {
-            // Some how we still need to assert that a generic type does not impl drop
-            quote! {}
-        } else {
-            quote! {
-                const _: () = assert!(!std::mem::needs_drop::<#name>());
-            }
-        };
-
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
             fn trace<GC_INTERNAL_TRACER_GENERIC: gc::Tracer>(&self, tracer: &mut GC_INTERNAL_TRACER_GENERIC) {
-                #no_drop_assert
-
                 #(#trace_body)*
             }
         }

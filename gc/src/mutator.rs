@@ -49,6 +49,8 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
+        const { assert!(!std::mem::needs_drop::<T>(), "A type must not need dropping to be allocated in a GcArena") };
+
         let layout = Layout::new::<T>();
         match self.allocator.alloc(layout) {
             Ok(ptr) => {

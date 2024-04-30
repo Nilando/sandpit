@@ -7,15 +7,15 @@
 //!
 //! To build a GcArena, you must pass a callback to the Gc::build method which must return the arena's root object. The Gc::build method also provides a mutator as an argument to allow for the option of allocating the root object within the GcArena.
 //! ```rust
-//! use gc::{Gc, Mutator};
+//! use gc::{Gc, Mutator, GcPtr};
 //!
 //! // This creates an arena with a usize as the root.
-//! let gc: Gc<usize> = Gc::build(|mutator| {
-//!     *mutator.alloc(123).unwrap()
+//! let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| {
+//!     mutator.alloc(123).unwrap()
 //! });
 //!
 //! gc.mutate(|root, mutator| {
-//!     assert_eq!(*root, 123)
+//!     assert_eq!(**root, 123)
 //! });
 //! ```
 //!
@@ -23,17 +23,18 @@
 //! not impl Drop. This is because the trace and sweep collector by design doesn't keep track of
 //! what has been freed and more so what is still reachable by the root.
 //! ```compile_fail
-//! use gc::{gc_derive::Trace, Trace};
+//! use gc::{Gc, gc_derive::Trace, GcPtr};
 //!
 //! #[derive(Trace)]
-//! struct Foo<T: Trace> {
-//!     t: T
-//! }
+//! struct Foo;
 //!
-//!
-//! impl<T: Trace> Drop for Foo<T> {
+//! impl Drop for Foo {
 //!     fn drop(&mut self) {}
 //! }
+//!
+//! let gc: Gc<GcPtr<Foo>> = Gc::build(|mutator| {
+//!     mutator.alloc(Foo).unwrap()
+//! });
 //! ```
 //!
 //! TODO:
@@ -47,6 +48,7 @@
 //! - static assert that gc types cannot implement Drop
 //! - make gc_ptr send only if its pointed type is send
 //! - multi threading tests
+#![feature(inline_const)]
 
 mod allocator;
 mod collector;
