@@ -45,7 +45,6 @@
 //!     - make the modules more loosley coupled
 //! - the exposed Gc type does not need to be generic 
 //! - add a way to pass in config to the gc when building
-//! - static assert that gc types cannot implement Drop
 //! - make gc_ptr send only if its pointed type is send
 //! - multi threading tests
 #![feature(inline_const)]
