@@ -195,13 +195,13 @@ impl<T: Trace> Iterator for GcArrayIter<T> {
 }
 
 unsafe impl<T: Trace> Trace for GcArray<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace(&self, tracer: &mut Tracer) {
         self.meta.trace(tracer)
     }
 }
 
 unsafe impl<T: Trace> Trace for GcArrayMeta<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace(&self, tracer: &mut Tracer) {
         let len = self.len.load(Ordering::SeqCst);
 
         self.data.trace(tracer);

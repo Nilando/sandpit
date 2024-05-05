@@ -1,104 +1,78 @@
-use crate::allocator::{Allocate, GenerationalArena};
 use super::trace::Trace;
-use super::trace_metrics::TraceMetrics;
+use super::tracer_controller::TracerController;
 use super::trace_packet::{TracePacket, TRACE_PACKET_SIZE};
 use std::ptr::NonNull;
-use std::sync::{Arc, Mutex};
+use crate::allocator::{Allocate, GenerationalArena};
 
-pub trait Tracer {
-    fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>);
+pub struct Tracer<'a> {
+    controller: &'a TracerController,
+    tracing_packet: TracePacket,
+    new_packet: TracePacket,
 }
 
-impl<A: Allocate> Tracer for TracerWorker<A> {
-    fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if A::get_mark(ptr) == self.mark {
-            return;
+unsafe impl<'a> Send for Tracer<'a> {}
+unsafe impl<'a> Sync for Tracer<'a> {}
+
+impl<'a> Tracer<'a> {
+    pub fn new(controller: &'a TracerController) -> Self {
+        Self {
+            controller,
+            new_packet: TracePacket::new(),
+            tracing_packet: TracePacket::new(),
         }
+    }
 
-        A::set_mark(ptr, self.mark);
-
+    pub fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>) {
         if !T::needs_trace() { return }
 
-        if self.new_packet.is_some() {
-            if self.new_packet.as_ref().unwrap().is_full() {
-                let packet = self.new_packet.take().unwrap();
-                self.send_packet(packet)
-            } else {
-                self.new_packet
-                    .as_mut()
-                    .unwrap()
-                    .push(Some((ptr.cast(), T::dyn_trace)));
-                return;
-            }
+        if self.new_packet.is_full() {
+            self.send_packet();
         }
 
-        let mut packet = TracePacket::new();
-        packet.push(Some((ptr.cast(), T::dyn_trace)));
-        self.new_packet = Some(packet);
-    }
-}
-
-pub struct TracerWorker<A: Allocate> {
-    unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
-    mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
-    new_packet: Option<TracePacket<TracerWorker<A>>>,
-    metrics: TraceMetrics,
-}
-
-unsafe impl<T: Allocate> Send for TracerWorker<T> {}
-unsafe impl<T: Allocate> Sync for TracerWorker<T> {}
-
-impl<A: Allocate> TracerWorker<A> {
-    pub fn new(
-        unscanned: Arc<Mutex<Vec<TracePacket<TracerWorker<A>>>>>,
-        mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
-    ) -> Self {
-        Self {
-            unscanned,
-            mark,
-            new_packet: None,
-            metrics: TraceMetrics::new(),
-        }
+        self.new_packet.push(Some((ptr.cast(), T::dyn_trace)));
     }
 
     pub fn init<T: Trace>(&mut self, root: &T) {
         root.trace(self);
     }
 
-    pub fn trace(&mut self) {
+    pub fn trace<A: Allocate>(&mut self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
         loop {
-            let packet = if self.new_packet.is_some() {
-                self.new_packet.take()
-            } else {
-                self.unscanned.lock().unwrap().pop()
-            };
+            if self.tracing_packet.is_empty() {
+                if !self.new_packet.is_empty(){
+                    std::mem::swap(&mut self.tracing_packet, &mut self.new_packet);
+                } else {
+                    if let Some(new_tracing_packet) = self.controller.pop_packet() {
+                        self.tracing_packet = new_tracing_packet;
+                    } 
 
-            match packet {
-                Some(packet) => self.trace_packet(packet),
-                None => break,
+                    if self.tracing_packet.is_empty() {
+                        break;
+                    }
+                }
             }
+
+            self.trace_packet::<A>(mark);
         }
     }
 
-    pub fn get_metrics(&self) -> TraceMetrics {
-        self.metrics
-    }
-
-    fn trace_packet(&mut self, mut packet: TracePacket<TracerWorker<A>>) {
+    fn trace_packet<A: Allocate>(&mut self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
         for _ in 0..TRACE_PACKET_SIZE {
-            match packet.pop() {
+            match self.tracing_packet.pop() {
                 Some((ptr, trace_fn)) => {
-                    // TODO: COMPILE THIS CONDITIONALLY
-                    self.metrics.objects_marked += 1;
-                    trace_fn(ptr, self)
+                    if mark != A::get_mark(ptr) {
+                        A::set_mark(ptr, mark);
+
+                        trace_fn(ptr, self)
+                    }
                 }
                 None => break,
             }
         }
     }
 
-    fn send_packet(&mut self, packet: TracePacket<TracerWorker<A>>) {
-        self.unscanned.lock().unwrap().push(packet);
-        // if we have an available worker, that is waiting, give it to them
+    fn send_packet(&mut self) {
+        self.controller.push_packet(self.new_packet.clone());
+        self.new_packet.drain();
     }
 }

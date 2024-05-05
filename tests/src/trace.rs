@@ -10,7 +10,7 @@ mod tests {
             mutator.alloc(outer).unwrap()
         });
 
-        gc.collect();
+        gc.major_collect();
 
         gc.mutate(|root, mutator| {
             assert!(root.as_ref().unwrap().unwrap() == 420);

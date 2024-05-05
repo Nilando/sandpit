@@ -13,7 +13,7 @@ pub enum ListItem<T: Trace> {
 fn empty_list() {
     let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         assert_eq!(root.len(), 0);
@@ -26,7 +26,7 @@ fn empty_list() {
 fn collect_list() {
     let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         assert_eq!(root.len(), 0);
@@ -48,7 +48,7 @@ fn fill_list() {
         assert_eq!(root.cap(), 8);
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         for i in 0..8 {
@@ -79,7 +79,7 @@ fn set_array() {
         }
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         assert_eq!(root.len(), 10000);
@@ -105,7 +105,7 @@ fn overfill_list_capacity_and_iter() {
         assert_eq!(root.len(), 100);
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         for (i, item) in root.iter().enumerate() {
@@ -153,7 +153,7 @@ fn nested_arrays() {
         assert_eq!(root.len(), outer_len);
     });
 
-    gc.collect();
+    gc.major_collect();
 
     let num_objs = ((1 + 100) * 3) - 1; // -1 b/c root isnt marked
     assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), num_objs);
@@ -174,7 +174,7 @@ fn nested_arrays() {
         }
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         for item in root.iter() {
@@ -209,7 +209,7 @@ fn large_array() {
         assert_eq!(root.len(), 10000);
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         assert_eq!(root.len(), 10000);
@@ -237,7 +237,7 @@ fn get_size() {
         root.push(mutator, small);
     });
 
-    gc.collect();
+    gc.major_collect();
     assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
 }
 
@@ -273,7 +273,7 @@ fn push_zero_cap() {
         }
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, mx| {
         assert!(root.len() == 10);
@@ -299,5 +299,5 @@ fn cyclic_list() {
         root.push(mx, list_item);
     });
 
-    gc.collect();
+    gc.major_collect();
 }

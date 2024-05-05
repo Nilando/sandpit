@@ -2,41 +2,50 @@ use super::allocator::{Allocate, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
 use super::trace::{Trace, TracerController};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::Mutex;
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator
 pub trait Collect: 'static {
-    fn collect(&self);
-    fn eden_collect(&self);
+    fn major_collect(&self);
+    fn minor_collect(&self);
     fn arena_size(&self) -> usize;
 }
 
 pub trait GcController: Collect {
     type Root: Trace;
-    type Mutator: Mutator;
+    type Mutator<'scope>: Mutator;
 
-    fn build(callback: fn(&mut Self::Mutator) -> Self::Root) -> Self;
-    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator));
+    fn build(callback: fn(&mut Self::Mutator<'_>) -> Self::Root) -> Self;
+    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator<'_>));
     fn metrics(&self) -> HashMap<String, usize>;
 }
 
-unsafe impl<A: Allocate, T: Trace + Send> Send for Controller<A, T> {}
-unsafe impl<A: Allocate, T: Trace + Sync> Sync for Controller<A, T> {}
+unsafe impl<A: Allocate, T: Trace + Send> Send for Collector<A, T> {}
+unsafe impl<A: Allocate, T: Trace + Sync> Sync for Collector<A, T> {}
 
-pub struct Controller<A: Allocate, T: Trace> {
-    arena: Arc<A::Arena>,
-    tracer: Arc<TracerController<A>>,
+pub struct Collector<A: Allocate, T: Trace> {
+    arena: A::Arena,
+    tracer: TracerController,
     root: T,
+    lock: Mutex<()>
 }
 
-impl<A: Allocate, T: Trace> Collect for Controller<A, T> {
-    fn collect(&self) {
-        self.tracer.full_collection(self.arena.as_ref(), &self.root);
+impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
+    fn major_collect(&self) {
+        println!("MC: ENTER");
+        let _lock = self.lock.lock().unwrap();
+        println!("MC: LOCKED");
+        let mark = self.arena.rotate_mark();
+        println!("MC: COLLECTING");
+        self.collect(mark);
+        println!("MC: EXIT");
     }
 
-    fn eden_collect(&self) {
-        self.tracer.eden_collection(self.arena.as_ref(), &self.root);
+    fn minor_collect(&self) {
+        let _lock = self.lock.lock().unwrap();
+        let mark = self.arena.current_mark();
+        self.collect(mark);
     }
 
     fn arena_size(&self) -> usize {
@@ -44,32 +53,34 @@ impl<A: Allocate, T: Trace> Collect for Controller<A, T> {
     }
 }
 
-impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
+impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
     type Root = T;
-    type Mutator = MutatorScope<A>;
+    type Mutator<'scope> = MutatorScope<'scope, A>;
 
-    fn build(callback: fn(&mut Self::Mutator) -> T) -> Self {
-        let arena = Arc::new(A::Arena::new());
-        let tracer = Arc::new(TracerController::<A>::new());
-        let yield_lock = tracer.get_yield_lock();
-        let mut scope = Self::Mutator::new(arena.as_ref(), tracer.clone());
+    fn build(callback: fn(&mut Self::Mutator<'_>) -> T) -> Self {
+        let arena = A::Arena::new();
+        let tracer = TracerController::new();
+        let mut scope = Self::Mutator::new(&arena, &tracer);
         let root = callback(&mut scope);
-        drop(yield_lock);
+
+        drop(scope);
+
         let gc = Self {
             arena,
             tracer,
             root,
+            lock: Mutex::new(()),
         };
 
         gc
     }
 
-    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator)) {
-        if self.tracer.get_yield_flag() {
-            self.tracer.wait_for_trace();
-        }
-        let _yield_lock = self.tracer.get_yield_lock();
-        let mut mutator = Self::Mutator::new(self.arena.as_ref(), self.tracer.clone());
+    fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator<'_>)) {
+        let collection_lock = self.lock.lock().unwrap();
+        let mut mutator = Self::Mutator::new(&self.arena, &self.tracer);
+        let _yield_lock = self.tracer.yield_lock();
+
+        drop(collection_lock);
 
         callback(&self.root, &mut mutator);
     }
@@ -78,12 +89,21 @@ impl<A: Allocate, T: Trace> GcController for Controller<A, T> {
         let tracer_metrics = self.tracer.metrics();
 
         HashMap::from([
+          //("memory_blocks".into(), tracer_metrics.objects_marked),
+          //("large_objects".into(), tracer_metrics.objects_marked),
           ("prev_marked_objects".into(), tracer_metrics.objects_marked),
           ("prev_marked_space".into(), tracer_metrics.objects_marked),
-          //("prev_objects_freed".into(), tracer_metrics.objects_marked),
+          // ("prev_objects_freed".into(), tracer_metrics.objects_marked),
           ("arena_size".into(), self.arena.get_size()),
-          //("full_collections".into(), *self.full_collections.lock().unwrap()),
-          //("eden_collections".into(), *self.eden_collections.lock().unwrap())
+          // ("full_collections".into(), *self.full_collections.lock().unwrap()),
+          // ("eden_collections".into(), *self.eden_collections.lock().unwrap())
         ])
+    }
+}
+
+impl<A: Allocate, T: Trace> Collector<A, T> {
+    fn collect(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
+        self.tracer.trace::<T, A>(&self.root, mark);
+        self.arena.refresh();
     }
 }

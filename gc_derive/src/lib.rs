@@ -90,7 +90,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
     // assert of 
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
-            fn trace<GC_INTERNAL_TRACER_GENERIC: gc::Tracer>(&self, tracer: &mut GC_INTERNAL_TRACER_GENERIC) {
+            fn trace(&self, tracer: &mut gc::Tracer) {
                 #(#trace_body)*
             }
         }

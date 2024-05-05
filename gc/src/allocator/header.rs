@@ -13,6 +13,10 @@ pub enum Mark {
 }
 
 impl Marker for Mark {
+    fn new() -> Self {
+        Self::New
+    }
+
     fn is_new(&self) -> bool {
         *self == Mark::New
     }

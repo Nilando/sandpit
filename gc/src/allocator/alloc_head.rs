@@ -36,6 +36,10 @@ impl AllocHead {
         }
     }
 
+    pub fn get_mark(&self) -> Mark {
+        self.mark
+    }
+
     pub fn alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
         if let Some(space) = self.head_alloc(layout) {
             return Ok(space);

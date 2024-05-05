@@ -3,8 +3,8 @@ use super::tracer::Tracer;
 
 pub unsafe trait TraceLeaf: 'static {}
 pub unsafe trait Trace: 'static {
-    fn trace<T: Tracer>(&self, tracer: &mut T);
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
+    fn trace(&self, tracer: &mut Tracer);
+    fn dyn_trace(ptr: NonNull<()>, tracer: &mut Tracer)
     where
         Self: Sized,
     {
@@ -18,10 +18,11 @@ pub unsafe trait Trace: 'static {
 // ****************************************************************************
 
 unsafe impl<T: TraceLeaf> Trace for T {
-    fn trace<U: Tracer>(&self, _tracer: &mut U) {
-        // this will be called,but never
+    fn trace(&self, _: &mut Tracer) {
+        // TODO: make it so this function is never called
+        // this can be done in the proc macro
     }
-    fn dyn_trace<U: Tracer>(_ptr: NonNull<()>, _tracer: &mut U) {
+    fn dyn_trace(_ptr: NonNull<()>, _: &mut Tracer) {
         unimplemented!()
     }
     fn needs_trace() -> bool { false }
@@ -49,13 +50,13 @@ unsafe impl<T: TraceLeaf> TraceLeaf for crate::gc_cell::GcCell<T> {}
 // ****************************************************************************
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace(&self, tracer: &mut Tracer) {
         self.as_ref().map(|value| value.trace(tracer));
     }
 }
 
 unsafe impl<T: Trace> Trace for crate::gc_ptr::GcPtr<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace(&self, tracer: &mut Tracer) {
         unsafe {
             let ptr = self.as_ptr();
 
