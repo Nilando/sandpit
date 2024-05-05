@@ -1,8 +1,8 @@
 use super::allocator::{Allocate, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
-use super::trace::{Trace, TracerController};
+use super::trace::{Trace, TracerController, TraceMarker};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator
@@ -26,26 +26,22 @@ unsafe impl<A: Allocate, T: Trace + Sync> Sync for Collector<A, T> {}
 
 pub struct Collector<A: Allocate, T: Trace> {
     arena: A::Arena,
-    tracer: TracerController,
+    tracer: Arc<TracerController<TraceMarker<A>>>,
     root: T,
     lock: Mutex<()>
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn major_collect(&self) {
-        println!("MC: ENTER");
         let _lock = self.lock.lock().unwrap();
-        println!("MC: LOCKED");
-        let mark = self.arena.rotate_mark();
-        println!("MC: COLLECTING");
-        self.collect(mark);
-        println!("MC: EXIT");
+        let marker = TraceMarker::new(self.arena.rotate_mark());
+        self.collect(marker);
     }
 
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
-        let mark = self.arena.current_mark();
-        self.collect(mark);
+        let marker = TraceMarker::new(self.arena.current_mark());
+        self.collect(marker);
     }
 
     fn arena_size(&self) -> usize {
@@ -59,8 +55,8 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
 
     fn build(callback: fn(&mut Self::Mutator<'_>) -> T) -> Self {
         let arena = A::Arena::new();
-        let tracer = TracerController::new();
-        let mut scope = Self::Mutator::new(&arena, &tracer);
+        let tracer = Arc::new(TracerController::new());
+        let mut scope = Self::Mutator::new(&arena, tracer.as_ref());
         let root = callback(&mut scope);
 
         drop(scope);
@@ -102,8 +98,8 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
 }
 
 impl<A: Allocate, T: Trace> Collector<A, T> {
-    fn collect(&self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
-        self.tracer.trace::<T, A>(&self.root, mark);
+    fn collect(&self, marker: TraceMarker<A>) {
+        self.tracer.clone().trace(&self.root, marker);
         self.arena.refresh();
     }
 }

@@ -105,9 +105,7 @@ impl MonitorWorker {
             metrics.prev_arena_size = new_arena_size;
 
             if metrics.debt >= DEBT_CEILING {
-                println!("Monitor Triggered A Collection!");
                 self.collector.major_collect();
-                println!("Monitor Collection Completed");
                 metrics.debt = 0.0;
             }
         }

@@ -226,7 +226,6 @@ fn monitor_requests_yield() {
         Node::insert_rand(root, mutator);
 
         if mutator.yield_requested() {
-            println!("Mutator Detected a yield!");
             Node::kill_children(root);
             break;
         }

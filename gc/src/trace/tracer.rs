@@ -1,42 +1,53 @@
 use super::trace::Trace;
 use super::tracer_controller::TracerController;
-use super::trace_packet::{TracePacket, TRACE_PACKET_SIZE};
+use super::trace_packet::{TracePacket, TraceJob};
+use super::marker::Marker;
 use std::ptr::NonNull;
-use crate::allocator::{Allocate, GenerationalArena};
+use std::sync::Arc;
 
-pub struct Tracer<'a> {
-    controller: &'a TracerController,
-    tracing_packet: TracePacket,
-    new_packet: TracePacket,
+pub trait Tracer {
+    fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
 }
 
-unsafe impl<'a> Send for Tracer<'a> {}
-unsafe impl<'a> Sync for Tracer<'a> {}
+pub struct TraceWorker<M: Marker> {
+    controller: Arc<TracerController<M>>,
+    marker: M,
+    tracing_packet: TracePacket<M>,
+    new_packet: TracePacket<M>,
+}
 
-impl<'a> Tracer<'a> {
-    pub fn new(controller: &'a TracerController) -> Self {
-        Self {
-            controller,
-            new_packet: TracePacket::new(),
-            tracing_packet: TracePacket::new(),
+unsafe impl<M: Marker> Send for TraceWorker<M> {}
+unsafe impl<M: Marker> Sync for TraceWorker<M> {}
+
+impl<M: Marker> Tracer for TraceWorker<M> {
+    fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
+        if !self.marker.needs_trace(ptr) {
+            return;
         }
-    }
-
-    pub fn send_unscanned<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !T::needs_trace() { return }
 
         if self.new_packet.is_full() {
             self.send_packet();
         }
 
-        self.new_packet.push(Some((ptr.cast(), T::dyn_trace)));
+        self.new_packet.push(ptr);
+    }
+}
+
+impl<M: Marker> TraceWorker<M> {
+    pub fn new(controller: Arc<TracerController<M>>, marker: M) -> Self {
+        Self {
+            controller,
+            marker,
+            new_packet: TracePacket::new(),
+            tracing_packet: TracePacket::new(),
+        }
     }
 
-    pub fn init<T: Trace>(&mut self, root: &T) {
-        root.trace(self);
+    pub fn trace_obj<T: Trace>(&mut self, obj: &T) {
+        obj.trace(self);
     }
 
-    pub fn trace<A: Allocate>(&mut self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
+    pub fn trace_loop(&mut self) {
         loop {
             if self.tracing_packet.is_empty() {
                 if !self.new_packet.is_empty(){
@@ -52,20 +63,14 @@ impl<'a> Tracer<'a> {
                 }
             }
 
-            self.trace_packet::<A>(mark);
+            self.trace_packet();
         }
     }
 
-    fn trace_packet<A: Allocate>(&mut self, mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) {
-        for _ in 0..TRACE_PACKET_SIZE {
+    fn trace_packet(&mut self) {
+        loop {
             match self.tracing_packet.pop() {
-                Some((ptr, trace_fn)) => {
-                    if mark != A::get_mark(ptr) {
-                        A::set_mark(ptr, mark);
-
-                        trace_fn(ptr, self)
-                    }
-                }
+                Some(job) => job.trace(self),
                 None => break,
             }
         }

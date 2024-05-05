@@ -1,7 +1,6 @@
 use super::gc_ptr::GcPtr;
-use super::trace::Trace;
+use super::trace::{Trace, Tracer};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use super::trace::Tracer;
 use super::mutator::Mutator;
 use std::mem::{size_of, align_of};
 use std::alloc::Layout;
@@ -195,13 +194,13 @@ impl<T: Trace> Iterator for GcArrayIter<T> {
 }
 
 unsafe impl<T: Trace> Trace for GcArray<T> {
-    fn trace(&self, tracer: &mut Tracer) {
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
         self.meta.trace(tracer)
     }
 }
 
 unsafe impl<T: Trace> Trace for GcArrayMeta<T> {
-    fn trace(&self, tracer: &mut Tracer) {
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
         let len = self.len.load(Ordering::SeqCst);
 
         self.data.trace(tracer);
