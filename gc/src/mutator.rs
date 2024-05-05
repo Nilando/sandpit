@@ -77,7 +77,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        if self.allocator.check_if_old(ptr) {
+        if !self.allocator.check_if_old(ptr) {
             return;
         }
 
