@@ -171,7 +171,7 @@ fn find() {
         return root;
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         let node = Node::find(root, 420).unwrap();
@@ -202,9 +202,9 @@ fn multiple_collects() {
             s.spawn(|| {
                 for i in 0..10 {
                     if i % 2 == 0 {
-                        gc.eden_collect();
+                        gc.minor_collect();
                     } else {
-                        gc.collect();
+                        gc.major_collect();
                     }
                 }
             });
@@ -244,7 +244,7 @@ fn objects_marked_metric() {
         assert_eq!(Node::collect(root).len(), 100);
     });
 
-    gc.collect();
+    gc.major_collect();
 
     assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 100);
 
@@ -257,7 +257,7 @@ fn objects_marked_metric() {
         assert!(Node::find(root, 99).is_none());
     });
 
-    gc.collect();
+    gc.major_collect();
 
     assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
 }
@@ -276,5 +276,5 @@ fn cyclic_graph() {
         assert!(Node::left_val(root) == 0);
     });
 
-    gc.collect();
+    gc.major_collect();
 }

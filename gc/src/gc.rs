@@ -19,7 +19,7 @@ impl<C: GcController, M: Monitor> Drop for Gc<C, M> {
 }
 
 impl<C: GcController, M: Monitor> Gc<C, M> {
-    pub fn build(callback: fn(&mut C::Mutator) -> C::Root) -> Self {
+    pub fn build(callback: fn(&mut C::Mutator<'_>) -> C::Root) -> Self {
         let controller = Arc::new(C::build(callback));
         let monitor = Arc::new(M::new(controller.clone()));
 
@@ -29,16 +29,16 @@ impl<C: GcController, M: Monitor> Gc<C, M> {
         }
     }
 
-    pub fn mutate(&self, callback: fn(&C::Root, &mut C::Mutator)) {
+    pub fn mutate(&self, callback: fn(&C::Root, &mut C::Mutator<'_>)) {
         self.controller.mutate(callback);
     }
 
-    pub fn collect(&self) {
-        self.controller.collect();
+    pub fn major_collect(&self) {
+        self.controller.major_collect();
     }
 
-    pub fn eden_collect(&self) {
-        self.controller.eden_collect();
+    pub fn minor_collect(&self) {
+        self.controller.minor_collect();
     }
 
     pub fn start_monitor(&self) {

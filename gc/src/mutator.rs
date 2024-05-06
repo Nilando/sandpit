@@ -1,10 +1,9 @@
-use super::allocator::{Allocate, Marker};
+use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, TracePacket, TracerWorker, TracerController};
+use super::trace::{Trace, TracePacket, TraceMarker, TracerController};
 
 use std::ptr::NonNull;
-use std::sync::Arc;
 use std::alloc::Layout;
 use std::ptr::write;
 use std::cell::UnsafeCell;
@@ -16,36 +15,38 @@ pub trait Mutator {
     fn yield_requested(&self) -> bool;
 }
 
-pub struct MutatorScope<A: Allocate> {
+pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
-    tracer_controller: Arc<TracerController<A>>,
-    new_packet: UnsafeCell<TracePacket<TracerWorker<A>>>,
+    tracer_controller: &'scope TracerController<TraceMarker<A>>,
+    trace_packet: UnsafeCell<TracePacket<TraceMarker<A>>>,
 }
 
-impl<A: Allocate> MutatorScope<A> {
-    pub fn new(arena: &A::Arena, tracer_controller: Arc<TracerController<A>>) -> Self {
+impl<'scope, A: Allocate> MutatorScope<'scope, A> {
+    pub fn new(arena: &A::Arena, tracer_controller: &'scope TracerController<TraceMarker<A>>) -> Self {
         let allocator = A::new(arena);
 
         Self {
             allocator,
             tracer_controller,
-            new_packet: UnsafeCell::new(TracePacket::new()),
+            trace_packet: UnsafeCell::new(TracePacket::new()),
         }
     }
 }
 
-impl<A: Allocate> Drop for MutatorScope<A> {
+impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     fn drop(&mut self) {
         unsafe {
-            let packet_ref = &mut *self.new_packet.get();
+            let packet_ref = &mut *self.trace_packet.get();
             self.tracer_controller.push_packet(packet_ref.clone());
         }
     }
 }
 
-impl<A: Allocate> Mutator for MutatorScope<A> {
+impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     fn yield_requested(&self) -> bool {
-        self.tracer_controller.get_yield_flag()
+        // TODO: this should also check how much memory is left,
+        // as well as how long the tracer has been running
+        self.tracer_controller.yield_flag()
     }
 
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
@@ -76,19 +77,22 @@ impl<A: Allocate> Mutator for MutatorScope<A> {
     }
 
     fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        if A::get_mark(ptr).is_new() {
+        if !self.allocator.check_if_old(ptr) {
             return;
         }
 
+        let new_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
+        A::set_mark(ptr, new_mark);
+
         unsafe {
-            let packet_ref = &mut *self.new_packet.get();
+            let packet_ref = &mut *self.trace_packet.get();
 
             if packet_ref.is_full() {
                 self.tracer_controller.push_packet(packet_ref.clone());
-                *packet_ref = TracePacket::new();
-            } else {
-                packet_ref.push(Some((ptr.cast(), T::dyn_trace))); 
+                packet_ref.drain();
             }
+
+            packet_ref.push(ptr); 
         }
     }
 }

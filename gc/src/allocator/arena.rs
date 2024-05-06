@@ -42,9 +42,11 @@ impl GenerationalArena for Arena {
         *self.current_mark.lock().unwrap()
     }
 
-    fn rotate_mark(&self) {
+    fn rotate_mark(&self) -> Self::Mark {
         let mut mark = self.current_mark.lock().unwrap();
 
         *mark = mark.rotate();
+
+        *mark
     }
 }

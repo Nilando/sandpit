@@ -39,6 +39,8 @@ fn gc_cell_write_barrier() {
     });
 }
 
+// this is just testing that dyn trace doesn't get called on
+// a TraceLeaf like usize
 #[test]
 fn dyn_trace_on_usize() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
@@ -47,7 +49,7 @@ fn dyn_trace_on_usize() {
         assert_eq!(**root, 69);
     });
 
-    gc.collect();
+    gc.major_collect();
 }
 
 #[test]
@@ -72,7 +74,7 @@ fn alloc_into_free_blocks() {
         }
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|_, m| {
         let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
@@ -81,7 +83,7 @@ fn alloc_into_free_blocks() {
             m.alloc_layout(medium_layout).unwrap();
         }
     });
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         assert!(**root == 69);

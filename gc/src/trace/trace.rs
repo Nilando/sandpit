@@ -17,11 +17,12 @@ pub unsafe trait Trace: 'static {
 // TRACE LEAF IMPLS
 // ****************************************************************************
 
-unsafe impl<T: TraceLeaf> Trace for T {
-    fn trace<U: Tracer>(&self, _tracer: &mut U) {
-        // this will be called,but never
+unsafe impl<L: TraceLeaf> Trace for L {
+    fn trace<T: Tracer>(&self, _: &mut T) {
+        // TODO: make it so this function is never called
+        // this can be done in the proc macro
     }
-    fn dyn_trace<U: Tracer>(_ptr: NonNull<()>, _tracer: &mut U) {
+    fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {
         unimplemented!()
     }
     fn needs_trace() -> bool { false }
@@ -49,18 +50,18 @@ unsafe impl<T: TraceLeaf> TraceLeaf for crate::gc_cell::GcCell<T> {}
 // ****************************************************************************
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
         self.as_ref().map(|value| value.trace(tracer));
     }
 }
 
 unsafe impl<T: Trace> Trace for crate::gc_ptr::GcPtr<T> {
-    fn trace<U: Tracer>(&self, tracer: &mut U) {
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
         unsafe {
             let ptr = self.as_ptr();
 
             if !ptr.is_null() {
-                tracer.send_unscanned(NonNull::new_unchecked(ptr))
+                tracer.trace(NonNull::new_unchecked(ptr))
             }
         }
     }

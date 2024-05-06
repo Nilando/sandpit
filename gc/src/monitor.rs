@@ -105,7 +105,7 @@ impl MonitorWorker {
             metrics.prev_arena_size = new_arena_size;
 
             if metrics.debt >= DEBT_CEILING {
-                self.collector.collect();
+                self.collector.major_collect();
                 metrics.debt = 0.0;
             }
         }

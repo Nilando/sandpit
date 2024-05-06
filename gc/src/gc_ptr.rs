@@ -71,6 +71,8 @@ impl<T: Trace> GcPtr<T> {
             let old_ptr = callback(ptr.as_ref());
 
             old_ptr.unsafe_set(new_ptr);
+
+            // TODO: if the new_ptr is already marked as old, we wouldn't need to trigger the barrier
             mutator.write_barrier(ptr);
         }
     }

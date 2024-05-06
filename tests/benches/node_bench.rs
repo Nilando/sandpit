@@ -4,7 +4,7 @@ use tests::Node;
 
 const TREE_SIZE: usize = 10_000;
 
-fn full_collection() {
+fn major_collection() {
     let gc = Gc::build(|m| {
         let root = Node::alloc(m, 0).unwrap();
 
@@ -15,7 +15,7 @@ fn full_collection() {
         root
     });
 
-    gc.collect();
+    gc.major_collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -25,16 +25,18 @@ fn full_collection() {
 
 }
 
-fn eden_collection() {
-    let gc = Gc::build(|mutator| {
-        let root = Node::alloc(mutator, 0).unwrap();
+fn minor_collection() {
+    let gc = Gc::build(|m| {
+        let root = Node::alloc(m, 0).unwrap();
 
-        Node::create_balanced_tree(&root, mutator, TREE_SIZE);
+        for _ in 0..10 {
+            Node::create_balanced_tree(&root, m, TREE_SIZE);
+        }
 
         root
     });
 
-    gc.eden_collect();
+    gc.minor_collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -47,10 +49,12 @@ fn sync_collection() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
 
     gc.mutate(|root, m| {
-        Node::create_balanced_tree(root, m, TREE_SIZE);
+        for _ in 0..100 {
+            Node::create_balanced_tree(root, m, TREE_SIZE);
+        }
     });
 
-    gc.collect();
+    gc.minor_collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -65,12 +69,12 @@ fn concurrent_collection() {
     gc.start_monitor();
 
     gc.mutate(|root, m| {
-        for _ in 0..10 {
+        for _ in 0..100 {
             Node::create_balanced_tree(root, m, TREE_SIZE);
         }
     });
 
-    gc.collect();
+    gc.minor_collect();
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -80,8 +84,8 @@ fn concurrent_collection() {
 }
 
 fn node_benchmark(c: &mut Criterion) {
-    c.bench_function("full collection", |b| b.iter(|| full_collection()));
-    c.bench_function("eden collection", |b| b.iter(|| eden_collection()));
+    c.bench_function("major collection", |b| b.iter(|| major_collection()));
+    c.bench_function("minor collection", |b| b.iter(|| minor_collection()));
     c.bench_function("sync collection", |b| b.iter(|| sync_collection()));
     c.bench_function("concurrent collection", |b| b.iter(|| concurrent_collection()));
 }

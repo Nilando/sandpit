@@ -71,7 +71,7 @@ pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
 pub use gc_derive;
 
-pub type Gc<T> = gc::Gc<collector::Controller<allocator::Allocator, T>, monitor::MonitorController>;
+pub type Gc<T> = gc::Gc<collector::Collector<allocator::Allocator, T>, monitor::MonitorController>;
 
 #[cfg(test)]
 mod test;
