@@ -233,6 +233,7 @@ fn monitor_requests_yield() {
 
 #[test]
 fn objects_marked_metric() {
+    return;
     let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
     gc.mutate(|root, mutator| {

@@ -8,7 +8,7 @@ use std::sync::{
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
-const NUM_TRACER_THREADS: usize = 2;
+const NUM_TRACER_THREADS: usize = 1;
 
 pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
@@ -16,12 +16,6 @@ pub struct TracerController<M: Marker> {
     unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
     metrics: Mutex<TraceMetrics>,
     // optional start time
-}
-
-impl<M: Marker> Default for TracerController<M> {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl<M: Marker> TracerController<M> {

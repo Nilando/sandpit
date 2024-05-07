@@ -15,12 +15,6 @@ pub struct BlockStore {
     large: Mutex<LinkedList<Block>>,
 }
 
-impl Default for BlockStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl BlockStore {
     pub fn new() -> Self {
         Self {

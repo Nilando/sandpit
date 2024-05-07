@@ -3,20 +3,11 @@ use super::trace::Trace;
 use super::tracer::TraceWorker;
 use std::ptr::NonNull;
 
-pub const TRACE_PACKET_SIZE: usize = 100;
+pub const TRACE_PACKET_SIZE: usize = 128;
 
 pub struct TraceJob<M: Marker> {
     ptr: NonNull<()>,
     dyn_trace: fn(NonNull<()>, &mut TraceWorker<M>),
-}
-
-impl<M: Marker> Default for TraceJob<M> {
-    fn default() -> Self {
-        Self {
-            ptr: NonNull::<()>::dangling(),
-            dyn_trace: TraceJob::<M>::virtual_trace,
-        }
-    }
 }
 
 impl<M: Marker> TraceJob<M> {
@@ -46,12 +37,6 @@ impl<M: Marker> TraceJob<M> {
 pub struct TracePacket<M: Marker> {
     jobs: [TraceJob<M>; TRACE_PACKET_SIZE],
     len: usize,
-}
-
-impl<M: Marker> Default for TracePacket<M> {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl<M: Marker> TracePacket<M> {

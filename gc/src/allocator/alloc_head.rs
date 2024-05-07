@@ -54,14 +54,11 @@ impl AllocHead {
     }
 
     fn small_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
-        loop {
-            // this is okay be we already tried to alloc in head and didn't have space
-            self.get_new_head()?;
+        // this is okay be we already tried to alloc in head and didn't have space
+        // and any block returned by get new head should have space for a small object
+        self.get_new_head()?;
 
-            if let Some(space) = self.head_alloc(layout) {
-                return Ok(space);
-            }
-        }
+        Ok(self.head_alloc(layout).unwrap())
     }
 
     fn medium_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
