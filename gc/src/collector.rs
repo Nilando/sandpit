@@ -82,11 +82,11 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
     }
 
     fn metrics(&self) -> HashMap<String, usize> {
-        let tracer_metrics = self.tracer.metrics();
-
+        todo!();
+        /*
         HashMap::from([
-            //("memory_blocks".into(), tracer_metrics.objects_marked),
-            //("large_objects".into(), tracer_metrics.objects_marked),
+            // ("memory_blocks".into(), tracer_metrics.objects_marked),
+            // ("large_objects".into(), tracer_metrics.objects_marked),
             ("prev_marked_objects".into(), tracer_metrics.objects_marked),
             ("prev_marked_space".into(), tracer_metrics.objects_marked),
             // ("prev_objects_freed".into(), tracer_metrics.objects_marked),
@@ -94,6 +94,7 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
             // ("full_collections".into(), *self.full_collections.lock().unwrap()),
             // ("eden_collections".into(), *self.eden_collections.lock().unwrap())
         ])
+        */
     }
 }
 

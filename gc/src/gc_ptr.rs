@@ -1,14 +1,14 @@
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
-use std::marker::PhantomData;
 
 use super::mutator::Mutator;
 use super::trace::Trace;
 
 pub struct GcPtr<T: Trace> {
     ptr: AtomicPtr<T>,
-    _mark: PhantomData<*const ()>
+    _mark: PhantomData<*const ()>,
 }
 
 impl<T: Trace> Deref for GcPtr<T> {
@@ -30,14 +30,14 @@ impl<T: Trace> GcPtr<T> {
     pub fn new(ptr: NonNull<T>) -> Self {
         Self {
             ptr: AtomicPtr::from(ptr.as_ptr()),
-            _mark: PhantomData::<*const ()>
+            _mark: PhantomData::<*const ()>,
         }
     }
 
     pub fn null() -> Self {
         Self {
             ptr: AtomicPtr::new(std::ptr::null_mut()),
-            _mark: PhantomData::<*const ()>
+            _mark: PhantomData::<*const ()>,
         }
     }
 
@@ -94,7 +94,7 @@ impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
         Self {
             ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
-            _mark: PhantomData::<*const ()>
+            _mark: PhantomData::<*const ()>,
         }
     }
 }
