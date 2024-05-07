@@ -97,7 +97,6 @@ fn wait_for_trace() {
 
     for _ in 0..10 {
         gc.mutate(|_, m| loop {
-            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
             m.alloc(420).unwrap();
 
             if m.yield_requested() {
@@ -119,7 +118,6 @@ fn start_monitor_multiple_times() {
     gc.start_monitor();
 
     gc.mutate(|_, m| loop {
-        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
         m.alloc(420).unwrap();
 
         if m.yield_requested() {

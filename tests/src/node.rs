@@ -1,5 +1,5 @@
 use gc::gc_derive::Trace;
-use gc::{Gc, GcCell, GcError, GcPtr, Mutator};
+use gc::*;
 use rand::Rng;
 
 unsafe impl Send for Node {}
@@ -60,13 +60,11 @@ impl Node {
             } else {
                 Node::insert(&this.left, mutator, new_val);
             }
+        } else if this.right.is_null() {
+            let node_ptr = Node::alloc(mutator, new_val).unwrap();
+            Node::set_right(this, mutator, node_ptr);
         } else {
-            if this.right.is_null() {
-                let node_ptr = Node::alloc(mutator, new_val).unwrap();
-                Node::set_right(this, mutator, node_ptr);
-            } else {
-                Node::insert(&this.right, mutator, new_val);
-            }
+            Node::insert(&this.right, mutator, new_val);
         }
     }
 
@@ -173,7 +171,7 @@ fn find() {
 
         Node::insert(&root, mutator, 420);
 
-        return root;
+        root
     });
 
     gc.major_collect();
@@ -199,7 +197,7 @@ fn multiple_collects() {
             Node::insert_rand(&root, mutator);
         }
         Node::insert(&root, mutator, 69);
-        return root;
+        root
     });
 
     for _ in 0..10 {
@@ -268,8 +266,6 @@ fn cyclic_graph() {
     let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
     gc.mutate(|root, mutator| {
-        let root_clone = root.clone();
-
         Node::set_right(root, mutator, root.clone());
         Node::set_left(root, mutator, root.clone());
 

@@ -61,14 +61,14 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
 
         drop(scope);
 
-        let gc = Self {
+        
+
+        Self {
             arena,
             tracer,
             root,
             lock: Mutex::new(()),
-        };
-
-        gc
+        }
     }
 
     fn mutate(&self, callback: fn(&Self::Root, &mut Self::Mutator<'_>)) {

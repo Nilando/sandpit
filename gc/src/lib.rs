@@ -61,7 +61,6 @@
 //! - the exposed Gc type does not need to be generic
 //! - add a way to pass in config to the gc when building
 //! - multi threading tests
-#![feature(inline_const)]
 
 mod allocator;
 mod collector;

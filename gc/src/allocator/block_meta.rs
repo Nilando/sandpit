@@ -31,7 +31,7 @@ impl BlockMeta {
     pub fn mark(&self, header: &Header, mark: Mark) {
         let addr = header as *const Header as usize;
 
-        let relative_ptr = (addr as usize) % constants::BLOCK_SIZE;
+        let relative_ptr = addr % constants::BLOCK_SIZE;
 
         let line = relative_ptr / constants::LINE_SIZE;
 

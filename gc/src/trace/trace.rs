@@ -55,7 +55,7 @@ unsafe impl<T: TraceLeaf> TraceLeaf for crate::gc_cell::GcCell<T> {}
 
 unsafe impl<T: Trace> Trace for Option<T> {
     fn trace<R: Tracer>(&self, tracer: &mut R) {
-        self.as_ref().map(|value| value.trace(tracer));
+        if let Some(value) = self.as_ref() { value.trace(tracer) }
     }
 }
 

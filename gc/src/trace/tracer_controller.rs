@@ -2,8 +2,7 @@ use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
-use super::tracer::{TraceWorker, Tracer};
-use crate::allocator::{Allocate, GenerationalArena};
+use super::tracer::TraceWorker;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
@@ -17,6 +16,12 @@ pub struct TracerController<M: Marker> {
     unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
     metrics: Mutex<TraceMetrics>,
     // optional start time
+}
+
+impl<M: Marker> Default for TracerController<M> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<M: Marker> TracerController<M> {

@@ -1,6 +1,6 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_packet::{TraceJob, TracePacket};
+use super::trace_packet::{TracePacket};
 use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;

@@ -6,6 +6,12 @@ pub struct TraceMetrics {
     pub full_collections: usize,
 }
 
+impl Default for TraceMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TraceMetrics {
     pub fn new() -> Self {
         Self {

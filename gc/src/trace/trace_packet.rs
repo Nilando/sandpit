@@ -1,7 +1,6 @@
 use super::marker::Marker;
 use super::trace::Trace;
 use super::tracer::TraceWorker;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 pub const TRACE_PACKET_SIZE: usize = 100;
@@ -35,7 +34,7 @@ impl<M: Marker> TraceJob<M> {
         }
     }
 
-    fn virtual_trace(ptr: NonNull<()>, tracer: &mut TraceWorker<M>) {
+    fn virtual_trace(_: NonNull<()>, _: &mut TraceWorker<M>) {
         unreachable!();
     }
 
@@ -47,6 +46,12 @@ impl<M: Marker> TraceJob<M> {
 pub struct TracePacket<M: Marker> {
     jobs: [TraceJob<M>; TRACE_PACKET_SIZE],
     len: usize,
+}
+
+impl<M: Marker> Default for TracePacket<M> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<M: Marker> TracePacket<M> {
@@ -97,8 +102,8 @@ impl<M: Marker> Clone for TracePacket<M> {
 impl<M: Marker> Clone for TraceJob<M> {
     fn clone(&self) -> Self {
         Self {
-            ptr: self.ptr.clone(),
-            dyn_trace: self.dyn_trace.clone(),
+            ptr: self.ptr,
+            dyn_trace: self.dyn_trace,
         }
     }
 }

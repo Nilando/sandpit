@@ -16,10 +16,6 @@ impl Marker for Mark {
     fn new() -> Self {
         Self::New
     }
-
-    fn is_new(&self) -> bool {
-        *self == Mark::New
-    }
 }
 
 impl Mark {
@@ -63,7 +59,7 @@ impl Header {
 
     pub fn get_mark(ptr: *const Header) -> Mark {
         let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
-        unsafe { (&*mark_ptr).load(Ordering::SeqCst).into() }
+        unsafe { (*mark_ptr).load(Ordering::SeqCst).into() }
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -76,7 +72,7 @@ impl Header {
 
     pub fn mark_new(ptr: *const Header) {
         let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
-        unsafe { (&*mark_ptr).store(Mark::New as u8, Ordering::SeqCst) }
+        unsafe { (*mark_ptr).store(Mark::New as u8, Ordering::SeqCst) }
     }
 
     pub fn set_mark(ptr: *const Header, mark: Mark) {

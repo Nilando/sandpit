@@ -1,5 +1,6 @@
 use gc::gc_derive::Trace;
-use gc::{collections::GcArray, Gc, GcPtr, Mutator, Trace};
+use gc::*;
+use gc::collections::*;
 
 type List<T> = GcArray<ListItem<T>>;
 
@@ -272,14 +273,14 @@ fn push_zero_cap() {
     gc.mutate(|root, mx| {
         let val = mx.alloc(ListItem::Val(9)).unwrap();
 
-        for i in 0..10 {
+        for _ in 0..10 {
             root.push(mx, val.clone());
         }
     });
 
     gc.major_collect();
 
-    gc.mutate(|root, mx| {
+    gc.mutate(|root, _mx| {
         assert!(root.len() == 10);
         assert!(root.cap() == 12);
         for i in 0..10 {

@@ -83,11 +83,11 @@ fn concurrent_collection() {
 }
 
 fn node_benchmark(c: &mut Criterion) {
-    c.bench_function("major collection", |b| b.iter(|| major_collection()));
-    c.bench_function("minor collection", |b| b.iter(|| minor_collection()));
-    c.bench_function("sync collection", |b| b.iter(|| sync_collection()));
+    c.bench_function("major collection", |b| b.iter(major_collection));
+    c.bench_function("minor collection", |b| b.iter(minor_collection));
+    c.bench_function("sync collection", |b| b.iter(sync_collection));
     c.bench_function("concurrent collection", |b| {
-        b.iter(|| concurrent_collection())
+        b.iter(concurrent_collection)
     });
 }
 

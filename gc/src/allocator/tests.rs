@@ -107,7 +107,7 @@ fn object_align() {
 fn clone_size_class() {
     // this is just for test coverage
     let foo = SizeClass::get_for_size(69);
-    let clone = foo.clone();
+    let clone = foo;
 
     assert!(foo == clone);
 }
