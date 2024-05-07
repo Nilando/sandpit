@@ -20,8 +20,8 @@
 //! ```
 //!
 //! To allocate a type in a GcArena it must meet a few guarantees. First, the type must
-//! not impl Drop. This is because the trace and sweep collector by design doesn't keep track of
-//! what has been freed and more so what is still reachable by the root.
+//! not impl Drop. This is because the trace and sweep collector by design only keeps track of what
+//! is still reachable from the root, and implicitly frees what is not.
 //! ```compile_fail
 //! use gc::{Gc, gc_derive::Trace, GcPtr};
 //!
@@ -37,15 +37,29 @@
 //! });
 //! ```
 //!
+//! A Gc is Send/Sync only if its root type T is also Send/Sync.
+//! ```compile_fail
+//! use gc::{Gc, gc_derive::Trace, GcPtr};
+//!
+//! #[derive(Trace)]
+//! struct Foo;
+//!
+//! let gc: Gc<GcPtr<Foo>> = Gc::build(|mutator| {
+//!     mutator.alloc(Foo).unwrap()
+//! });
+//!
+//! // GcPtr is not send, so gc cannot be send
+//! std::thread::spawn(|| {
+//!     gc.mutate(|_, _| {});
+//! });
+//! ```
+//!
 //! TODO:
 //! - Fixing Bugs and adding tests is the #1 priority!
 //! - Right now the monitor is essentially just a placeholder. Actuall experiementing
 //!   and work needs to be done in order to make an actual acceptable monitor.
-//! - Organize the code into modules
-//!     - make the modules more loosley coupled
 //! - the exposed Gc type does not need to be generic
 //! - add a way to pass in config to the gc when building
-//! - make gc_ptr send only if its pointed type is send
 //! - multi threading tests
 #![feature(inline_const)]
 

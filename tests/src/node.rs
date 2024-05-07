@@ -202,19 +202,15 @@ fn multiple_collects() {
         return root;
     });
 
-    std::thread::scope(|s| {
-        for _ in 0..10 {
-            s.spawn(|| {
-                for i in 0..10 {
-                    if i % 2 == 0 {
-                        gc.minor_collect();
-                    } else {
-                        gc.major_collect();
-                    }
-                }
-            });
+    for _ in 0..10 {
+        for i in 0..10 {
+            if i % 2 == 0 {
+                gc.minor_collect();
+            } else {
+                gc.major_collect();
+            }
         }
-    });
+    }
 
     gc.mutate(|root, _mutator| {
         assert!(Node::find(root, 69).is_some());
