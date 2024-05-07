@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use gc::{Gc, Mutator, GcPtr};
+    use gc::{Gc, GcPtr, Mutator};
 
     #[test]
     fn trace_option() {

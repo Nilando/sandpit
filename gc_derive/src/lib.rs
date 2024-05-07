@@ -39,26 +39,18 @@ pub fn trace(input: TokenStream) -> TokenStream {
 
                 match &variant.fields {
                     Fields::Unnamed(fields) => {
-                        let body = fields
-                            .unnamed
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, _)| {
-                                let ident = Ident::new(&format!("t{}", idx), Span::call_site());
-                                quote! {
-                                    gc::Trace::trace( #ident , tracer);
-                                }
-                            });
+                        let body = fields.unnamed.iter().enumerate().map(|(idx, _)| {
+                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                            quote! {
+                                gc::Trace::trace( #ident , tracer);
+                            }
+                        });
 
-                        let args = fields
-                            .unnamed
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, _)| {
-                                let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                        let args = fields.unnamed.iter().enumerate().map(|(idx, _)| {
+                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
 
-                               quote! { #ident }
-                            });
+                            quote! { #ident }
+                        });
 
                         quote! {
                             #name::#variant_ident(#(#args)*) => { #(#body)* }
@@ -75,19 +67,17 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }
             });
 
-            vec![
-                quote! {
-                    match self { #(#arms)* }
-                }
-            ]
+            vec![quote! {
+                match self { #(#arms)* }
+            }]
         }
         _ => todo!("implement Derive(Trace) for union types"),
     };
 
     // This assert still applies to types with generics, b/c
-    // the generics types are bound by the Trace trait. So for any generic trace type, 
+    // the generics types are bound by the Trace trait. So for any generic trace type,
     // eventually there must be some concrete Trace type being passed in with the static,
-    // assert of 
+    // assert of
     let expanded = quote! {
         unsafe impl #impl_generics gc::Trace for #name #ty_generics #where_clause {
             fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: gc::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {

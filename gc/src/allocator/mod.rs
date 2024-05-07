@@ -1,6 +1,6 @@
 mod alloc_head;
-mod allocator;
 mod allocate;
+mod allocator;
 mod arena;
 mod block;
 mod block_meta;
@@ -14,5 +14,5 @@ mod size_class;
 #[cfg(test)]
 mod tests;
 
+pub use allocate::{Allocate, GenerationalArena, Marker};
 pub use allocator::Allocator;
-pub use allocate::{Marker, Allocate, GenerationalArena};

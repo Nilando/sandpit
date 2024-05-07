@@ -1,14 +1,14 @@
 use super::alloc_head::AllocHead;
+use super::allocate::{Allocate, GenerationalArena};
 use super::arena::Arena;
 use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
-use super::allocate::{Allocate, GenerationalArena};
+use std::alloc::Layout;
+use std::mem::{align_of, size_of};
 use std::ptr::write;
 use std::ptr::NonNull;
-use std::mem::{align_of, size_of};
-use std::alloc::Layout;
 
 pub struct Allocator {
     head: AllocHead,

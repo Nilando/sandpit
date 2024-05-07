@@ -1,8 +1,8 @@
 use super::allocator::{Allocate, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
-use super::trace::{Trace, TracerController, TraceMarker};
+use super::trace::{Trace, TraceMarker, TracerController};
 use std::collections::HashMap;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 // Collect is moved into a separate trait from the GcController, so that the monitor can work with
 // a dynamic Collect type without needing to define the associated types of root and mutator
@@ -28,7 +28,7 @@ pub struct Collector<A: Allocate, T: Trace> {
     arena: A::Arena,
     tracer: Arc<TracerController<TraceMarker<A>>>,
     root: T,
-    lock: Mutex<()>
+    lock: Mutex<()>,
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
@@ -85,14 +85,14 @@ impl<A: Allocate, T: Trace> GcController for Collector<A, T> {
         let tracer_metrics = self.tracer.metrics();
 
         HashMap::from([
-          //("memory_blocks".into(), tracer_metrics.objects_marked),
-          //("large_objects".into(), tracer_metrics.objects_marked),
-          ("prev_marked_objects".into(), tracer_metrics.objects_marked),
-          ("prev_marked_space".into(), tracer_metrics.objects_marked),
-          // ("prev_objects_freed".into(), tracer_metrics.objects_marked),
-          ("arena_size".into(), self.arena.get_size()),
-          // ("full_collections".into(), *self.full_collections.lock().unwrap()),
-          // ("eden_collections".into(), *self.eden_collections.lock().unwrap())
+            //("memory_blocks".into(), tracer_metrics.objects_marked),
+            //("large_objects".into(), tracer_metrics.objects_marked),
+            ("prev_marked_objects".into(), tracer_metrics.objects_marked),
+            ("prev_marked_space".into(), tracer_metrics.objects_marked),
+            // ("prev_objects_freed".into(), tracer_metrics.objects_marked),
+            ("arena_size".into(), self.arena.get_size()),
+            // ("full_collections".into(), *self.full_collections.lock().unwrap()),
+            // ("eden_collections".into(), *self.eden_collections.lock().unwrap())
         ])
     }
 }

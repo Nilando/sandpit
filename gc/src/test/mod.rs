@@ -23,9 +23,8 @@ fn gc_cell_swap() {
 
 #[test]
 fn gc_cell_write_barrier() {
-    let gc: Gc<GcPtr<GcPtr<usize>>> = Gc::build(|mutator| {
-        mutator.alloc(mutator.alloc(69).unwrap()).unwrap()
-    });
+    let gc: Gc<GcPtr<GcPtr<usize>>> =
+        Gc::build(|mutator| mutator.alloc(mutator.alloc(69).unwrap()).unwrap());
 
     gc.mutate(|root, mutator| {
         let new_val: GcPtr<usize> = mutator.alloc(420).unwrap();
@@ -97,14 +96,12 @@ fn wait_for_trace() {
     gc.start_monitor();
 
     for _ in 0..10 {
-        gc.mutate(|_, m| {
-            loop {
-                let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-                m.alloc(420).unwrap();
+        gc.mutate(|_, m| loop {
+            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+            m.alloc(420).unwrap();
 
-                if m.yield_requested() {
-                    break;
-                }
+            if m.yield_requested() {
+                break;
             }
         });
     }
@@ -121,14 +118,12 @@ fn start_monitor_multiple_times() {
     gc.start_monitor();
     gc.start_monitor();
 
-    gc.mutate(|_, m| {
-        loop {
-            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-            m.alloc(420).unwrap();
+    gc.mutate(|_, m| loop {
+        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+        m.alloc(420).unwrap();
 
-            if m.yield_requested() {
-                break;
-            }
+        if m.yield_requested() {
+            break;
         }
     });
 }

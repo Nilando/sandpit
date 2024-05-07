@@ -1,5 +1,5 @@
-use crate::allocator::{Allocate, GenerationalArena};
 use super::trace::Trace;
+use crate::allocator::{Allocate, GenerationalArena};
 use std::ptr::NonNull;
 
 pub trait Marker: Clone {
@@ -19,21 +19,17 @@ impl<A: Allocate> Marker for TraceMarker<A> {
 }
 
 pub struct TraceMarker<A: Allocate> {
-    mark: <<A as Allocate>::Arena as GenerationalArena>::Mark
+    mark: <<A as Allocate>::Arena as GenerationalArena>::Mark,
 }
 
 impl<A: Allocate> TraceMarker<A> {
     pub fn new(mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) -> Self {
-        Self {
-            mark
-        }
+        Self { mark }
     }
 }
 
 impl<A: Allocate> Clone for TraceMarker<A> {
     fn clone(&self) -> Self {
-        Self {
-            mark: self.mark
-        }
+        Self { mark: self.mark }
     }
 }

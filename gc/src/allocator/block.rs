@@ -1,7 +1,7 @@
-use super::constants::{BLOCK_SIZE};
+use super::constants::BLOCK_SIZE;
 use super::errors::BlockError;
-use std::ptr::NonNull;
 use std::alloc::{alloc, dealloc, Layout};
+use std::ptr::NonNull;
 
 pub type BlockPtr = NonNull<u8>;
 

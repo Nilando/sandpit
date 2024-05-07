@@ -129,8 +129,7 @@ mod tests {
         b.limit = b.cursor; // block is recycled
 
         let count = loop_check_allocate(&mut b);
-        let expect =
-            (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / 16;
+        let expect = (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / 16;
 
         assert_eq!(count, expect);
     }

@@ -1,5 +1,5 @@
-use gc::{Gc, Mutator, Trace, collections::GcArray, GcPtr};
 use gc::gc_derive::Trace;
+use gc::{collections::GcArray, Gc, GcPtr, Mutator, Trace};
 
 type List<T> = GcArray<ListItem<T>>;
 
@@ -11,7 +11,8 @@ pub enum ListItem<T: Trace> {
 
 #[test]
 fn empty_list() {
-    let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
+    let gc: Gc<List<u8>> =
+        Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
 
     gc.major_collect();
 
@@ -168,7 +169,7 @@ fn nested_arrays() {
                     ListItem::Val(_) => assert!(false),
                     ListItem::List(ref list) => {
                         list.push(mutator, n);
-                    },
+                    }
                 }
             }
         }
@@ -189,7 +190,7 @@ fn nested_arrays() {
                             ListItem::List(_) => assert!(false),
                         }
                     }
-                },
+                }
             }
         }
     });
@@ -216,7 +217,6 @@ fn large_array() {
     });
 }
 
-
 #[test]
 fn get_size() {
     let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
@@ -238,7 +238,10 @@ fn get_size() {
     });
 
     gc.major_collect();
-    assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
+    assert_eq!(
+        *gc.metrics().get("arena_size").unwrap(),
+        block_size + large_size
+    );
 }
 
 #[test]
@@ -263,7 +266,8 @@ fn out_of_bounds_set() {
 
 #[test]
 fn push_zero_cap() {
-    let gc: Gc<List<u8>> = Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
+    let gc: Gc<List<u8>> =
+        Gc::build(|mutator| GcArray::alloc_with_capacity(mutator, 0).expect("root allocated"));
 
     gc.mutate(|root, mx| {
         let val = mx.alloc(ListItem::Val(9)).unwrap();

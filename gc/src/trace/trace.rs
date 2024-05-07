@@ -1,5 +1,5 @@
-use std::ptr::NonNull;
 use super::tracer::Tracer;
+use std::ptr::NonNull;
 
 pub unsafe trait TraceLeaf: 'static {}
 pub unsafe trait Trace: 'static {
@@ -10,7 +10,9 @@ pub unsafe trait Trace: 'static {
     {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
     }
-    fn needs_trace() -> bool { true }
+    fn needs_trace() -> bool {
+        true
+    }
 }
 
 // ****************************************************************************
@@ -25,7 +27,9 @@ unsafe impl<L: TraceLeaf> Trace for L {
     fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {
         unimplemented!()
     }
-    fn needs_trace() -> bool { false }
+    fn needs_trace() -> bool {
+        false
+    }
 }
 
 unsafe impl TraceLeaf for () {}

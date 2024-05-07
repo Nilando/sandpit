@@ -1,6 +1,6 @@
+use std::alloc::Layout;
 use std::fmt::Debug;
 use std::ptr::NonNull;
-use std::alloc::Layout;
 
 pub trait Allocate: 'static {
     type Arena: GenerationalArena;

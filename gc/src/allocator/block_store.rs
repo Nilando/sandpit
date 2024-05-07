@@ -2,10 +2,10 @@ use super::block::Block;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
 use super::header::Mark;
+use std::alloc::Layout;
 use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use std::alloc::Layout;
 
 pub struct BlockStore {
     block_count: AtomicUsize,
@@ -62,7 +62,11 @@ impl BlockStore {
     }
 
     pub fn count_large_space(&self) -> usize {
-        self.large.lock().unwrap().iter().fold(0, |sum, block| sum + block.get_size())
+        self.large
+            .lock()
+            .unwrap()
+            .iter()
+            .fold(0, |sum, block| sum + block.get_size())
     }
 
     pub fn create_large(&self, layout: Layout) -> Result<*const u8, AllocError> {

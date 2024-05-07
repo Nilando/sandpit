@@ -1,6 +1,6 @@
+use std::ops::Deref;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
-use std::ops::Deref;
 
 use super::mutator::Mutator;
 use super::trace::Trace;
@@ -18,7 +18,9 @@ impl<T: Trace> Deref for GcPtr<T> {
     fn deref(&self) -> &Self::Target {
         unsafe {
             let ptr = self.as_ptr();
-            if ptr.is_null() { panic!("Attempt to deref a null GC ptr") }
+            if ptr.is_null() {
+                panic!("Attempt to deref a null GC ptr")
+            }
 
             NonNull::new_unchecked(ptr).as_ref()
         }
@@ -27,11 +29,15 @@ impl<T: Trace> Deref for GcPtr<T> {
 
 impl<T: Trace> GcPtr<T> {
     pub fn new(ptr: NonNull<T>) -> Self {
-        Self { ptr: AtomicPtr::from(ptr.as_ptr()) }
+        Self {
+            ptr: AtomicPtr::from(ptr.as_ptr()),
+        }
     }
 
     pub fn null() -> Self {
-        Self { ptr: AtomicPtr::new(std::ptr::null_mut()) }
+        Self {
+            ptr: AtomicPtr::new(std::ptr::null_mut()),
+        }
     }
 
     pub fn set_null(&self) {
@@ -78,12 +84,15 @@ impl<T: Trace> GcPtr<T> {
     }
 
     pub unsafe fn unsafe_set(&self, new_ptr: GcPtr<T>) {
-        self.ptr.store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
+        self.ptr
+            .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
     }
 }
 
 impl<T: Trace> Clone for GcPtr<T> {
     fn clone(&self) -> Self {
-        Self { ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)) }
+        Self {
+            ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
+        }
     }
 }

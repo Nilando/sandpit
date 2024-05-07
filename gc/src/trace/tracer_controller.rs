@@ -1,14 +1,13 @@
+use super::marker::Marker;
+use super::trace::Trace;
 use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
-use super::tracer::{Tracer, TraceWorker};
-use super::trace::Trace;
-use super::marker::Marker;
-use std::sync::{
-    Mutex, RwLock, RwLockReadGuard,
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use super::tracer::{TraceWorker, Tracer};
 use crate::allocator::{Allocate, GenerationalArena};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, RwLock, RwLockReadGuard,
+};
 
 const NUM_TRACER_THREADS: usize = 2;
 
@@ -57,7 +56,7 @@ impl<M: Marker> TracerController<M> {
         // We are about to begin the final trace, first, we signal to the mutators
         // to yield.
         //
-        // The yield flag may have already have bin raised if the initial 
+        // The yield flag may have already have bin raised if the initial
         // trace had been running for a long time, or if space is running low.
         self.yield_flag.store(true, Ordering::SeqCst);
 
@@ -70,7 +69,7 @@ impl<M: Marker> TracerController<M> {
         // This final trace ensures we trace any remaining objects that were
         self.clone().spawn_tracers(None as Option<&T>, &marker);
 
-        // tracing 
+        // tracing
         self.yield_flag.store(false, Ordering::SeqCst);
     }
 

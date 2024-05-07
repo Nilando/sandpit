@@ -1,7 +1,7 @@
-use super::trace::Trace;
-use super::tracer_controller::TracerController;
-use super::trace_packet::{TracePacket, TraceJob};
 use super::marker::Marker;
+use super::trace::Trace;
+use super::trace_packet::{TraceJob, TracePacket};
+use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -50,12 +50,12 @@ impl<M: Marker> TraceWorker<M> {
     pub fn trace_loop(&mut self) {
         loop {
             if self.tracing_packet.is_empty() {
-                if !self.new_packet.is_empty(){
+                if !self.new_packet.is_empty() {
                     std::mem::swap(&mut self.tracing_packet, &mut self.new_packet);
                 } else {
                     if let Some(new_tracing_packet) = self.controller.pop_packet() {
                         self.tracing_packet = new_tracing_packet;
-                    } 
+                    }
 
                     if self.tracing_packet.is_empty() {
                         break;

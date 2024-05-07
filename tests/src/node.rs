@@ -1,5 +1,5 @@
-use gc::{Gc, GcCell, GcError, GcPtr, Mutator};
 use gc::gc_derive::Trace;
+use gc::{Gc, GcCell, GcError, GcPtr, Mutator};
 use rand::Rng;
 
 unsafe impl Send for Node {}
@@ -108,7 +108,12 @@ impl Node {
         Node::inner_create_balanced_tree(this, mutator, 0, size)
     }
 
-    fn inner_create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mutator: &M, low: usize, high: usize) {
+    fn inner_create_balanced_tree<M: Mutator>(
+        this: &GcPtr<Node>,
+        mutator: &M,
+        low: usize,
+        high: usize,
+    ) {
         if this.val.get() > low {
             let right_val = low + ((this.val.get() - low) / 2);
             let right = Node::alloc(mutator, right_val).unwrap();

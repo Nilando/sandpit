@@ -3,9 +3,9 @@ use super::bump_block::BumpBlock;
 use super::errors::AllocError;
 use super::header::Mark;
 use super::size_class::SizeClass;
+use std::alloc::Layout;
 use std::cell::Cell;
 use std::sync::Arc;
-use std::alloc::Layout;
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
@@ -134,14 +134,9 @@ mod tests {
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
-        let medium_layout = Layout::from_size_align(
-            constants::BLOCK_CAPACITY - constants::LINE_SIZE,
-            8
-        ).unwrap();
-        let small_layout = Layout::from_size_align(
-            constants::LINE_SIZE,
-            8
-        ).unwrap();
+        let medium_layout =
+            Layout::from_size_align(constants::BLOCK_CAPACITY - constants::LINE_SIZE, 8).unwrap();
+        let small_layout = Layout::from_size_align(constants::LINE_SIZE, 8).unwrap();
 
         blocks.alloc(medium_layout).unwrap();
         assert_eq!(store.block_count(), 1);
@@ -173,10 +168,7 @@ mod tests {
     fn test_alloc_many_blocks() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
-        let medium_layout = Layout::from_size_align(
-            constants::BLOCK_CAPACITY,
-            8
-        ).unwrap();
+        let medium_layout = Layout::from_size_align(constants::BLOCK_CAPACITY, 8).unwrap();
 
         for i in 1..100 {
             blocks.alloc(medium_layout).unwrap();
@@ -188,14 +180,8 @@ mod tests {
     fn test_alloc_into_overflow() {
         let store = Arc::new(BlockStore::new());
         let blocks = AllocHead::new(store.clone(), Mark::Red);
-        let medium_layout = Layout::from_size_align(
-            constants::BLOCK_CAPACITY,
-            8
-        ).unwrap();
-        let medium_layout_2 = Layout::from_size_align(
-            constants::BLOCK_CAPACITY / 2,
-            8
-        ).unwrap();
+        let medium_layout = Layout::from_size_align(constants::BLOCK_CAPACITY, 8).unwrap();
+        let medium_layout_2 = Layout::from_size_align(constants::BLOCK_CAPACITY / 2, 8).unwrap();
 
         blocks.alloc(medium_layout).unwrap();
         blocks.alloc(medium_layout_2).unwrap();

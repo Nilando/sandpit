@@ -43,7 +43,7 @@
 //!   and work needs to be done in order to make an actual acceptable monitor.
 //! - Organize the code into modules
 //!     - make the modules more loosley coupled
-//! - the exposed Gc type does not need to be generic 
+//! - the exposed Gc type does not need to be generic
 //! - add a way to pass in config to the gc when building
 //! - make gc_ptr send only if its pointed type is send
 //! - multi threading tests
@@ -66,10 +66,10 @@ pub mod collections {
 
 pub use error::GcError;
 pub use gc_cell::GcCell;
+pub use gc_derive;
 pub use gc_ptr::GcPtr;
 pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
-pub use gc_derive;
 
 pub type Gc<T> = gc::Gc<collector::Collector<allocator::Allocator, T>, monitor::MonitorController>;
 

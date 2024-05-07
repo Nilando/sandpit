@@ -1,8 +1,8 @@
 use super::marker::Marker;
 use super::trace::Trace;
 use super::tracer::TraceWorker;
-use std::ptr::NonNull;
 use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 pub const TRACE_PACKET_SIZE: usize = 100;
 
@@ -89,7 +89,7 @@ impl<M: Marker> Clone for TracePacket<M> {
     fn clone(&self) -> Self {
         Self {
             len: self.len,
-            jobs: self.jobs.clone()
+            jobs: self.jobs.clone(),
         }
     }
 }
@@ -98,7 +98,7 @@ impl<M: Marker> Clone for TraceJob<M> {
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr.clone(),
-            dyn_trace: self.dyn_trace.clone()
+            dyn_trace: self.dyn_trace.clone(),
         }
     }
 }

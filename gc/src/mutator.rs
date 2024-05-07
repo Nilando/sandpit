@@ -1,12 +1,12 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, TracePacket, TraceMarker, TracerController};
+use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 
-use std::ptr::NonNull;
 use std::alloc::Layout;
-use std::ptr::write;
 use std::cell::UnsafeCell;
+use std::ptr::write;
+use std::ptr::NonNull;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
@@ -22,7 +22,10 @@ pub struct MutatorScope<'scope, A: Allocate> {
 }
 
 impl<'scope, A: Allocate> MutatorScope<'scope, A> {
-    pub fn new(arena: &A::Arena, tracer_controller: &'scope TracerController<TraceMarker<A>>) -> Self {
+    pub fn new(
+        arena: &A::Arena,
+        tracer_controller: &'scope TracerController<TraceMarker<A>>,
+    ) -> Self {
         let allocator = A::new(arena);
 
         Self {
@@ -50,7 +53,12 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
-        const { assert!(!std::mem::needs_drop::<T>(), "A type must not need dropping to be allocated in a GcArena") };
+        const {
+            assert!(
+                !std::mem::needs_drop::<T>(),
+                "A type must not need dropping to be allocated in a GcArena"
+            )
+        };
 
         let layout = Layout::new::<T>();
         match self.allocator.alloc(layout) {
@@ -58,7 +66,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                 unsafe { write(ptr.as_ptr().cast(), obj) }
 
                 Ok(GcPtr::new(ptr.cast()))
-            },
+            }
             Err(_) => todo!(),
         }
     }
@@ -71,7 +79,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                 }
 
                 Ok(GcPtr::new(ptr.cast()))
-            },
+            }
             Err(_) => todo!(),
         }
     }
@@ -92,7 +100,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                 packet_ref.drain();
             }
 
-            packet_ref.push(ptr); 
+            packet_ref.push(ptr);
         }
     }
 }

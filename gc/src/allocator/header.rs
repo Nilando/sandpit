@@ -1,7 +1,7 @@
 use super::allocate::Marker;
-use super::size_class::SizeClass;
 use super::block_meta::BlockMeta;
-use std::sync::atomic::{Ordering, AtomicU8};
+use super::size_class::SizeClass;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -25,10 +25,10 @@ impl Marker for Mark {
 impl Mark {
     pub fn rotate(&self) -> Self {
         match self {
-            Mark::Red   => Mark::Green,
+            Mark::Red => Mark::Green,
             Mark::Green => Mark::Blue,
-            Mark::Blue  => Mark::Red,
-            Mark::New   => unreachable!(),
+            Mark::Blue => Mark::Red,
+            Mark::New => unreachable!(),
         }
     }
 }
@@ -36,10 +36,10 @@ impl Mark {
 impl From<u8> for Mark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == Mark::New   as u8 => Mark::New,
-            x if x == Mark::Red   as u8 => Mark::Red,
+            x if x == Mark::New as u8 => Mark::New,
+            x if x == Mark::Red as u8 => Mark::Red,
             x if x == Mark::Green as u8 => Mark::Green,
-            x if x == Mark::Blue  as u8 => Mark::Blue,
+            x if x == Mark::Blue as u8 => Mark::Blue,
             _ => panic!("Bad GC Mark"),
         }
     }

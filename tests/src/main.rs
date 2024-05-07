@@ -2,18 +2,16 @@ use gc::{Gc, Mutator};
 use tests::Node;
 
 fn main() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
     gc.start_monitor();
 
     for _ in 0..10 {
-        gc.mutate(|root, m| {
-            loop {
-                Node::create_balanced_tree(root, m, 1_000);
+        gc.mutate(|root, m| loop {
+            Node::create_balanced_tree(root, m, 1_000);
 
-                if m.yield_requested() {
-                    break;
-                }
+            if m.yield_requested() {
+                break;
             }
         });
 

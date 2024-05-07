@@ -22,7 +22,6 @@ fn major_collection() {
         let expected: Vec<usize> = (0..TREE_SIZE).collect();
         assert_eq!(actual, expected)
     });
-
 }
 
 fn minor_collection() {
@@ -46,7 +45,7 @@ fn minor_collection() {
 }
 
 fn sync_collection() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
     gc.mutate(|root, m| {
         for _ in 0..100 {
@@ -64,7 +63,7 @@ fn sync_collection() {
 }
 
 fn concurrent_collection() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap() );
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
     gc.start_monitor();
 
@@ -87,7 +86,9 @@ fn node_benchmark(c: &mut Criterion) {
     c.bench_function("major collection", |b| b.iter(|| major_collection()));
     c.bench_function("minor collection", |b| b.iter(|| minor_collection()));
     c.bench_function("sync collection", |b| b.iter(|| sync_collection()));
-    c.bench_function("concurrent collection", |b| b.iter(|| concurrent_collection()));
+    c.bench_function("concurrent collection", |b| {
+        b.iter(|| concurrent_collection())
+    });
 }
 
 criterion_group!(benches, node_benchmark);

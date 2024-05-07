@@ -1,10 +1,10 @@
-use super::gc_ptr::GcPtr;
-use super::trace::{Trace, Tracer};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use super::mutator::Mutator;
-use std::mem::{size_of, align_of};
-use std::alloc::Layout;
 use super::error::GcError;
+use super::gc_ptr::GcPtr;
+use super::mutator::Mutator;
+use super::trace::{Trace, Tracer};
+use std::alloc::Layout;
+use std::mem::{align_of, size_of};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct GcArrayMeta<T: Trace> {
     data: GcPtr<GcPtr<T>>,
@@ -21,7 +21,7 @@ pub struct GcArray<T: Trace> {
 impl<T: Trace> Clone for GcArray<T> {
     fn clone(&self) -> Self {
         Self {
-            meta: self.meta.clone()
+            meta: self.meta.clone(),
         }
     }
 }
@@ -73,16 +73,17 @@ impl<T: Trace> GcArrayMeta<T> {
         let cap = this.cap.load(Ordering::SeqCst);
 
         if len == cap {
-            let new_cap = 
-                if cap == 0 {
-                    8
-                } else {
-                    (cap / 2) + cap
-                };
+            let new_cap = if cap == 0 { 8 } else { (cap / 2) + cap };
 
             unsafe {
-                let layout = Layout::from_size_align_unchecked(size_of::<GcPtr<T>>() * new_cap, align_of::<GcPtr<T>>());
-                let new_data: GcPtr<GcPtr<T>> = mutator.alloc_layout(layout).expect("failed to grow array").cast();
+                let layout = Layout::from_size_align_unchecked(
+                    size_of::<GcPtr<T>>() * new_cap,
+                    align_of::<GcPtr<T>>(),
+                );
+                let new_data: GcPtr<GcPtr<T>> = mutator
+                    .alloc_layout(layout)
+                    .expect("failed to grow array")
+                    .cast();
                 let new_meta: GcArrayMeta<T> = Self::new(new_data.clone(), len, new_cap);
 
                 for i in 0..len {
@@ -109,7 +110,7 @@ impl<T: Trace> GcArrayMeta<T> {
         let len = self.len.load(Ordering::SeqCst);
 
         if len == 0 {
-            return None
+            return None;
         }
 
         let len = self.len.fetch_sub(1, Ordering::SeqCst);
@@ -128,7 +129,12 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn alloc_with_capacity<M: Mutator>(mutator: &M, capacity: usize) -> Result<Self, GcError> {
-        let layout = unsafe { Layout::from_size_align_unchecked(size_of::<GcPtr<T>>() * capacity, align_of::<GcPtr<T>>()) };
+        let layout = unsafe {
+            Layout::from_size_align_unchecked(
+                size_of::<GcPtr<T>>() * capacity,
+                align_of::<GcPtr<T>>(),
+            )
+        };
         let data_ptr = mutator.alloc_layout(layout)?;
         let casted_ptr = unsafe { data_ptr.cast() };
         let meta = GcArrayMeta::new(casted_ptr, 0, capacity);
@@ -168,14 +174,14 @@ impl<T: Trace> GcArray<T> {
     pub fn iter(&self) -> GcArrayIter<T> {
         GcArrayIter {
             pos: 0,
-            array: self.clone()
+            array: self.clone(),
         }
     }
 }
 
 pub struct GcArrayIter<T: Trace> {
     pos: usize,
-    array: GcArray<T>
+    array: GcArray<T>,
 }
 
 impl<T: Trace> Iterator for GcArrayIter<T> {

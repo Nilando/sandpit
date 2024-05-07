@@ -1,11 +1,11 @@
+use super::allocate::{Allocate, GenerationalArena};
 use super::arena::Arena;
 use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
-use super::allocate::{Allocate, GenerationalArena};
 use std::alloc::Layout;
+use std::mem::{align_of, size_of};
 use std::ptr::write;
-use std::mem::{size_of, align_of};
 
 #[test]
 fn hello_alloc() {
@@ -124,7 +124,7 @@ fn large_object_align() {
 
 #[test]
 fn arena_get_size() {
-    use super::header::{Mark, Header};
+    use super::header::{Header, Mark};
     let arena = Arena::new();
     let alloc = Allocator::new(&arena);
 
