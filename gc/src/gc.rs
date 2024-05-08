@@ -1,4 +1,4 @@
-use super::collector::GcController;
+use super::controller::GcController;
 use super::monitor::Monitor;
 use std::collections::HashMap;
 use std::sync::Arc;

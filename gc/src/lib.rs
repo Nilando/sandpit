@@ -73,6 +73,7 @@ mod monitor;
 mod mutator;
 mod trace;
 mod metrics;
+mod controller;
 
 pub mod collections {
     pub use crate::gc_array::{GcArray, GcArrayIter};
