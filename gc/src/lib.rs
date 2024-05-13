@@ -73,7 +73,6 @@ mod monitor;
 mod mutator;
 mod trace;
 mod metrics;
-mod controller;
 
 pub mod collections {
     pub use crate::gc_array::{GcArray, GcArrayIter};
@@ -85,8 +84,8 @@ pub use gc_derive;
 pub use gc_ptr::GcPtr;
 pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
+pub use gc::Gc;
 
-pub type Gc<T> = gc::Gc<collector::Collector<allocator::Allocator, T>, monitor::MonitorController>;
 
 #[cfg(test)]
 mod test;

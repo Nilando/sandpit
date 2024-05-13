@@ -1,44 +1,61 @@
-use super::controller::GcController;
-use super::monitor::Monitor;
+use super::monitor::Monitor as GenericMonitor;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLockReadGuard};
+use super::mutator::MutatorScope;
+use super::trace::Trace;
+use super::collector::{Collector as GenericCollector};
 
-pub struct Gc<C: GcController, M: Monitor> {
-    controller: Arc<C>,
-    monitor: Arc<M>,
-    // TODO: config: Config
+// This allocator can be swapped out and everything should just work...
+use super::allocator::Allocator;
+
+type Collector = GenericCollector<Allocator>;
+type Monitor = GenericMonitor<Allocator>;
+
+pub struct Gc<T: Trace> {
+    collector: Arc<Collector>,
+    monitor: Arc<Monitor>,
+    root: T,
 }
 
-unsafe impl<C: GcController + Send, M: Monitor> Send for Gc<C, M> {}
-unsafe impl<C: GcController + Sync, M: Monitor> Sync for Gc<C, M> {}
+unsafe impl<T: Send + Trace> Send for Gc<T> {}
+unsafe impl<T: Sync + Trace> Sync for Gc<T> {}
 
-impl<C: GcController, M: Monitor> Drop for Gc<C, M> {
+impl<T: Trace> Drop for Gc<T> {
     fn drop(&mut self) {
         self.stop_monitor()
     }
 }
 
-impl<C: GcController, M: Monitor> Gc<C, M> {
-    pub fn build(callback: fn(&mut C::Mutator<'_>) -> C::Root) -> Self {
-        let controller = Arc::new(C::build(callback));
-        let monitor = Arc::new(M::new(controller.clone()));
+impl<T: Trace> Gc<T> {
+    pub fn build(callback: fn(&mut MutatorScope<Allocator>) -> T) -> Self {
+        let collector = Arc::new(Collector::new());
+        let binding = collector.clone();
+        let (mut mutator, _lock) = binding.new_mutator();
+        let root = callback(&mut mutator);
+
+        drop(mutator);
+
+        let monitor = Arc::new(Monitor::new(collector.clone()));
 
         Self {
-            controller,
+            collector,
             monitor,
+            root,
         }
     }
 
-    pub fn mutate(&self, callback: fn(&C::Root, &mut C::Mutator<'_>)) {
-        self.controller.mutate(callback);
+    pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<Allocator>)) {
+        let (mut mutator, _lock) = self.collector.new_mutator();
+
+        callback(&self.root, &mut mutator);
     }
 
     pub fn major_collect(&self) {
-        self.controller.major_collect();
+        self.collector.major_collect(&self.root);
     }
 
     pub fn minor_collect(&self) {
-        self.controller.minor_collect();
+        self.collector.minor_collect(&self.root);
     }
 
     pub fn start_monitor(&self) {
@@ -50,6 +67,7 @@ impl<C: GcController, M: Monitor> Gc<C, M> {
     }
 
     pub fn metrics(&self) -> HashMap<String, usize> {
-        self.controller.metrics()
+        todo!()
+        //self.collector.metrics()
     }
 }

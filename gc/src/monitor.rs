@@ -1,4 +1,5 @@
-use super::collector::Collect;
+use super::allocator::Allocate;
+use super::collector::Collector;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -7,113 +8,26 @@ use std::sync::{
 use std::thread;
 use std::time;
 
-pub trait Monitor {
-    fn new<C: Collect>(collector: Arc<C>) -> Self;
-    fn start(&self);
-    fn stop(&self);
+pub struct Monitor<A: Allocate> {
+    collector: Arc<Collector<A>>,
+    monitor_lock: Mutex<()>,
 }
 
-pub struct MonitorController {
-    worker: Arc<MonitorWorker>,
-}
+unsafe impl<A: Allocate> Send for Monitor<A> {}
+unsafe impl<A: Allocate> Sync for Monitor<A> {}
 
-struct MonitorWorker {
-    collector: Arc<dyn Collect>,
-    metrics: Mutex<MonitorMetrics>,
-    monitor_flag: AtomicBool,
-}
 
-struct MonitorMetrics {
-    prev_arena_size: usize,
-    debt: f64,
-}
-
-impl MonitorMetrics {
-    fn new() -> Self {
-        Self {
-            prev_arena_size: 0,
-            debt: 0.0,
-        }
-    }
-}
-
-impl MonitorWorker {
-    fn new(collector: Arc<dyn Collect>) -> Self {
-        let monitor_flag = AtomicBool::new(false);
-
+impl<A: Allocate> Monitor<A> {
+    pub fn new(collector: Arc<Collector<A>>) -> Self {
         Self {
             collector,
-            monitor_flag,
-            metrics: Mutex::new(MonitorMetrics::new()),
-        }
-    }
-}
-
-unsafe impl Send for MonitorWorker {}
-unsafe impl Sync for MonitorWorker {}
-
-const DEBT_CEILING: f64 = 32_000.0 * 1000.0;
-const DEBT_INTEREST_RATE: f64 = 1.3;
-
-impl Monitor for MonitorController {
-    fn new<C: Collect>(collector: Arc<C>) -> Self {
-        let worker = Arc::new(MonitorWorker::new(collector));
-
-        Self { worker }
-    }
-
-    fn stop(&self) {
-        self.worker.monitor_flag.store(false, Ordering::Relaxed);
-    }
-
-    fn start(&self) {
-        let flag = self.worker.monitor_flag.compare_exchange(
-            false,
-            true,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        );
-        if flag.is_err() {
-            return;
-        }
-
-        let worker = self.worker.clone();
-
-        thread::spawn(move || worker.monitor());
-    }
-}
-
-impl MonitorWorker {
-    fn monitor(&self) {
-        loop {
-            self.sleep();
-
-            if !self.monitor_flag.load(Ordering::Relaxed) {
-                break;
-            }
-
-            let mut metrics = self.metrics.lock().unwrap();
-            metrics.debt *= DEBT_INTEREST_RATE;
-
-            let new_arena_size = self.collector.arena_size();
-            if metrics.prev_arena_size < new_arena_size {
-                let new_debt = self.collector.arena_size() - metrics.prev_arena_size;
-
-                metrics.debt += new_debt as f64;
-            }
-
-            metrics.prev_arena_size = new_arena_size;
-
-            if metrics.debt >= DEBT_CEILING {
-                self.collector.major_collect();
-                metrics.debt = 0.0;
-            }
+            monitor_lock: Mutex::new(())
         }
     }
 
-    fn sleep(&self) {
-        let millis = time::Duration::from_millis(500);
+    pub fn stop(&self) {
+    }
 
-        thread::sleep(millis);
+    pub fn start(&self) {
     }
 }
