@@ -4,7 +4,7 @@ use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
 use super::tracer::TraceWorker;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
@@ -14,8 +14,7 @@ pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
-    metrics: Mutex<TraceMetrics>,
-    // optional start time
+    old_objects_count: AtomicUsize,
 }
 
 impl<M: Marker> TracerController<M> {
@@ -24,7 +23,7 @@ impl<M: Marker> TracerController<M> {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             unscanned: Mutex::new(vec![]),
-            metrics: Mutex::new(TraceMetrics::new()),
+            old_objects_count: AtomicUsize::new(0),
         }
     }
 
@@ -42,10 +41,6 @@ impl<M: Marker> TracerController<M> {
 
     pub fn pop_packet(&self) -> Option<TracePacket<M>> {
         self.unscanned.lock().unwrap().pop()
-    }
-
-    pub fn metrics(&self) -> TraceMetrics {
-        *self.metrics.lock().unwrap()
     }
 
     pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: M) {

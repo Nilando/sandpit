@@ -1,33 +1,74 @@
 use super::allocator::Allocate;
-use super::collector::Collector;
+use super::collector::Collect;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 
 use std::thread;
 use std::time;
 
-pub struct Monitor<A: Allocate> {
-    collector: Arc<Collector<A>>,
-    monitor_lock: Mutex<()>,
+const MAX_OLD_GROWTH_RATE: f64 = 10.0;
+const ARENA_SIZE_RATIO_TRIGGER: f64 = 2.0;
+
+pub struct Monitor<T: Collect + 'static> {
+    collector: Arc<T>,
+    flag: AtomicBool,
+    prev_arena_size: AtomicUsize,
+    max_old_objects: AtomicUsize,
 }
 
-unsafe impl<A: Allocate> Send for Monitor<A> {}
-unsafe impl<A: Allocate> Sync for Monitor<A> {}
+unsafe impl<T: Collect + 'static> Send for Monitor<T> {}
+unsafe impl<T: Collect + 'static> Sync for Monitor<T> {}
 
-
-impl<A: Allocate> Monitor<A> {
-    pub fn new(collector: Arc<Collector<A>>) -> Self {
+impl<T: Collect + 'static> Monitor<T> {
+    pub fn new(collector: Arc<T>) -> Self {
+        let prev_arena_size = collector.arena_size();
         Self {
             collector,
-            monitor_lock: Mutex::new(())
+            flag: AtomicBool::new(false),
+            prev_arena_size: AtomicUsize::new(prev_arena_size),
+            max_old_objects: AtomicUsize::new(100),
         }
     }
 
     pub fn stop(&self) {
+        self.flag.store(false, Ordering::SeqCst);
     }
 
-    pub fn start(&self) {
+    pub fn start(self: Arc<Self>) {
+        if self.flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+            return
+        }
+
+
+        std::thread::spawn(move || {
+            loop {
+                let ten_millis = time::Duration::from_millis(10);
+                thread::sleep(ten_millis);
+
+                if !self.flag.load(Ordering::SeqCst) { break; }
+
+                let arena_size = self.collector.arena_size();
+                let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+
+                if arena_size as f64 >= prev_arena_size as f64 * ARENA_SIZE_RATIO_TRIGGER {
+                    self.collector.minor_collect();
+
+                    let old_objects = self.collector.old_objects_count();
+                    if old_objects > self.max_old_objects.load(Ordering::SeqCst) {
+                        self.collector.major_collect();
+
+                        let old_objects = self.collector.old_objects_count();
+                        self.max_old_objects.store(
+                            (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
+                            Ordering::SeqCst
+                        );
+                    }
+
+                    self.prev_arena_size.store(self.collector.arena_size(), Ordering::SeqCst);
+                }
+            }
+        });
     }
 }

@@ -5,25 +5,19 @@ use std::ptr::NonNull;
 pub trait Marker: Clone {
     type Mark: AllocMarker;
 
-    fn needs_trace<T: Trace>(&self, ptr: NonNull<T>) -> bool;
-    fn set_mark(&mut self, mark: Self::Mark);
+    fn is_marked<T: Trace>(&self, ptr: NonNull<T>) -> bool;
+    fn set_mark<T: Trace>(&self, ptr: NonNull<T>);
 }
 
 impl<A: Allocate> Marker for TraceMarker<A> {
     type Mark = <<A as Allocate>::Arena as GenerationalArena>::Mark;
 
-    fn needs_trace<T: Trace>(&self, ptr: NonNull<T>) -> bool {
-        if A::get_mark(ptr) == self.mark {
-            return false;
-        }
-
-        A::set_mark(ptr, self.mark);
-
-        T::needs_trace()
+    fn is_marked<T: Trace>(&self, ptr: NonNull<T>) -> bool {
+        A::get_mark(ptr) == self.mark
     }
 
-    fn set_mark(&mut self, mark: Self::Mark) {
-        self.mark = mark;
+    fn set_mark<T: Trace>(&self, ptr: NonNull<T>) {
+        A::set_mark(ptr, self.mark);
     }
 }
 

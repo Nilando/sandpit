@@ -13,6 +13,7 @@ pub struct TraceWorker<M: Marker> {
     controller: Arc<TracerController<M>>,
     marker: M,
     switch: bool,
+    mark_count: usize,
     p1: TracePacket<M>,
     p2: TracePacket<M>,
 }
@@ -22,9 +23,12 @@ unsafe impl<M: Marker> Sync for TraceWorker<M> {}
 
 impl<M: Marker> Tracer for TraceWorker<M> {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !self.marker.needs_trace(ptr) {
+        if self.marker.is_marked(ptr) || !T::needs_trace() {
             return;
         }
+
+        self.marker.set_mark(ptr);
+        self.mark_count += 1;
 
         if self.next_packet().is_full() {
             self.send_packet();
@@ -40,6 +44,7 @@ impl<M: Marker> TraceWorker<M> {
             controller,
             marker,
             switch: false,
+            mark_count: 0,
             p1: TracePacket::new(),
             p2: TracePacket::new(),
         }
