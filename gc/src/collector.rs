@@ -3,39 +3,52 @@ use super::mutator::{Mutator, MutatorScope};
 use super::trace::{Trace, TraceMarker, TracerController};
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLockReadGuard};
+use std::sync::{Arc, Mutex, RwLockReadGuard, atomic::{AtomicUsize, Ordering}};
 
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
-    fn old_objects_count(&self) -> usize;
-    fn arena_size(&self) -> usize;
+    fn get_old_objects_count(&self) -> usize;
+    fn get_arena_size(&self) -> usize;
+    fn get_major_collections(&self) -> usize;
+    fn get_minor_collections(&self) -> usize;
 }
 
 pub struct Collector<A: Allocate, T: Trace> {
     arena: A::Arena,
     tracer: Arc<TracerController<TraceMarker<A>>>,
-    marker: TraceMarker<A>,
     lock: Mutex<()>,
     root: T,
+    major_collections: AtomicUsize,
+    minor_collections: AtomicUsize,
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn major_collect(&self) {
         let _lock = self.lock.lock().unwrap();
+        self.major_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.rotate_mark()));
     }
 
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
+        self.minor_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.current_mark()));
     }
 
-    fn arena_size(&self) -> usize {
+    fn get_major_collections(&self) -> usize {
+        self.major_collections.load(Ordering::SeqCst)
+    }
+
+    fn get_minor_collections(&self) -> usize {
+        self.minor_collections.load(Ordering::SeqCst)
+    }
+
+    fn get_arena_size(&self) -> usize {
         self.arena.get_size()
     }
     
-    fn old_objects_count(&self) -> usize {
+    fn get_old_objects_count(&self) -> usize {
         0
     }
 }
@@ -46,16 +59,16 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let tracer = Arc::new(TracerController::new());
         let mut mutator = MutatorScope::new(&arena, &tracer);
         let root = callback(&mut mutator);
-        let marker = TraceMarker::new(arena.current_mark());
 
         drop(mutator);
 
         Self {
             arena,
-            marker,
             tracer,
             root,
             lock: Mutex::new(()),
+            major_collections: AtomicUsize::new(0),
+            minor_collections: AtomicUsize::new(0),
         }
     }
 

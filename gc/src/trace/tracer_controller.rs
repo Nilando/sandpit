@@ -1,6 +1,5 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
 use super::tracer::TraceWorker;
 use std::sync::{

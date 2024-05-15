@@ -85,6 +85,7 @@ pub use gc_ptr::GcPtr;
 pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
 pub use gc::Gc;
+pub use metrics::GcMetrics;
 
 
 #[cfg(test)]

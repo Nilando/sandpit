@@ -1,6 +1,5 @@
 mod marker;
 mod trace;
-mod trace_metrics;
 mod trace_packet;
 mod tracer;
 mod tracer_controller;
