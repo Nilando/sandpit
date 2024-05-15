@@ -54,18 +54,20 @@ impl<M: Marker> TraceWorker<M> {
         }
     }
 
-
     pub fn trace_obj<T: Trace>(&mut self, obj: &T) {
         obj.trace(self);
     }
 
-    pub fn trace_loop(&mut self) {
+    pub fn trace_loop(&mut self) -> usize {
         loop {
             if self.current_packet().is_empty() {
                 self.get_new_packet();
 
                 if self.current_packet().is_empty() {
-                    break;
+                    self.switch = !self.switch;
+                    if self.current_packet().is_empty() {
+                        break;
+                    }
                 }
             }
 
@@ -73,6 +75,8 @@ impl<M: Marker> TraceWorker<M> {
 
             self.switch = !self.switch;
         }
+
+        self.mark_count
     }
 
     fn get_new_packet(&mut self) {

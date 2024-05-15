@@ -21,11 +21,13 @@ pub struct Collector<A: Allocate, T: Trace> {
     root: T,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
+    old_objects: AtomicUsize,
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn major_collect(&self) {
         let _lock = self.lock.lock().unwrap();
+        self.old_objects.store(0, Ordering::SeqCst);
         self.major_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.rotate_mark()));
     }
@@ -49,7 +51,7 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     }
     
     fn get_old_objects_count(&self) -> usize {
-        0
+        self.old_objects.load(Ordering::SeqCst)
     }
 }
 
@@ -69,6 +71,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
             lock: Mutex::new(()),
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
+            old_objects: AtomicUsize::new(0),
         }
     }
 
@@ -85,7 +88,9 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     fn collect(&self, marker: TraceMarker<A>) {
-        self.tracer.clone().trace(&self.root, marker);
+        let mark_count = self.tracer.clone().trace(&self.root, marker);
+
+        self.old_objects.fetch_add(mark_count, Ordering::SeqCst);
         self.arena.refresh();
     }
 }

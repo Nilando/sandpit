@@ -13,7 +13,6 @@ pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
-    old_objects_count: AtomicUsize,
 }
 
 impl<M: Marker> TracerController<M> {
@@ -22,7 +21,6 @@ impl<M: Marker> TracerController<M> {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             unscanned: Mutex::new(vec![]),
-            old_objects_count: AtomicUsize::new(0),
         }
     }
 
@@ -42,9 +40,9 @@ impl<M: Marker> TracerController<M> {
         self.unscanned.lock().unwrap().pop()
     }
 
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: M) {
+    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: M) -> usize {
         // Perform initial trace.
-        self.clone().spawn_tracers(Some(root), &marker);
+        let initial_mark_count = self.clone().spawn_tracers(Some(root), &marker);
 
         // We are about to begin the final trace, first, we signal to the mutators
         // to yield.
@@ -60,14 +58,19 @@ impl<M: Marker> TracerController<M> {
 
         // Now that all mutators are stopped we do a final trace.
         // This final trace ensures we trace any remaining objects that were
-        self.clone().spawn_tracers(None as Option<&T>, &marker);
+        let final_mark_count = self.clone().spawn_tracers(None as Option<&T>, &marker);
 
         // tracing
         self.yield_flag.store(false, Ordering::SeqCst);
+
+        return initial_mark_count + final_mark_count;
     }
 
-    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: &M) {
+    // returns number of objects marked
+    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: &M) -> usize {
+        let mut mark_count = AtomicUsize::new(0);
         std::thread::scope(|scope| {
+            let mark_count_ref = &mark_count;
             for i in 0..NUM_TRACER_THREADS {
                 let mut tracer = TraceWorker::new(self.clone(), marker.clone());
 
@@ -76,9 +79,11 @@ impl<M: Marker> TracerController<M> {
                 }
 
                 scope.spawn(move || {
-                    tracer.trace_loop();
+                    mark_count_ref.fetch_add(tracer.trace_loop(), Ordering::SeqCst);
                 });
             }
         });
+
+        return mark_count.load(Ordering::SeqCst);
     }
 }

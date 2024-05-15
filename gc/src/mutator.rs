@@ -85,11 +85,13 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        if !self.allocator.check_if_old(ptr) {
+        let mark = A::get_mark(ptr);
+        let new_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
+
+        if new_mark == mark {
             return;
         }
 
-        let new_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new_mark);
 
         unsafe {
