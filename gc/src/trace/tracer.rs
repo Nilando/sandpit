@@ -23,12 +23,16 @@ unsafe impl<M: Marker> Sync for TraceWorker<M> {}
 
 impl<M: Marker> Tracer for TraceWorker<M> {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if self.marker.is_marked(ptr) || !T::needs_trace() {
+        if self.marker.is_marked(ptr) {
             return;
         }
 
         self.marker.set_mark(ptr);
         self.mark_count += 1;
+
+        if !T::needs_trace() {
+            return
+        }
 
         if self.next_packet().is_full() {
             self.send_packet();

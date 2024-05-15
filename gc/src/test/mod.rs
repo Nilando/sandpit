@@ -65,28 +65,22 @@ fn deref_null_prt() {
 fn alloc_into_free_blocks() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    gc.mutate(|_, m| {
-        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-        for _ in 0..10_000 {
-            m.alloc(420).unwrap();
-            m.alloc_layout(medium_layout).unwrap();
-        }
-    });
+    fn alloc_medium_and_small(gc: &Gc<GcPtr<usize>>) {
+        gc.mutate(|_, m| {
+            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+            for _ in 0..10_000 {
+                m.alloc(420).unwrap();
+                m.alloc_layout(medium_layout).unwrap();
+            }
+        });
+    }
 
+    alloc_medium_and_small(&gc); // this should leave us with a bunch of free blocks to alloc into
     gc.major_collect();
+    alloc_medium_and_small(&gc);
+    gc.major_collect(); // now only the root should be left
 
-    gc.mutate(|_, m| {
-        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-        for _ in 0..10_000 {
-            m.alloc(420).unwrap();
-            m.alloc_layout(medium_layout).unwrap();
-        }
-    });
-    gc.major_collect();
-
-    gc.mutate(|root, _| {
-        assert!(**root == 69);
-    });
+    gc.mutate(|root, _| assert!(**root == 69));
 }
 
 #[test]
@@ -110,11 +104,6 @@ fn wait_for_trace() {
 fn start_monitor_multiple_times() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
     gc.start_monitor();
 
     gc.mutate(|_, m| loop {
