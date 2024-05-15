@@ -61,10 +61,4 @@ impl Allocate for Allocator {
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         Header::set_mark(Self::get_header(ptr), mark);
     }
-
-    fn check_if_old<T>(&self, ptr: NonNull<T>) -> bool {
-        let mark = Header::get_mark(Self::get_header(ptr));
-
-        mark == self.head.get_mark()
-    }
 }
