@@ -63,8 +63,7 @@ impl<M: Marker> TracerController<M> {
         self.yield_flag.store(false, Ordering::SeqCst);
     }
 
-    // returns number of objects marked
-    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: Arc<M>) {
+    fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: Arc<M>) {
         std::thread::scope(|scope| {
             for i in 0..NUM_TRACER_THREADS {
                 let mut tracer = TraceWorker::new(self.clone(), marker.clone());
