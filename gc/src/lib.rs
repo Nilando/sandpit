@@ -10,7 +10,7 @@
 //! use gc::{Gc, Mutator, GcPtr};
 //!
 //! // This creates an arena with a usize as the root.
-//! let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| {
+//! let gc = Gc::build(|mutator| {
 //!     mutator.alloc(123).unwrap()
 //! });
 //!
@@ -58,6 +58,10 @@
 //! - Fixing Bugs and adding tests is the #1 priority!
 //! - add a way to pass in config to the gc when building
 //! - multi threading tests
+//! - Sharing work between tracer threads!
+//!     - there should be some more bench marks to help
+//!       validate optimizations like this
+//! - Returning values from the GcArena
 
 mod allocator;
 mod collector;

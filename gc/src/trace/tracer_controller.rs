@@ -12,7 +12,11 @@ const NUM_TRACER_THREADS: usize = 1;
 pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
-    unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
+    // TODO: store in GcArray instead of vec
+    // this will be tricky since then tracing will require
+    // access to a mutator, or at least the arena in some way
+    // or should this be some kind of channel?
+    unscanned: Mutex<Vec<TracePacket<M>>>,
 }
 
 impl<M: Marker> TracerController<M> {
@@ -72,6 +76,7 @@ impl<M: Marker> TracerController<M> {
                     tracer.trace_obj(root.unwrap())
                 }
 
+                // TODO: USE MPMC channel to share work between threads
                 scope.spawn(move || tracer.trace_loop());
             }
         });
