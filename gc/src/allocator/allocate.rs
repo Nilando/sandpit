@@ -10,6 +10,8 @@ pub trait Allocate: 'static {
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Self::Error>;
     fn get_mark<T>(ptr: NonNull<T>) -> <<Self as Allocate>::Arena as GenerationalArena>::Mark;
     fn set_mark<T>(ptr: NonNull<T>, mark: <<Self as Allocate>::Arena as GenerationalArena>::Mark);
+
+    fn is_old<T>(&self, ptr: NonNull<T>) -> bool;
 }
 
 pub trait GenerationalArena {

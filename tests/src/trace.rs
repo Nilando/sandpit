@@ -15,7 +15,7 @@ mod tests {
         gc.mutate(|root, mutator| {
             assert!(root.as_ref().unwrap().unwrap() == 420);
             let new_null = GcPtr::null();
-            root.write_barrier(mutator, new_null, |this| this.as_ref().unwrap());
+            mutator.write_barrier(root.clone(), new_null, |this| this.as_ref().unwrap());
             assert!(root.as_ref().unwrap().is_null());
         })
     }

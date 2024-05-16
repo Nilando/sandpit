@@ -1,6 +1,6 @@
 use super::allocator::{Allocator, Allocate, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
-use super::trace::{Trace, TraceMarker, TracerController};
+use super::trace::{Trace, TraceMarker, Marker, TracerController};
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLockReadGuard, atomic::{AtomicUsize, Ordering}};
@@ -29,13 +29,13 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
         let _lock = self.lock.lock().unwrap();
         self.old_objects.store(0, Ordering::SeqCst);
         self.major_collections.fetch_add(1, Ordering::SeqCst);
-        self.collect(TraceMarker::new(self.arena.rotate_mark()));
+        self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
     }
 
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
-        self.collect(TraceMarker::new(self.arena.current_mark()));
+        self.collect(TraceMarker::new(self.arena.current_mark()).into());
     }
 
     fn get_major_collections(&self) -> usize {
@@ -88,10 +88,9 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
-    fn collect(&self, marker: TraceMarker<A>) {
-        let mark_count = self.tracer.clone().trace(&self.root, marker);
-
-        self.old_objects.fetch_add(mark_count, Ordering::SeqCst);
+    fn collect(&self, marker: Arc<TraceMarker<A>>) {
+        self.tracer.clone().trace(&self.root, marker.clone());
+        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

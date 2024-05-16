@@ -220,11 +220,7 @@ fn large_array() {
 
 #[test]
 fn get_size() {
-    return;
     let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
-    let block_size = 1024 * 32;
-    let header_size = 8;
-    let large_size = (40_000 * std::mem::size_of::<GcPtr<ListItem<usize>>>()) + header_size;
 
     gc.mutate(|root, mutator| {
         let large_list = GcArray::alloc_with_capacity(mutator, 40_000).unwrap();

@@ -31,7 +31,7 @@ impl Node {
     }
 
     pub fn set_left<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_left: GcPtr<Node>) {
-        this.write_barrier(mutator, new_left, |this| &this.left);
+        mutator.write_barrier(this.clone(), new_left, |this: &Node| &this.left);
     }
 
     pub fn right_val(this: &GcPtr<Node>) -> usize {
@@ -43,7 +43,7 @@ impl Node {
     }
 
     pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
-        this.write_barrier(mutator, new_right, |this| &this.right);
+        mutator.write_barrier(this.clone(), new_right, |this: &Node | &this.right);
     }
 
     pub fn insert_rand<M: Mutator>(this: &GcPtr<Node>, mutator: &M) {

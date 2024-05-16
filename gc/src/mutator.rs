@@ -8,10 +8,17 @@ use std::cell::UnsafeCell;
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
+
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError>;
-    fn write_barrier<T: Trace>(&self, obj: NonNull<T>);
+    fn write_barrier<A: Trace, B: Trace>(
+        &self,
+        update: GcPtr<A>,
+        new: GcPtr<B>,
+        callback: fn(&A) -> &GcPtr<B>,
+    );
+    fn rescan<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
 }
 
@@ -87,8 +94,30 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
     }
 
-    fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        if A::get_mark(ptr).is_new() {
+    fn write_barrier<X: Trace, Y: Trace>(
+        &self,
+        update_ptr: GcPtr<X>,
+        new_ptr: GcPtr<Y>,
+        callback: fn(&X) -> &GcPtr<Y>,
+    ) {
+        unsafe {
+            let ptr = update_ptr.as_nonnull();
+            let old_ptr = callback(ptr.as_ref());
+            // TODO: this might work but new_ptr could be null!
+            // let need_rescan = !self.allocator.is_old(new_ptr.as_nonnull());
+
+            old_ptr.unsafe_set(new_ptr);
+
+            //if need_rescan {
+                self.rescan(update_ptr);
+            //}
+        }
+    }
+
+    fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
+        let ptr = unsafe { gc_ptr.as_nonnull() };
+
+        if !self.allocator.is_old(ptr){
            return;
         }
 
