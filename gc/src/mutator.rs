@@ -40,6 +40,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
         Self {
             allocator,
             tracer_controller,
+            // TODO: this could probably be something other than a mutex
             trace_packet: Mutex::new(TracePacket::new()),
             _lock
         }
