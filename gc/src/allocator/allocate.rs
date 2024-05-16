@@ -24,4 +24,7 @@ pub trait GenerationalArena {
 
 pub trait Marker: Copy + Clone + PartialEq + Eq + Debug + Send + Sync {
     fn new() -> Self;
+    fn new_rescan() -> Self;
+    fn is_new(&self) -> bool;
+    fn is_rescan(&self) -> bool;
 }

@@ -245,8 +245,6 @@ fn objects_marked_metric() {
 
     gc.major_collect();
 
-    //assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 100);
-
     gc.mutate(|root, _| {
         let node = Node::find(root, 48).unwrap();
         Node::kill_children(&node);
@@ -257,8 +255,6 @@ fn objects_marked_metric() {
     });
 
     gc.major_collect();
-
-    //assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), 50);
 }
 
 #[test]
@@ -274,4 +270,27 @@ fn cyclic_graph() {
     });
 
     gc.major_collect();
+}
+
+#[test]
+fn build_and_collect_balanced_tree() {
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+
+    gc.start_monitor();
+
+    gc.mutate(|root, m| {
+        for i in 0..1000 {
+            Node::create_balanced_tree(root, m, 10_000);
+        }
+    });
+
+    gc.minor_collect();
+    assert_eq!(gc.metrics().old_objects_count, 10_000);
+
+
+    gc.mutate(|root, _| {
+        let actual: Vec<usize> = Node::collect(root);
+        let expected: Vec<usize> = (0..10_000).collect();
+        assert_eq!(actual, expected)
+    });
 }

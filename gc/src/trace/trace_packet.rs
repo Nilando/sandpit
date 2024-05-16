@@ -3,7 +3,7 @@ use super::trace::Trace;
 use super::tracer::TraceWorker;
 use std::ptr::NonNull;
 
-pub const TRACE_PACKET_SIZE: usize = 128;
+pub const TRACE_PACKET_SIZE: usize = 64;
 
 pub struct TraceJob<M: Marker> {
     ptr: NonNull<()>,

@@ -85,14 +85,12 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        let mark = A::get_mark(ptr);
-        let new_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
-
-        if new_mark == mark {
-            return;
+        if A::get_mark(ptr).is_new() {
+           // return;
         }
 
-        A::set_mark(ptr, new_mark);
+        let rescan_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new_rescan();
+        A::set_mark(ptr, rescan_mark);
 
         unsafe {
             let packet_ref = &mut *self.trace_packet.get();

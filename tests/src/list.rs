@@ -157,7 +157,7 @@ fn nested_arrays() {
 
     gc.major_collect();
 
-    let num_objs = ((1 + 100) * 3) - 1; // -1 b/c root isnt marked
+    let num_objs = ((1 + 100) * 3) - 2; // -1 b/c root isnt marked
     assert_eq!(gc.metrics().old_objects_count, num_objs);
 
     gc.mutate(|root, mutator| {

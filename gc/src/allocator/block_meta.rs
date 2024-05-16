@@ -1,6 +1,7 @@
 use super::constants;
 use super::header::Header;
 use super::header::Mark;
+use super::allocate::Marker;
 use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -48,6 +49,18 @@ impl BlockMeta {
         self.set_block(mark);
     }
 
+    pub fn free_unmarked(&self, mark: Mark) {
+        if self.get_block() != mark {
+            self.set_block(Mark::New);
+        }
+
+        for i in 0..(constants::LINE_COUNT - 1) {
+            if self.get_line(i) != mark {
+                self.set_line(i, mark);
+            }
+        }
+    }
+
     pub fn get_block(&self) -> Mark {
         self.get_line(constants::LINE_COUNT - 1)
     }
@@ -78,7 +91,6 @@ impl BlockMeta {
         &self,
         starting_at: usize,
         alloc_size: usize,
-        mark: Mark,
     ) -> Option<(usize, usize)> {
         let mut count = 0;
         let starting_line = starting_at / constants::LINE_SIZE;
@@ -88,7 +100,7 @@ impl BlockMeta {
         for index in (0..starting_line).rev() {
             let line_mark = self.get_line(index);
 
-            if line_mark != mark {
+            if line_mark.is_new() {
                 count += 1;
 
                 if index == 0 && count >= lines_required {
@@ -167,7 +179,6 @@ mod tests {
         let got = meta.find_next_available_hole(
             10 * constants::LINE_SIZE,
             constants::LINE_SIZE,
-            Mark::Red,
         );
 
         assert_eq!(got, expect);
@@ -188,7 +199,6 @@ mod tests {
         let got = meta.find_next_available_hole(
             3 * constants::LINE_SIZE,
             constants::LINE_SIZE,
-            Mark::Red,
         );
 
         assert_eq!(got, expect);
@@ -211,7 +221,6 @@ mod tests {
         let got = meta.find_next_available_hole(
             constants::BLOCK_CAPACITY,
             constants::LINE_SIZE,
-            Mark::Red,
         );
 
         assert_eq!(got, expect);
@@ -234,7 +243,6 @@ mod tests {
         let got = meta.find_next_available_hole(
             constants::BLOCK_CAPACITY,
             constants::LINE_SIZE,
-            Mark::Red,
         );
         assert_eq!(got, None);
     }
@@ -248,7 +256,6 @@ mod tests {
         let got = meta.find_next_available_hole(
             constants::BLOCK_CAPACITY,
             constants::LINE_SIZE,
-            Mark::Red,
         );
 
         assert_eq!(got, expect);

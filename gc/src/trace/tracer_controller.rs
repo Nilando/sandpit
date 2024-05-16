@@ -46,7 +46,6 @@ impl<M: Marker> TracerController<M> {
 
         // We are about to begin the final trace, first, we signal to the mutators
         // to yield.
-        //
         // The yield flag may have already have bin raised if the initial
         // trace had been running for a long time, or if space is running low.
         self.yield_flag.store(true, Ordering::SeqCst);
@@ -58,9 +57,8 @@ impl<M: Marker> TracerController<M> {
 
         // Now that all mutators are stopped we do a final trace.
         // This final trace ensures we trace any remaining objects that were
+        // added before the mutators actually stopped.
         let final_mark_count = self.clone().spawn_tracers(None as Option<&T>, &marker);
-
-        // tracing
         self.yield_flag.store(false, Ordering::SeqCst);
 
         return initial_mark_count + final_mark_count;

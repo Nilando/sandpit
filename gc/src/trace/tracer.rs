@@ -26,9 +26,12 @@ impl<M: Marker> Tracer for TraceWorker<M> {
         if self.marker.is_marked(ptr) {
             return;
         }
+        
+        if !self.marker.is_rescan(ptr) {
+            self.mark_count += 1;
+        }
 
         self.marker.set_mark(ptr);
-        self.mark_count += 1;
 
         if !T::needs_trace() {
             return

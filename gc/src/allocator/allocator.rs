@@ -31,7 +31,7 @@ impl Allocate for Allocator {
 
     fn new(arena: &Self::Arena) -> Self {
         Self {
-            head: AllocHead::new(arena.get_block_store(), arena.current_mark()),
+            head: AllocHead::new(arena.get_block_store()),
         }
     }
 

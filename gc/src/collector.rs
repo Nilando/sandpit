@@ -79,6 +79,12 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let (mut mutator, _lock) = self.new_mutator();
 
         callback(&self.root, &mut mutator);
+
+        // TODO: store the lock in the mutator
+        // this is important the mutator must be dropped first so that the tracer
+        // gets sent any unscanned pointers before it can start its next trace
+        drop(mutator);
+        drop(_lock);
     }
 
     fn new_mutator(&self) -> (MutatorScope<A>, RwLockReadGuard<()>) {

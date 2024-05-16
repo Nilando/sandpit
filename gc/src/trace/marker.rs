@@ -6,6 +6,7 @@ pub trait Marker: Clone {
     type Mark: AllocMarker;
 
     fn is_marked<T: Trace>(&self, ptr: NonNull<T>) -> bool;
+    fn is_rescan<T: Trace>(&self, ptr: NonNull<T>) -> bool;
     fn set_mark<T: Trace>(&self, ptr: NonNull<T>);
 }
 
@@ -14,6 +15,10 @@ impl<A: Allocate> Marker for TraceMarker<A> {
 
     fn is_marked<T: Trace>(&self, ptr: NonNull<T>) -> bool {
         A::get_mark(ptr) == self.mark
+    }
+
+    fn is_rescan<T: Trace>(&self, ptr: NonNull<T>) -> bool {
+        A::get_mark(ptr).is_rescan()
     }
 
     fn set_mark<T: Trace>(&self, ptr: NonNull<T>) {
