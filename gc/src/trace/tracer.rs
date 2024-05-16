@@ -11,9 +11,8 @@ pub trait Tracer {
 
 pub struct TraceWorker<M: Marker> {
     controller: Arc<TracerController<M>>,
-    marker: M,
+    marker: Arc<M>,
     switch: bool,
-    mark_count: usize,
     p1: TracePacket<M>,
     p2: TracePacket<M>,
 }
@@ -23,15 +22,9 @@ unsafe impl<M: Marker> Sync for TraceWorker<M> {}
 
 impl<M: Marker> Tracer for TraceWorker<M> {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if self.marker.is_marked(ptr) {
+        if !self.marker.set_mark(ptr) {
             return;
         }
-        
-        if !self.marker.is_rescan(ptr) {
-            self.mark_count += 1;
-        }
-
-        self.marker.set_mark(ptr);
 
         if !T::needs_trace() {
             return
@@ -46,12 +39,11 @@ impl<M: Marker> Tracer for TraceWorker<M> {
 }
 
 impl<M: Marker> TraceWorker<M> {
-    pub fn new(controller: Arc<TracerController<M>>, marker: M) -> Self {
+    pub fn new(controller: Arc<TracerController<M>>, marker: Arc<M>) -> Self {
         Self {
             controller,
             marker,
             switch: false,
-            mark_count: 0,
             p1: TracePacket::new(),
             p2: TracePacket::new(),
         }
@@ -61,7 +53,7 @@ impl<M: Marker> TraceWorker<M> {
         obj.trace(self);
     }
 
-    pub fn trace_loop(&mut self) -> usize {
+    pub fn trace_loop(&mut self) {
         loop {
             if self.current_packet().is_empty() {
                 self.get_new_packet();
@@ -78,8 +70,6 @@ impl<M: Marker> TraceWorker<M> {
 
             self.switch = !self.switch;
         }
-
-        self.mark_count
     }
 
     fn get_new_packet(&mut self) {

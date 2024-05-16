@@ -3,17 +3,21 @@ use super::block_store::BlockStore;
 use super::constants::BLOCK_SIZE;
 use super::header::Mark;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone)]
 pub struct Arena {
     block_store: Arc<BlockStore>,
-    current_mark: Arc<Mutex<Mark>>,
+    current_mark: Arc<AtomicU8>,
 }
 
 impl Arena {
     pub fn get_block_store(&self) -> Arc<BlockStore> {
         self.block_store.clone()
+    }
+
+    pub fn get_current_mark_ref(&self) -> Arc<AtomicU8> {
+        self.current_mark.clone()
     }
 }
 
@@ -23,7 +27,7 @@ impl GenerationalArena for Arena {
     fn new() -> Self {
         Self {
             block_store: Arc::new(BlockStore::new()),
-            current_mark: Arc::new(Mutex::new(Mark::Red)),
+            current_mark: Arc::new(AtomicU8::new(Mark::Red as u8)),
         }
     }
 
@@ -39,14 +43,15 @@ impl GenerationalArena for Arena {
     }
 
     fn current_mark(&self) -> Self::Mark {
-        *self.current_mark.lock().unwrap()
+        Mark::from(self.current_mark.load(Ordering::SeqCst))
     }
 
     fn rotate_mark(&self) -> Self::Mark {
-        let mut mark = self.current_mark.lock().unwrap();
+        let mark = self.current_mark();
+        let new_mark = mark.rotate();
 
-        *mark = mark.rotate();
+        self.current_mark.store(new_mark as u8, Ordering::SeqCst);
 
-        *mark
+        new_mark
     }
 }

@@ -40,9 +40,9 @@ impl<M: Marker> TracerController<M> {
         self.unscanned.lock().unwrap().pop()
     }
 
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: M) -> usize {
+    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         // Perform initial trace.
-        let initial_mark_count = self.clone().spawn_tracers(Some(root), &marker);
+        self.clone().spawn_tracers(Some(root), marker.clone());
 
         // We are about to begin the final trace, first, we signal to the mutators
         // to yield.
@@ -58,17 +58,13 @@ impl<M: Marker> TracerController<M> {
         // Now that all mutators are stopped we do a final trace.
         // This final trace ensures we trace any remaining objects that were
         // added before the mutators actually stopped.
-        let final_mark_count = self.clone().spawn_tracers(None as Option<&T>, &marker);
+        self.clone().spawn_tracers(None as Option<&T>, marker.clone());
         self.yield_flag.store(false, Ordering::SeqCst);
-
-        return initial_mark_count + final_mark_count;
     }
 
     // returns number of objects marked
-    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: &M) -> usize {
-        let mut mark_count = AtomicUsize::new(0);
+    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: Arc<M>) {
         std::thread::scope(|scope| {
-            let mark_count_ref = &mark_count;
             for i in 0..NUM_TRACER_THREADS {
                 let mut tracer = TraceWorker::new(self.clone(), marker.clone());
 
@@ -76,12 +72,8 @@ impl<M: Marker> TracerController<M> {
                     tracer.trace_obj(root.unwrap())
                 }
 
-                scope.spawn(move || {
-                    mark_count_ref.fetch_add(tracer.trace_loop(), Ordering::SeqCst);
-                });
+                scope.spawn(move || tracer.trace_loop());
             }
         });
-
-        return mark_count.load(Ordering::SeqCst);
     }
 }
