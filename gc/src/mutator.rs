@@ -5,8 +5,8 @@ use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 
 use std::alloc::Layout;
 use std::cell::UnsafeCell;
-use std::ptr::write;
-use std::ptr::NonNull;
+use std::ptr::{write, NonNull};
+use std::sync::RwLockReadGuard;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
@@ -19,12 +19,14 @@ pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
     tracer_controller: &'scope TracerController<TraceMarker<A>>,
     trace_packet: UnsafeCell<TracePacket<TraceMarker<A>>>,
+    _lock: RwLockReadGuard<'scope, ()>,
 }
 
 impl<'scope, A: Allocate> MutatorScope<'scope, A> {
     pub fn new(
         arena: &A::Arena,
         tracer_controller: &'scope TracerController<TraceMarker<A>>,
+        _lock: RwLockReadGuard<'scope, ()>,
     ) -> Self {
         let allocator = A::new(arena);
 
@@ -32,6 +34,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
             allocator,
             tracer_controller,
             trace_packet: UnsafeCell::new(TracePacket::new()),
+            _lock
         }
     }
 }
