@@ -113,6 +113,9 @@ fn start_monitor_multiple_times() {
             break;
         }
     });
+
+    gc.major_collect();
+    assert_eq!(gc.metrics().old_objects_count, 1);
 }
 
 #[test]
