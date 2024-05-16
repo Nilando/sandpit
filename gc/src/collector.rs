@@ -59,7 +59,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     pub fn build(callback: fn(&mut MutatorScope<A>) -> T) -> Self {
         let arena = A::Arena::new();
         let tracer = Arc::new(TracerController::new());
-        let mut mutator = MutatorScope::new(&arena, &tracer);
+        let lock = tracer.yield_lock();
+        let mut mutator = MutatorScope::new(&arena, &tracer, lock);
         let root = callback(&mut mutator);
 
         drop(mutator);
@@ -76,21 +77,15 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<A>)) {
-        let (mut mutator, _lock) = self.new_mutator();
+        let mut mutator = self.new_mutator();
 
         callback(&self.root, &mut mutator);
-
-        // TODO: store the lock in the mutator
-        // this is important the mutator must be dropped first so that the tracer
-        // gets sent any unscanned pointers before it can start its next trace
-        drop(mutator);
-        drop(_lock);
     }
 
-    fn new_mutator(&self) -> (MutatorScope<A>, RwLockReadGuard<()>) {
+    fn new_mutator(&self) -> MutatorScope<A> {
         let lock = self.tracer.yield_lock();
 
-        (MutatorScope::new(&self.arena, self.tracer.as_ref()), lock)
+        MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
