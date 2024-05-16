@@ -49,34 +49,58 @@ impl<T: Collect + 'static> Monitor<T> {
             return
         }
 
+        std::thread::spawn(move || self.monitor());
+    }
 
-        std::thread::spawn(move || {
-            loop {
-                let ten_millis = time::Duration::from_millis(10);
-                thread::sleep(ten_millis);
+    fn monitor(&self) {
+        loop {
+            self.sleep();
 
-                if !self.flag.load(Ordering::SeqCst) { break; }
+            if self.should_stop_monitoring() { break }
 
-                let arena_size = self.collector.get_arena_size();
-                let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+            if self.minor_trigger() {
+                self.collector.minor_collect();
 
-                if arena_size as f64 >= prev_arena_size as f64 * ARENA_SIZE_RATIO_TRIGGER {
-                    self.collector.minor_collect();
+                if self.major_trigger() {
+                    self.collector.major_collect();
 
-                    let old_objects = self.collector.get_old_objects_count();
-                    if old_objects > self.max_old_objects.load(Ordering::SeqCst) {
-                        self.collector.major_collect();
-
-                        let old_objects = self.collector.get_old_objects_count();
-                        self.max_old_objects.store(
-                            (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
-                            Ordering::SeqCst
-                        );
-                    }
-
-                    self.prev_arena_size.store(self.collector.get_arena_size(), Ordering::SeqCst);
+                    self.update_old_max();
                 }
+
+                self.prev_arena_size.store(self.collector.get_arena_size(), Ordering::SeqCst);
             }
-        });
+        }
+    }
+
+    fn major_trigger(&self) -> bool {
+        let old_objects = self.collector.get_old_objects_count();
+
+        old_objects > self.max_old_objects.load(Ordering::SeqCst)
+    }
+
+    fn minor_trigger(&self) -> bool {
+        let arena_size = self.collector.get_arena_size();
+        let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+
+        arena_size as f64 >= (prev_arena_size as f64 * ARENA_SIZE_RATIO_TRIGGER)
+    }
+
+    fn update_old_max(&self) {
+        let old_objects = self.collector.get_old_objects_count();
+
+        self.max_old_objects.store(
+            (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
+            Ordering::SeqCst
+        );
+    }
+
+    fn should_stop_monitoring(&self) -> bool {
+        !self.flag.load(Ordering::SeqCst)
+    }
+
+    fn sleep(&self) {
+        let ten_millis = time::Duration::from_millis(10);
+
+        thread::sleep(ten_millis);
     }
 }
