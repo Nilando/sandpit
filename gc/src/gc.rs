@@ -1,10 +1,10 @@
+use super::collector::{Collect, Collector};
+use super::metrics::GcMetrics;
 use super::monitor::Monitor;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLockReadGuard};
 use super::mutator::MutatorScope;
 use super::trace::Trace;
-use super::collector::{Collector, Collect};
-use super::metrics::GcMetrics;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLockReadGuard};
 
 use super::allocator::Allocator;
 
@@ -29,10 +29,7 @@ impl<T: Trace> Gc<T> {
         let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(callback));
         let monitor = Arc::new(Monitor::new(collector.clone()));
 
-        Self {
-            collector,
-            monitor,
-        }
+        Self { collector, monitor }
     }
 
     // MutatorScope is a sealed type but the user utilize it through the public
@@ -60,7 +57,7 @@ impl<T: Trace> Gc<T> {
     pub fn metrics(&self) -> GcMetrics {
         GcMetrics {
             // Collector Metrics:
-            
+
             // Running count of how many times major/minor collections have happend.
             major_collections: self.collector.get_major_collections(),
             minor_collections: self.collector.get_minor_collections(),
@@ -68,10 +65,10 @@ impl<T: Trace> Gc<T> {
             // How many old objects there were as per the last trace.
             old_objects_count: self.collector.get_old_objects_count(),
             // The current size of the arena including large objects and blocks.
-            arena_size:        self.collector.get_arena_size(),
+            arena_size: self.collector.get_arena_size(),
 
             // Monitor Metrics:
-           
+
             // How many old objects must exist before a major collection is triggered.
             // If you divide this number by the monitor's 'MAX_OLD_GROWTH_RATE, you get the number
             // of old objects at the end of the last major collection

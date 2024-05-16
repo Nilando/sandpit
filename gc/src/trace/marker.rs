@@ -17,7 +17,7 @@ impl<A: Allocate> Marker for TraceMarker<A> {
         let mark = A::get_mark(ptr);
 
         if mark == self.mark {
-            return false
+            return false;
         }
 
         self.mark_count.fetch_add(1, Ordering::Relaxed);
@@ -39,6 +39,9 @@ pub struct TraceMarker<A: Allocate> {
 
 impl<A: Allocate> TraceMarker<A> {
     pub fn new(mark: <<A as Allocate>::Arena as GenerationalArena>::Mark) -> Self {
-        Self { mark, mark_count: AtomicUsize::new(0) }
+        Self {
+            mark,
+            mark_count: AtomicUsize::new(0),
+        }
     }
 }

@@ -1,6 +1,6 @@
-use gc::*;
-use gc::gc_derive::Trace;
 use gc::collections::*;
+use gc::gc_derive::Trace;
+use gc::*;
 
 type List<T> = GcArray<ListItem<T>>;
 

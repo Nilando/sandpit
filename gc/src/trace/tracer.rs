@@ -1,6 +1,6 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_packet::{TracePacket};
+use super::trace_packet::TracePacket;
 use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ impl<M: Marker> Tracer for TraceWorker<M> {
         }
 
         if !T::needs_trace() {
-            return
+            return;
         }
 
         if self.next_packet().is_full() {
@@ -59,7 +59,7 @@ impl<M: Marker> TraceWorker<M> {
                 self.switch = !self.switch;
                 if self.current_packet().is_empty() {
                     self.get_new_packet();
-                } 
+                }
 
                 if self.current_packet().is_empty() {
                     break;
@@ -88,7 +88,6 @@ impl<M: Marker> TraceWorker<M> {
         } else {
             &self.p2
         }
-
     }
 
     fn next_packet(&mut self) -> &TracePacket<M> {

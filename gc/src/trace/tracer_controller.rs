@@ -58,7 +58,8 @@ impl<M: Marker> TracerController<M> {
         // Now that all mutators are stopped we do a final trace.
         // This final trace ensures we trace any remaining objects that were
         // added before the mutators actually stopped.
-        self.clone().spawn_tracers(None as Option<&T>, marker.clone());
+        self.clone()
+            .spawn_tracers(None as Option<&T>, marker.clone());
         self.yield_flag.store(false, Ordering::SeqCst);
     }
 

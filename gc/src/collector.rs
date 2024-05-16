@@ -1,9 +1,12 @@
-use super::allocator::{Allocator, Allocate, GenerationalArena};
+use super::allocator::{Allocate, Allocator, GenerationalArena};
 use super::mutator::{Mutator, MutatorScope};
-use super::trace::{Trace, TraceMarker, Marker, TracerController};
+use super::trace::{Marker, Trace, TraceMarker, TracerController};
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLockReadGuard, atomic::{AtomicUsize, Ordering}};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex, RwLockReadGuard,
+};
 
 pub trait Collect {
     fn major_collect(&self);
@@ -49,7 +52,7 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn get_arena_size(&self) -> usize {
         self.arena.get_size()
     }
-    
+
     fn get_old_objects_count(&self) -> usize {
         self.old_objects.load(Ordering::SeqCst)
     }
@@ -90,7 +93,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+        self.old_objects
+            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

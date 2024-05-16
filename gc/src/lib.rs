@@ -66,24 +66,23 @@ mod gc;
 mod gc_array;
 mod gc_cell;
 mod gc_ptr;
+mod metrics;
 mod monitor;
 mod mutator;
 mod trace;
-mod metrics;
 
 pub mod collections {
     pub use crate::gc_array::{GcArray, GcArrayIter};
 }
 
 pub use error::GcError;
+pub use gc::Gc;
 pub use gc_cell::GcCell;
 pub use gc_derive;
 pub use gc_ptr::GcPtr;
+pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use trace::{Trace, TraceLeaf, Tracer};
-pub use gc::Gc;
-pub use metrics::GcMetrics;
-
 
 #[cfg(test)]
 mod test;

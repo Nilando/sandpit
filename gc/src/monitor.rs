@@ -45,8 +45,12 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     pub fn start(self: Arc<Self>) {
-        if self.flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-            return
+        if self
+            .flag
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
         }
 
         std::thread::spawn(move || self.monitor());
@@ -56,7 +60,9 @@ impl<T: Collect + 'static> Monitor<T> {
         loop {
             self.sleep();
 
-            if self.should_stop_monitoring() { break }
+            if self.should_stop_monitoring() {
+                break;
+            }
 
             if self.minor_trigger() {
                 self.collector.minor_collect();
@@ -67,7 +73,8 @@ impl<T: Collect + 'static> Monitor<T> {
                     self.update_old_max();
                 }
 
-                self.prev_arena_size.store(self.collector.get_arena_size(), Ordering::SeqCst);
+                self.prev_arena_size
+                    .store(self.collector.get_arena_size(), Ordering::SeqCst);
             }
         }
     }
@@ -90,7 +97,7 @@ impl<T: Collect + 'static> Monitor<T> {
 
         self.max_old_objects.store(
             (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
-            Ordering::SeqCst
+            Ordering::SeqCst,
         );
     }
 

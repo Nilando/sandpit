@@ -1,4 +1,4 @@
-use crate::{Gc, collections::GcArray, GcCell, GcPtr, Mutator};
+use crate::{collections::GcArray, Gc, GcCell, GcPtr, Mutator};
 use std::alloc::Layout;
 
 #[test]
@@ -145,9 +145,9 @@ fn empty_gc_metrics() {
     assert_eq!(metrics.major_collections, 1);
     assert_eq!(metrics.minor_collections, 0);
     assert_eq!(metrics.old_objects_count, 0);
-    assert_eq!(metrics.max_old_objects,   0);
-    assert_eq!(metrics.arena_size,        0);
-    assert_eq!(metrics.prev_arena_size,   0);
+    assert_eq!(metrics.max_old_objects, 0);
+    assert_eq!(metrics.arena_size, 0);
+    assert_eq!(metrics.prev_arena_size, 0);
 }
 
 #[test]

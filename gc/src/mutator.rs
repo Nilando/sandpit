@@ -5,9 +5,8 @@ use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 
 use std::alloc::Layout;
 use std::ptr::write;
-use std::sync::RwLockReadGuard;
 use std::sync::Mutex;
-
+use std::sync::RwLockReadGuard;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
@@ -42,7 +41,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
             tracer_controller,
             // TODO: this could probably be something other than a mutex
             trace_packet: Mutex::new(TracePacket::new()),
-            _lock
+            _lock,
         }
     }
 }
@@ -108,7 +107,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
             old_ptr.unsafe_set(new_ptr);
 
             //if need_rescan {
-                self.rescan(update_ptr);
+            self.rescan(update_ptr);
             //}
         }
     }
@@ -117,7 +116,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let ptr = unsafe { gc_ptr.as_nonnull() };
 
         if !self.allocator.is_old(ptr) {
-           return;
+            return;
         }
 
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();

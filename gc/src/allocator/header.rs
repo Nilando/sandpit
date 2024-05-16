@@ -38,11 +38,11 @@ impl Mark {
 impl From<u8> for Mark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == Mark::New as u8    => Mark::New,
+            x if x == Mark::New as u8 => Mark::New,
 
-            x if x == Mark::Red as u8    => Mark::Red,
-            x if x == Mark::Green as u8  => Mark::Green,
-            x if x == Mark::Blue as u8   => Mark::Blue,
+            x if x == Mark::Red as u8 => Mark::Red,
+            x if x == Mark::Green as u8 => Mark::Green,
+            x if x == Mark::Blue as u8 => Mark::Blue,
             _ => panic!("Bad GC Mark"),
         }
     }

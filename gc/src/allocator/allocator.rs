@@ -9,8 +9,8 @@ use std::alloc::Layout;
 use std::mem::{align_of, size_of};
 use std::ptr::write;
 use std::ptr::NonNull;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
 
 pub struct Allocator {
     head: AllocHead,
@@ -41,7 +41,7 @@ impl Allocate for Allocator {
 
         Self {
             head: AllocHead::new(arena.get_block_store()),
-            current_mark
+            current_mark,
         }
     }
 

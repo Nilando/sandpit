@@ -29,10 +29,10 @@ impl BumpBlock {
     pub fn reset_hole(&mut self, mark: Mark) {
         self.meta.free_unmarked(mark);
 
-        if let Some((cursor, limit)) = self.meta.find_next_available_hole(
-            constants::BLOCK_CAPACITY,
-            constants::SMALL_OBJECT_MIN,
-        ) {
+        if let Some((cursor, limit)) = self
+            .meta
+            .find_next_available_hole(constants::BLOCK_CAPACITY, constants::SMALL_OBJECT_MIN)
+        {
             self.cursor = unsafe { self.block.as_ptr().add(cursor) };
             self.limit = unsafe { self.block.as_ptr().add(limit) };
         } else {
@@ -54,9 +54,9 @@ impl BumpBlock {
 
             let block_relative_limit = self.limit as usize - self.block.as_ptr() as usize;
 
-            if let Some((cursor, limit)) =
-                self.meta
-                    .find_next_available_hole(block_relative_limit, layout.size())
+            if let Some((cursor, limit)) = self
+                .meta
+                .find_next_available_hole(block_relative_limit, layout.size())
             {
                 self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                 self.limit = unsafe { self.block.as_ptr().add(limit) };

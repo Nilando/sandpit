@@ -122,9 +122,9 @@ impl AllocHead {
 
 #[cfg(test)]
 mod tests {
-    use std::ptr::write;
     use super::super::constants;
     use super::*;
+    use std::ptr::write;
 
     #[test]
     fn test_recycle_alloc() {
@@ -201,10 +201,14 @@ mod tests {
 
         for i in 0..1000 {
             let ptr = blocks.alloc(small_layout).unwrap();
-            unsafe { write(ptr as *mut u8, 0); }
+            unsafe {
+                write(ptr as *mut u8, 0);
+            }
             small_ptrs.push(ptr);
             let med_ptr = blocks.alloc(medium_layout).unwrap();
-            unsafe { write(med_ptr as *mut [u8; constants::LINE_SIZE * 2], medium_data); }
+            unsafe {
+                write(med_ptr as *mut [u8; constants::LINE_SIZE * 2], medium_data);
+            }
             med_ptrs.push(med_ptr as *mut [u8; constants::LINE_SIZE * 2]);
         }
 

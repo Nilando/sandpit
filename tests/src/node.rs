@@ -43,7 +43,7 @@ impl Node {
     }
 
     pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
-        mutator.write_barrier(this.clone(), new_right, |this: &Node | &this.right);
+        mutator.write_barrier(this.clone(), new_right, |this: &Node| &this.right);
     }
 
     pub fn insert_rand<M: Mutator>(this: &GcPtr<Node>, mutator: &M) {
@@ -285,7 +285,7 @@ fn build_and_collect_balanced_tree_sync() {
 
     gc.major_collect();
     // at this major collect should set objects count to 0
-    // then do a full trace of the tree... marking all 
+    // then do a full trace of the tree... marking all
     assert_eq!(gc.metrics().old_objects_count, 10_000);
 
     gc.mutate(|root, _| {
