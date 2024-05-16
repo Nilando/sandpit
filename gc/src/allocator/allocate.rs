@@ -11,7 +11,7 @@ pub trait Allocate: 'static {
     fn get_mark<T>(ptr: NonNull<T>) -> <<Self as Allocate>::Arena as GenerationalArena>::Mark;
     fn set_mark<T>(ptr: NonNull<T>, mark: <<Self as Allocate>::Arena as GenerationalArena>::Mark);
 
-    fn check_if_old<T>(&self, ptr: NonNull<T>) -> bool;
+    fn is_old<T>(&self, ptr: NonNull<T>) -> bool;
 }
 
 pub trait GenerationalArena {
@@ -26,4 +26,5 @@ pub trait GenerationalArena {
 
 pub trait Marker: Copy + Clone + PartialEq + Eq + Debug + Send + Sync {
     fn new() -> Self;
+    fn is_new(&self) -> bool;
 }

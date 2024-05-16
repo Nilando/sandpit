@@ -1,119 +1,106 @@
+use super::allocator::Allocate;
 use super::collector::Collect;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 
 use std::thread;
 use std::time;
 
-pub trait Monitor {
-    fn new<C: Collect>(collector: Arc<C>) -> Self;
-    fn start(&self);
-    fn stop(&self);
+const MAX_OLD_GROWTH_RATE: f64 = 10.0;
+const ARENA_SIZE_RATIO_TRIGGER: f64 = 2.0;
+
+pub struct Monitor<T: Collect + 'static> {
+    collector: Arc<T>,
+    flag: AtomicBool,
+    prev_arena_size: AtomicUsize,
+    max_old_objects: AtomicUsize,
 }
 
-pub struct MonitorController {
-    worker: Arc<MonitorWorker>,
-}
+unsafe impl<T: Collect + 'static> Send for Monitor<T> {}
+unsafe impl<T: Collect + 'static> Sync for Monitor<T> {}
 
-struct MonitorWorker {
-    collector: Arc<dyn Collect>,
-    metrics: Mutex<MonitorMetrics>,
-    monitor_flag: AtomicBool,
-}
-
-struct MonitorMetrics {
-    prev_arena_size: usize,
-    debt: f64,
-}
-
-impl MonitorMetrics {
-    fn new() -> Self {
-        Self {
-            prev_arena_size: 0,
-            debt: 0.0,
-        }
-    }
-}
-
-impl MonitorWorker {
-    fn new(collector: Arc<dyn Collect>) -> Self {
-        let monitor_flag = AtomicBool::new(false);
-
+impl<T: Collect + 'static> Monitor<T> {
+    pub fn new(collector: Arc<T>) -> Self {
+        let prev_arena_size = collector.get_arena_size();
         Self {
             collector,
-            monitor_flag,
-            metrics: Mutex::new(MonitorMetrics::new()),
+            flag: AtomicBool::new(false),
+            prev_arena_size: AtomicUsize::new(prev_arena_size),
+            max_old_objects: AtomicUsize::new(0),
         }
     }
-}
 
-unsafe impl Send for MonitorWorker {}
-unsafe impl Sync for MonitorWorker {}
-
-const DEBT_CEILING: f64 = 32_000.0 * 1000.0;
-const DEBT_INTEREST_RATE: f64 = 1.3;
-
-impl Monitor for MonitorController {
-    fn new<C: Collect>(collector: Arc<C>) -> Self {
-        let worker = Arc::new(MonitorWorker::new(collector));
-
-        Self { worker }
+    pub fn stop(&self) {
+        self.flag.store(false, Ordering::SeqCst);
     }
 
-    fn stop(&self) {
-        self.worker.monitor_flag.store(false, Ordering::Relaxed);
+    pub fn get_max_old_objects(&self) -> usize {
+        self.max_old_objects.load(Ordering::SeqCst)
     }
 
-    fn start(&self) {
-        let flag = self.worker.monitor_flag.compare_exchange(
-            false,
-            true,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        );
-        if flag.is_err() {
-            return;
+    pub fn get_prev_arena_size(&self) -> usize {
+        self.prev_arena_size.load(Ordering::SeqCst)
+    }
+
+    pub fn start(self: Arc<Self>) {
+        if self.flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+            return
         }
 
-        let worker = self.worker.clone();
-
-        thread::spawn(move || worker.monitor());
+        std::thread::spawn(move || self.monitor());
     }
-}
 
-impl MonitorWorker {
     fn monitor(&self) {
         loop {
             self.sleep();
 
-            if !self.monitor_flag.load(Ordering::Relaxed) {
-                break;
-            }
+            if self.should_stop_monitoring() { break }
 
-            let mut metrics = self.metrics.lock().unwrap();
-            metrics.debt *= DEBT_INTEREST_RATE;
+            if self.minor_trigger() {
+                self.collector.minor_collect();
 
-            let new_arena_size = self.collector.arena_size();
-            if metrics.prev_arena_size < new_arena_size {
-                let new_debt = self.collector.arena_size() - metrics.prev_arena_size;
+                if self.major_trigger() {
+                    self.collector.major_collect();
 
-                metrics.debt += new_debt as f64;
-            }
+                    self.update_old_max();
+                }
 
-            metrics.prev_arena_size = new_arena_size;
-
-            if metrics.debt >= DEBT_CEILING {
-                self.collector.major_collect();
-                metrics.debt = 0.0;
+                self.prev_arena_size.store(self.collector.get_arena_size(), Ordering::SeqCst);
             }
         }
     }
 
-    fn sleep(&self) {
-        let millis = time::Duration::from_millis(500);
+    fn major_trigger(&self) -> bool {
+        let old_objects = self.collector.get_old_objects_count();
 
-        thread::sleep(millis);
+        old_objects > self.max_old_objects.load(Ordering::SeqCst)
+    }
+
+    fn minor_trigger(&self) -> bool {
+        let arena_size = self.collector.get_arena_size();
+        let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+
+        arena_size as f64 >= (prev_arena_size as f64 * ARENA_SIZE_RATIO_TRIGGER)
+    }
+
+    fn update_old_max(&self) {
+        let old_objects = self.collector.get_old_objects_count();
+
+        self.max_old_objects.store(
+            (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
+            Ordering::SeqCst
+        );
+    }
+
+    fn should_stop_monitoring(&self) -> bool {
+        !self.flag.load(Ordering::SeqCst)
+    }
+
+    fn sleep(&self) {
+        let ten_millis = time::Duration::from_millis(10);
+
+        thread::sleep(ten_millis);
     }
 }

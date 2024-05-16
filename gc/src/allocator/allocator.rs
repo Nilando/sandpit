@@ -9,9 +9,12 @@ use std::alloc::Layout;
 use std::mem::{align_of, size_of};
 use std::ptr::write;
 use std::ptr::NonNull;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 pub struct Allocator {
     head: AllocHead,
+    current_mark: Arc<AtomicU8>,
 }
 
 impl Allocator {
@@ -23,6 +26,10 @@ impl Allocator {
 
         unsafe { ptr.sub(header_size + padding) as *const Header }
     }
+
+    fn get_current_mark(&self) -> Mark {
+        Mark::from(self.current_mark.load(Ordering::SeqCst))
+    }
 }
 
 impl Allocate for Allocator {
@@ -30,8 +37,11 @@ impl Allocate for Allocator {
     type Error = AllocError;
 
     fn new(arena: &Self::Arena) -> Self {
+        let current_mark = arena.get_current_mark_ref();
+
         Self {
-            head: AllocHead::new(arena.get_block_store(), arena.current_mark()),
+            head: AllocHead::new(arena.get_block_store()),
+            current_mark
         }
     }
 
@@ -62,9 +72,7 @@ impl Allocate for Allocator {
         Header::set_mark(Self::get_header(ptr), mark);
     }
 
-    fn check_if_old<T>(&self, ptr: NonNull<T>) -> bool {
-        let mark = Header::get_mark(Self::get_header(ptr));
-
-        mark == self.head.get_mark()
+    fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
+        Header::get_mark(Self::get_header(ptr)) == self.get_current_mark()
     }
 }

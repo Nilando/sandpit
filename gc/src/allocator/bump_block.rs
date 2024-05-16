@@ -27,10 +27,11 @@ impl BumpBlock {
     }
 
     pub fn reset_hole(&mut self, mark: Mark) {
+        self.meta.free_unmarked(mark);
+
         if let Some((cursor, limit)) = self.meta.find_next_available_hole(
             constants::BLOCK_CAPACITY,
             constants::SMALL_OBJECT_MIN,
-            mark,
         ) {
             self.cursor = unsafe { self.block.as_ptr().add(cursor) };
             self.limit = unsafe { self.block.as_ptr().add(limit) };
@@ -40,7 +41,7 @@ impl BumpBlock {
         }
     }
 
-    pub fn inner_alloc(&mut self, layout: Layout, mark: Mark) -> Option<*const u8> {
+    pub fn inner_alloc(&mut self, layout: Layout) -> Option<*const u8> {
         loop {
             let ptr = self.cursor as usize;
             let next_ptr = ptr.checked_sub(layout.size())? & !(layout.align() - 1);
@@ -55,7 +56,7 @@ impl BumpBlock {
 
             if let Some((cursor, limit)) =
                 self.meta
-                    .find_next_available_hole(block_relative_limit, layout.size(), mark)
+                    .find_next_available_hole(block_relative_limit, layout.size())
             {
                 self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                 self.limit = unsafe { self.block.as_ptr().add(limit) };
@@ -84,7 +85,7 @@ mod tests {
         let layout = Layout::from_size_align(16, 8).unwrap();
 
         loop {
-            if let Some(ptr) = b.inner_alloc(layout, Mark::Red) {
+            if let Some(ptr) = b.inner_alloc(layout) {
                 let u32ptr = ptr as *mut u32;
 
                 assert!(!v.contains(&u32ptr));

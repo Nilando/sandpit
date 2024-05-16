@@ -3,7 +3,7 @@ use super::trace::Trace;
 use super::tracer::TraceWorker;
 use std::ptr::NonNull;
 
-pub const TRACE_PACKET_SIZE: usize = 128;
+pub const TRACE_PACKET_SIZE: usize = 64;
 
 pub struct TraceJob<M: Marker> {
     ptr: NonNull<()>,
@@ -60,6 +60,10 @@ impl<M: Marker> TracePacket<M> {
     pub fn push<T: Trace>(&mut self, ptr: NonNull<T>) {
         self.jobs[self.len] = TraceJob::new(ptr);
         self.len += 1;
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 
     pub fn is_full(&self) -> bool {

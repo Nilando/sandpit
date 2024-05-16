@@ -1,10 +1,9 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_metrics::TraceMetrics;
 use super::trace_packet::TracePacket;
 use super::tracer::TraceWorker;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
@@ -14,8 +13,6 @@ pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     unscanned: Mutex<Vec<TracePacket<M>>>, // TODO: store in GcArray instead of vec
-    metrics: Mutex<TraceMetrics>,
-    // optional start time
 }
 
 impl<M: Marker> TracerController<M> {
@@ -24,7 +21,6 @@ impl<M: Marker> TracerController<M> {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             unscanned: Mutex::new(vec![]),
-            metrics: Mutex::new(TraceMetrics::new()),
         }
     }
 
@@ -44,17 +40,12 @@ impl<M: Marker> TracerController<M> {
         self.unscanned.lock().unwrap().pop()
     }
 
-    pub fn metrics(&self) -> TraceMetrics {
-        *self.metrics.lock().unwrap()
-    }
-
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: M) {
+    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         // Perform initial trace.
-        self.clone().spawn_tracers(Some(root), &marker);
+        self.clone().spawn_tracers(Some(root), marker.clone());
 
         // We are about to begin the final trace, first, we signal to the mutators
         // to yield.
-        //
         // The yield flag may have already have bin raised if the initial
         // trace had been running for a long time, or if space is running low.
         self.yield_flag.store(true, Ordering::SeqCst);
@@ -66,13 +57,13 @@ impl<M: Marker> TracerController<M> {
 
         // Now that all mutators are stopped we do a final trace.
         // This final trace ensures we trace any remaining objects that were
-        self.clone().spawn_tracers(None as Option<&T>, &marker);
-
-        // tracing
+        // added before the mutators actually stopped.
+        self.clone().spawn_tracers(None as Option<&T>, marker.clone());
         self.yield_flag.store(false, Ordering::SeqCst);
     }
 
-    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: &M) {
+    // returns number of objects marked
+    pub fn spawn_tracers<T: Trace>(self: Arc<Self>, root: Option<&T>, marker: Arc<M>) {
         std::thread::scope(|scope| {
             for i in 0..NUM_TRACER_THREADS {
                 let mut tracer = TraceWorker::new(self.clone(), marker.clone());
@@ -81,9 +72,7 @@ impl<M: Marker> TracerController<M> {
                     tracer.trace_obj(root.unwrap())
                 }
 
-                scope.spawn(move || {
-                    tracer.trace_loop();
-                });
+                scope.spawn(move || tracer.trace_loop());
             }
         });
     }

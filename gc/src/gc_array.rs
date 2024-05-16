@@ -51,7 +51,7 @@ impl<T: Trace> GcArrayMeta<T> {
 
     pub fn set<M: Mutator>(this: GcPtr<Self>, mutator: &M, idx: usize, item: GcPtr<T>) {
         this.internal_set(idx, item);
-        this.trigger_write_barrier(mutator);
+        mutator.rescan(this);
     }
 
     pub fn internal_set(&self, idx: usize, item: GcPtr<T>) {
@@ -103,7 +103,7 @@ impl<T: Trace> GcArrayMeta<T> {
             (*ptr).unsafe_set(obj);
         }
 
-        this.trigger_write_barrier(mutator);
+        mutator.rescan(this);
     }
 
     pub fn pop(&self) -> Option<GcPtr<T>> {

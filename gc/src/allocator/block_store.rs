@@ -121,8 +121,10 @@ impl BlockStore {
         *rest = new_rest;
         *recycle = new_recycle;
 
-        // TODO: ADD 10 as a CONFIG
-        while free.len() >= 10 {
+        // TODO: ADD 10 as a CONFIG FREE_RATE
+        for i in 0..10 {
+            if free.len() == 0 { break }
+
             self.block_count.fetch_sub(1, Ordering::Relaxed);
             free.pop();
         }

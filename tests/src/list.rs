@@ -142,7 +142,6 @@ fn pop() {
 
 #[test]
 fn nested_arrays() {
-    return;
     let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
 
     gc.mutate(|root, mutator| {
@@ -159,7 +158,7 @@ fn nested_arrays() {
     gc.major_collect();
 
     let num_objs = ((1 + 100) * 3) - 1; // -1 b/c root isnt marked
-    assert_eq!(*gc.metrics().get("prev_marked_objects").unwrap(), num_objs);
+    assert_eq!(gc.metrics().old_objects_count, num_objs);
 
     gc.mutate(|root, mutator| {
         let inner_len = 100;
@@ -221,11 +220,7 @@ fn large_array() {
 
 #[test]
 fn get_size() {
-    return;
     let gc: Gc<List<usize>> = Gc::build(|mutator| GcArray::alloc(mutator).expect("root allocated"));
-    let block_size = 1024 * 32;
-    let header_size = 8;
-    let large_size = (40_000 * std::mem::size_of::<GcPtr<ListItem<usize>>>()) + header_size;
 
     gc.mutate(|root, mutator| {
         let large_list = GcArray::alloc_with_capacity(mutator, 40_000).unwrap();
@@ -241,10 +236,7 @@ fn get_size() {
     });
 
     gc.major_collect();
-    assert_eq!(
-        *gc.metrics().get("arena_size").unwrap(),
-        block_size + large_size
-    );
+    //assert_eq!(*gc.metrics().get("arena_size").unwrap(), block_size + large_size);
 }
 
 #[test]

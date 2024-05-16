@@ -11,7 +11,7 @@ pub trait Tracer {
 
 pub struct TraceWorker<M: Marker> {
     controller: Arc<TracerController<M>>,
-    marker: M,
+    marker: Arc<M>,
     switch: bool,
     p1: TracePacket<M>,
     p2: TracePacket<M>,
@@ -22,8 +22,12 @@ unsafe impl<M: Marker> Sync for TraceWorker<M> {}
 
 impl<M: Marker> Tracer for TraceWorker<M> {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !self.marker.needs_trace(ptr) {
+        if !self.marker.set_mark(ptr) {
             return;
+        }
+
+        if !T::needs_trace() {
+            return
         }
 
         if self.next_packet().is_full() {
@@ -35,7 +39,7 @@ impl<M: Marker> Tracer for TraceWorker<M> {
 }
 
 impl<M: Marker> TraceWorker<M> {
-    pub fn new(controller: Arc<TracerController<M>>, marker: M) -> Self {
+    pub fn new(controller: Arc<TracerController<M>>, marker: Arc<M>) -> Self {
         Self {
             controller,
             marker,
@@ -45,7 +49,6 @@ impl<M: Marker> TraceWorker<M> {
         }
     }
 
-
     pub fn trace_obj<T: Trace>(&mut self, obj: &T) {
         obj.trace(self);
     }
@@ -53,7 +56,10 @@ impl<M: Marker> TraceWorker<M> {
     pub fn trace_loop(&mut self) {
         loop {
             if self.current_packet().is_empty() {
-                self.get_new_packet();
+                self.switch = !self.switch;
+                if self.current_packet().is_empty() {
+                    self.get_new_packet();
+                } 
 
                 if self.current_packet().is_empty() {
                     break;

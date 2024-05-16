@@ -1,4 +1,4 @@
-use crate::{Gc, GcCell, GcPtr, Mutator};
+use crate::{Gc, collections::GcArray, GcCell, GcPtr, Mutator};
 use std::alloc::Layout;
 
 #[test]
@@ -31,7 +31,7 @@ fn gc_cell_write_barrier() {
         let val: usize = ***root;
         assert_eq!(val, 69);
 
-        root.write_barrier(mutator, new_val, |root_ref| root_ref);
+        mutator.write_barrier(root.clone(), new_val, |root_ref| root_ref);
 
         let val: usize = ***root;
         assert_eq!(val, 420);
@@ -65,28 +65,22 @@ fn deref_null_prt() {
 fn alloc_into_free_blocks() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    gc.mutate(|_, m| {
-        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-        for _ in 0..10_000 {
-            m.alloc(420).unwrap();
-            m.alloc_layout(medium_layout).unwrap();
-        }
-    });
+    fn alloc_medium_and_small(gc: &Gc<GcPtr<usize>>) {
+        gc.mutate(|_, m| {
+            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
+            for _ in 0..10_000 {
+                m.alloc(420).unwrap();
+                m.alloc_layout(medium_layout).unwrap();
+            }
+        });
+    }
 
+    alloc_medium_and_small(&gc); // this should leave us with a bunch of free blocks to alloc into
     gc.major_collect();
+    alloc_medium_and_small(&gc);
+    gc.major_collect(); // now only the root should be left
 
-    gc.mutate(|_, m| {
-        let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
-        for _ in 0..10_000 {
-            m.alloc(420).unwrap();
-            m.alloc_layout(medium_layout).unwrap();
-        }
-    });
-    gc.major_collect();
-
-    gc.mutate(|root, _| {
-        assert!(**root == 69);
-    });
+    gc.mutate(|root, _| assert!(**root == 69));
 }
 
 #[test]
@@ -111,11 +105,6 @@ fn start_monitor_multiple_times() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
     gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
-    gc.start_monitor();
 
     gc.mutate(|_, m| loop {
         m.alloc(420).unwrap();
@@ -124,4 +113,78 @@ fn start_monitor_multiple_times() {
             break;
         }
     });
+
+    gc.major_collect();
+    assert_eq!(gc.metrics().old_objects_count, 1);
+}
+
+#[test]
+fn counts_collections() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    for _ in 0..100 {
+        gc.major_collect();
+        gc.minor_collect();
+    }
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.major_collections, 100);
+    assert_eq!(metrics.minor_collections, 100);
+    assert_eq!(metrics.old_objects_count, 1);
+}
+
+#[test]
+fn empty_gc_metrics() {
+    let gc = Gc::build(|_| ());
+
+    gc.major_collect();
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.major_collections, 1);
+    assert_eq!(metrics.minor_collections, 0);
+    assert_eq!(metrics.old_objects_count, 0);
+    assert_eq!(metrics.max_old_objects,   0);
+    assert_eq!(metrics.arena_size,        0);
+    assert_eq!(metrics.prev_arena_size,   0);
+}
+
+#[test]
+fn nested_gc_ptr_root() {
+    let gc = Gc::build(|mutator| {
+        let p1 = mutator.alloc(69).unwrap();
+        let p2 = mutator.alloc(p1).unwrap();
+        let p3 = mutator.alloc(p2).unwrap();
+        let p4 = mutator.alloc(p3).unwrap();
+        let p5 = mutator.alloc(p4).unwrap();
+        p5
+    });
+
+    gc.major_collect();
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.old_objects_count, 5);
+
+    gc.mutate(|root, _| assert_eq!(******root, 69));
+}
+
+#[test]
+fn push_array_until_yield() {
+    let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
+
+    gc.start_monitor();
+
+    gc.mutate(|root, m| loop {
+        let item = m.alloc(4096).unwrap();
+        root.push(m, item);
+
+        if m.yield_requested() {
+            break;
+        }
+    });
+
+    let metrics = gc.metrics();
+    assert_eq!(metrics.minor_collections, 1);
 }

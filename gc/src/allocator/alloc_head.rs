@@ -1,17 +1,15 @@
 use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
-use super::header::Mark;
 use super::size_class::SizeClass;
 use std::alloc::Layout;
 use std::cell::Cell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
     overflow: Cell<Option<BumpBlock>>,
     block_store: Arc<BlockStore>,
-    mark: Mark,
 }
 
 impl Drop for AllocHead {
@@ -27,17 +25,12 @@ impl Drop for AllocHead {
 }
 
 impl AllocHead {
-    pub fn new(block_store: Arc<BlockStore>, mark: Mark) -> Self {
+    pub fn new(block_store: Arc<BlockStore>) -> Self {
         Self {
             head: Cell::new(None),
             overflow: Cell::new(None),
             block_store,
-            mark,
         }
-    }
-
-    pub fn get_mark(&self) -> Mark {
-        self.mark
     }
 
     pub fn alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
@@ -56,9 +49,14 @@ impl AllocHead {
     fn small_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
         // this is okay be we already tried to alloc in head and didn't have space
         // and any block returned by get new head should have space for a small object
-        self.get_new_head()?;
+        loop {
+            self.get_new_head()?;
 
-        Ok(self.head_alloc(layout).unwrap())
+            match self.head_alloc(layout) {
+                Some(ptr) => return Ok(ptr),
+                None => {}
+            };
+        }
     }
 
     fn medium_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
@@ -102,7 +100,7 @@ impl AllocHead {
     fn head_alloc(&self, layout: Layout) -> Option<*const u8> {
         match self.head.take() {
             Some(mut head) => {
-                let result = head.inner_alloc(layout, self.mark);
+                let result = head.inner_alloc(layout);
                 self.head.set(Some(head));
                 result
             }
@@ -113,7 +111,7 @@ impl AllocHead {
     fn overflow_alloc(&self, layout: Layout) -> Option<*const u8> {
         match self.overflow.take() {
             Some(mut overflow) => {
-                let result = overflow.inner_alloc(layout, self.mark);
+                let result = overflow.inner_alloc(layout);
                 self.overflow.set(Some(overflow));
                 result
             }
@@ -124,13 +122,14 @@ impl AllocHead {
 
 #[cfg(test)]
 mod tests {
+    use std::ptr::write;
     use super::super::constants;
     use super::*;
 
     #[test]
     fn test_recycle_alloc() {
         let store = Arc::new(BlockStore::new());
-        let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let blocks = AllocHead::new(store.clone());
         let medium_layout =
             Layout::from_size_align(constants::BLOCK_CAPACITY - constants::LINE_SIZE, 8).unwrap();
         let small_layout = Layout::from_size_align(constants::LINE_SIZE, 8).unwrap();
@@ -164,7 +163,7 @@ mod tests {
     #[test]
     fn test_alloc_many_blocks() {
         let store = Arc::new(BlockStore::new());
-        let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let blocks = AllocHead::new(store.clone());
         let medium_layout = Layout::from_size_align(constants::BLOCK_CAPACITY, 8).unwrap();
 
         for i in 1..100 {
@@ -176,7 +175,7 @@ mod tests {
     #[test]
     fn test_alloc_into_overflow() {
         let store = Arc::new(BlockStore::new());
-        let blocks = AllocHead::new(store.clone(), Mark::Red);
+        let blocks = AllocHead::new(store.clone());
         let medium_layout = Layout::from_size_align(constants::BLOCK_CAPACITY, 8).unwrap();
         let medium_layout_2 = Layout::from_size_align(constants::BLOCK_CAPACITY / 2, 8).unwrap();
 
@@ -188,5 +187,33 @@ mod tests {
         blocks.alloc(medium_layout_2).unwrap();
         blocks.alloc(medium_layout_2).unwrap();
         assert_eq!(store.block_count(), 3);
+    }
+
+    #[test]
+    fn medium_and_small_allocs() {
+        let store = Arc::new(BlockStore::new());
+        let blocks = AllocHead::new(store.clone());
+        let medium_layout = Layout::new::<[u8; constants::LINE_SIZE * 2]>();
+        let small_layout = Layout::from_size_align(constants::LINE_SIZE, 8).unwrap();
+        let mut small_ptrs = Vec::<*const u8>::new();
+        let mut med_ptrs = Vec::<*const [u8; constants::LINE_SIZE * 2]>::new();
+        let medium_data = [255; constants::LINE_SIZE * 2];
+
+        for i in 0..1000 {
+            let ptr = blocks.alloc(small_layout).unwrap();
+            unsafe { write(ptr as *mut u8, 0); }
+            small_ptrs.push(ptr);
+            let med_ptr = blocks.alloc(medium_layout).unwrap();
+            unsafe { write(med_ptr as *mut [u8; constants::LINE_SIZE * 2], medium_data); }
+            med_ptrs.push(med_ptr as *mut [u8; constants::LINE_SIZE * 2]);
+        }
+
+        for ptr in small_ptrs.iter() {
+            unsafe { assert!(**ptr == 0) }
+        }
+
+        for ptr in med_ptrs.iter() {
+            unsafe { assert!(**ptr == medium_data) }
+        }
     }
 }

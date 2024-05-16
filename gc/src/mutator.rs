@@ -4,44 +4,53 @@ use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 
 use std::alloc::Layout;
-use std::cell::UnsafeCell;
 use std::ptr::write;
-use std::ptr::NonNull;
+use std::sync::RwLockReadGuard;
+use std::sync::Mutex;
+
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError>;
-    fn write_barrier<T: Trace>(&self, obj: NonNull<T>);
+    fn write_barrier<A: Trace, B: Trace>(
+        &self,
+        update: GcPtr<A>,
+        new: GcPtr<B>,
+        callback: fn(&A) -> &GcPtr<B>,
+    );
+    fn rescan<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
     tracer_controller: &'scope TracerController<TraceMarker<A>>,
-    trace_packet: UnsafeCell<TracePacket<TraceMarker<A>>>,
+    trace_packet: Mutex<TracePacket<TraceMarker<A>>>,
+    _lock: RwLockReadGuard<'scope, ()>,
 }
 
 impl<'scope, A: Allocate> MutatorScope<'scope, A> {
     pub fn new(
         arena: &A::Arena,
         tracer_controller: &'scope TracerController<TraceMarker<A>>,
+        _lock: RwLockReadGuard<'scope, ()>,
     ) -> Self {
         let allocator = A::new(arena);
 
         Self {
             allocator,
             tracer_controller,
-            trace_packet: UnsafeCell::new(TracePacket::new()),
+            // TODO: this could probably be something other than a mutex
+            trace_packet: Mutex::new(TracePacket::new()),
+            _lock
         }
     }
 }
 
 impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     fn drop(&mut self) {
-        unsafe {
-            let packet_ref = &mut *self.trace_packet.get();
-            self.tracer_controller.push_packet(packet_ref.clone());
-        }
+        let packet_ref = &mut *self.trace_packet.lock().unwrap();
+        self.tracer_controller.push_packet(packet_ref.clone());
     }
 }
 
@@ -84,23 +93,43 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
     }
 
-    fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
-        if !self.allocator.check_if_old(ptr) {
-            return;
-        }
-
-        let new_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
-        A::set_mark(ptr, new_mark);
-
+    fn write_barrier<X: Trace, Y: Trace>(
+        &self,
+        update_ptr: GcPtr<X>,
+        new_ptr: GcPtr<Y>,
+        callback: fn(&X) -> &GcPtr<Y>,
+    ) {
         unsafe {
-            let packet_ref = &mut *self.trace_packet.get();
+            let ptr = update_ptr.as_nonnull();
+            let old_ptr = callback(ptr.as_ref());
+            // TODO: this might work but new_ptr could be null!
+            // let need_rescan = !self.allocator.is_old(new_ptr.as_nonnull());
 
-            if packet_ref.is_full() {
-                self.tracer_controller.push_packet(packet_ref.clone());
-                packet_ref.drain();
-            }
+            old_ptr.unsafe_set(new_ptr);
 
-            packet_ref.push(ptr);
+            //if need_rescan {
+                self.rescan(update_ptr);
+            //}
         }
+    }
+
+    fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
+        let ptr = unsafe { gc_ptr.as_nonnull() };
+
+        if !self.allocator.is_old(ptr) {
+           return;
+        }
+
+        let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
+        A::set_mark(ptr, new);
+
+        let packet_ref = &mut *self.trace_packet.lock().unwrap();
+
+        if packet_ref.is_full() {
+            self.tracer_controller.push_packet(packet_ref.clone());
+            packet_ref.drain();
+        }
+
+        packet_ref.push(ptr);
     }
 }
