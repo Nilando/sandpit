@@ -63,27 +63,6 @@ impl<T: Trace> GcPtr<T> {
         unsafe { self.as_ptr().is_null() }
     }
 
-    pub fn trigger_write_barrier<M: Mutator>(&self, mutator: &M) {
-        unsafe { mutator.write_barrier(self.as_nonnull()) }
-    }
-
-    pub fn write_barrier<V: Trace, M: Mutator>(
-        &self,
-        mutator: &M,
-        new_ptr: GcPtr<V>,
-        callback: fn(&T) -> &GcPtr<V>,
-    ) {
-        unsafe {
-            let ptr = self.as_nonnull();
-            let old_ptr = callback(ptr.as_ref());
-
-            old_ptr.unsafe_set(new_ptr);
-
-            // TODO: if the new_ptr is already marked as old, we wouldn't need to trigger the barrier
-            mutator.write_barrier(ptr);
-        }
-    }
-
     pub unsafe fn unsafe_set(&self, new_ptr: GcPtr<T>) {
         self.ptr
             .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)

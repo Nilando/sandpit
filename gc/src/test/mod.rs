@@ -31,7 +31,7 @@ fn gc_cell_write_barrier() {
         let val: usize = ***root;
         assert_eq!(val, 69);
 
-        root.write_barrier(mutator, new_val, |root_ref| root_ref);
+        mutator.write_barrier(root.clone(), new_val, |root_ref| root_ref);
 
         let val: usize = ***root;
         assert_eq!(val, 420);
@@ -122,7 +122,7 @@ fn start_monitor_multiple_times() {
 fn counts_collections() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    for i in 0..100 {
+    for _ in 0..100 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -136,7 +136,7 @@ fn counts_collections() {
 
 #[test]
 fn empty_gc_metrics() {
-    let gc = Gc::build(|mutator| ());
+    let gc = Gc::build(|_| ());
 
     gc.major_collect();
 

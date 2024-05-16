@@ -6,12 +6,17 @@ use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 use std::alloc::Layout;
 use std::cell::UnsafeCell;
 use std::ptr::write;
-use std::ptr::NonNull;
 
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError>;
-    fn write_barrier<T: Trace>(&self, obj: NonNull<T>);
+    fn write_barrier<A: Trace, B: Trace>(
+        &self,
+        update: GcPtr<A>,
+        new: GcPtr<B>,
+        callback: fn(&A) -> &GcPtr<B>,
+    );
+    fn rescan<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
 }
 
@@ -84,7 +89,26 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
     }
 
-    fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
+    fn write_barrier<X: Trace, Y: Trace>(
+        &self,
+        update_ptr: GcPtr<X>,
+        new_ptr: GcPtr<Y>,
+        callback: fn(&X) -> &GcPtr<Y>,
+    ) {
+        unsafe {
+            let ptr = update_ptr.as_nonnull();
+            let old_ptr = callback(ptr.as_ref());
+
+            old_ptr.unsafe_set(new_ptr);
+
+            // TODO: if the new_ptr is already marked as old, we wouldn't need to trigger the barrier
+            self.rescan(update_ptr);
+        }
+    }
+
+    fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
+        let ptr = unsafe { gc_ptr.as_nonnull() };
+
         if !self.allocator.is_old(ptr){
            return;
         }
