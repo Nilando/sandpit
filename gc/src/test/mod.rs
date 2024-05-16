@@ -114,3 +114,53 @@ fn start_monitor_multiple_times() {
         }
     });
 }
+
+#[test]
+fn counts_collections() {
+    let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
+
+    for i in 0..100 {
+        gc.major_collect();
+        gc.minor_collect();
+    }
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.major_collections, 100);
+    assert_eq!(metrics.minor_collections, 100);
+    assert_eq!(metrics.old_objects_count, 1);
+}
+
+#[test]
+fn empty_gc_metrics() {
+    let gc = Gc::build(|mutator| ());
+
+    gc.major_collect();
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.major_collections, 1);
+    assert_eq!(metrics.minor_collections, 0);
+    assert_eq!(metrics.old_objects_count, 0);
+    assert_eq!(metrics.max_old_objects,   0);
+    assert_eq!(metrics.arena_size,        0);
+    assert_eq!(metrics.prev_arena_size,   0);
+}
+
+#[test]
+fn nested_gc_ptr_root() {
+    let gc = Gc::build(|mutator| {
+        let p1 = mutator.alloc(69).unwrap();
+        let p2 = mutator.alloc(p1).unwrap();
+        let p3 = mutator.alloc(p2).unwrap();
+        let p4 = mutator.alloc(p3).unwrap();
+        let p5 = mutator.alloc(p4).unwrap();
+        p5
+    });
+
+    gc.major_collect();
+
+    let metrics = gc.metrics();
+
+    assert_eq!(metrics.old_objects_count, 5);
+}

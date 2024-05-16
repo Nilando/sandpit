@@ -28,7 +28,7 @@ impl<T: Collect + 'static> Monitor<T> {
             collector,
             flag: AtomicBool::new(false),
             prev_arena_size: AtomicUsize::new(prev_arena_size),
-            max_old_objects: AtomicUsize::new(100),
+            max_old_objects: AtomicUsize::new(0),
         }
     }
 

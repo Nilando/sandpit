@@ -86,7 +86,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
     fn write_barrier<T: Trace>(&self, ptr: NonNull<T>) {
         if A::get_mark(ptr).is_new() {
-           // return;
+           return;
         }
 
         let rescan_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new_rescan();
