@@ -56,9 +56,6 @@
 //!
 //! TODO:
 //! - Fixing Bugs and adding tests is the #1 priority!
-//! - Right now the monitor is essentially just a placeholder. Actuall experiementing
-//!   and work needs to be done in order to make an actual acceptable monitor.
-//! - the exposed Gc type does not need to be generic
 //! - add a way to pass in config to the gc when building
 //! - multi threading tests
 

@@ -62,6 +62,10 @@ impl<M: Marker> TracePacket<M> {
         self.len += 1;
     }
 
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
     pub fn is_full(&self) -> bool {
         self.len == TRACE_PACKET_SIZE
     }

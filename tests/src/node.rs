@@ -273,20 +273,42 @@ fn cyclic_graph() {
 }
 
 #[test]
-fn build_and_collect_balanced_tree() {
+fn build_and_collect_balanced_tree_sync() {
+    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+
+    gc.major_collect();
+    assert_eq!(gc.metrics().old_objects_count, 1);
+
+    gc.mutate(|root, m| {
+        Node::create_balanced_tree(root, m, 10_000);
+    });
+
+    gc.major_collect();
+    // at this major collect should set objects count to 0
+    // then do a full trace of the tree... marking all 
+    assert_eq!(gc.metrics().old_objects_count, 10_000);
+
+    gc.mutate(|root, _| {
+        let actual: Vec<usize> = Node::collect(root);
+        let expected: Vec<usize> = (0..10_000).collect();
+        assert_eq!(actual, expected)
+    });
+}
+
+#[test]
+fn build_and_collect_balanced_tree_concurrent() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
     gc.start_monitor();
 
     gc.mutate(|root, m| {
-        for i in 0..1000 {
+        for _ in 0..1000 {
             Node::create_balanced_tree(root, m, 10_000);
         }
     });
 
     gc.minor_collect();
     assert_eq!(gc.metrics().old_objects_count, 10_000);
-
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);

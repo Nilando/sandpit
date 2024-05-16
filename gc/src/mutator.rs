@@ -4,9 +4,9 @@ use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
 
 use std::alloc::Layout;
-use std::cell::UnsafeCell;
-use std::ptr::{write, NonNull};
+use std::ptr::write;
 use std::sync::RwLockReadGuard;
+use std::sync::Mutex;
 
 
 pub trait Mutator {
@@ -25,7 +25,7 @@ pub trait Mutator {
 pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
     tracer_controller: &'scope TracerController<TraceMarker<A>>,
-    trace_packet: UnsafeCell<TracePacket<TraceMarker<A>>>,
+    trace_packet: Mutex<TracePacket<TraceMarker<A>>>,
     _lock: RwLockReadGuard<'scope, ()>,
 }
 
@@ -40,7 +40,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
         Self {
             allocator,
             tracer_controller,
-            trace_packet: UnsafeCell::new(TracePacket::new()),
+            trace_packet: Mutex::new(TracePacket::new()),
             _lock
         }
     }
@@ -48,10 +48,8 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
 
 impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     fn drop(&mut self) {
-        unsafe {
-            let packet_ref = &mut *self.trace_packet.get();
-            self.tracer_controller.push_packet(packet_ref.clone());
-        }
+        let packet_ref = &mut *self.trace_packet.lock().unwrap();
+        self.tracer_controller.push_packet(packet_ref.clone());
     }
 }
 
@@ -117,22 +115,20 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
         let ptr = unsafe { gc_ptr.as_nonnull() };
 
-        if !self.allocator.is_old(ptr){
+        if !self.allocator.is_old(ptr) {
            return;
         }
 
-        let rescan_mark = <<A as Allocate>::Arena as GenerationalArena>::Mark::new_rescan();
-        A::set_mark(ptr, rescan_mark);
+        let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
+        A::set_mark(ptr, new);
 
-        unsafe {
-            let packet_ref = &mut *self.trace_packet.get();
+        let packet_ref = &mut *self.trace_packet.lock().unwrap();
 
-            if packet_ref.is_full() {
-                self.tracer_controller.push_packet(packet_ref.clone());
-                packet_ref.drain();
-            }
-
-            packet_ref.push(ptr);
+        if packet_ref.is_full() {
+            self.tracer_controller.push_packet(packet_ref.clone());
+            packet_ref.drain();
         }
+
+        packet_ref.push(ptr);
     }
 }

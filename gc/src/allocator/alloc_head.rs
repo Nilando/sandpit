@@ -54,7 +54,7 @@ impl AllocHead {
 
             match self.head_alloc(layout) {
                 Some(ptr) => return Ok(ptr),
-                None => {println!("HEAD DIDN'T HAVE SPACE")}
+                None => {}
             };
         }
     }

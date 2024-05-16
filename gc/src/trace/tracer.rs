@@ -56,13 +56,13 @@ impl<M: Marker> TraceWorker<M> {
     pub fn trace_loop(&mut self) {
         loop {
             if self.current_packet().is_empty() {
-                self.get_new_packet();
+                self.switch = !self.switch;
+                if self.current_packet().is_empty() {
+                    self.get_new_packet();
+                } 
 
                 if self.current_packet().is_empty() {
-                    self.switch = !self.switch;
-                    if self.current_packet().is_empty() {
-                        break;
-                    }
+                    break;
                 }
             }
 

@@ -20,9 +20,7 @@ impl<A: Allocate> Marker for TraceMarker<A> {
             return false
         }
 
-        if !mark.is_rescan() {
-            self.mark_count.fetch_add(1, Ordering::Relaxed);
-        }
+        self.mark_count.fetch_add(1, Ordering::Relaxed);
 
         A::set_mark(ptr, self.mark);
 

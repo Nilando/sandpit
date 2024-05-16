@@ -50,13 +50,9 @@ impl BlockMeta {
     }
 
     pub fn free_unmarked(&self, mark: Mark) {
-        if self.get_block() != mark {
-            self.set_block(Mark::New);
-        }
-
-        for i in 0..(constants::LINE_COUNT - 1) {
+        for i in 0..constants::LINE_COUNT {
             if self.get_line(i) != mark {
-                self.set_line(i, mark);
+                self.set_line(i, Mark::New);
             }
         }
     }

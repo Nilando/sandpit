@@ -7,7 +7,6 @@ use std::sync::atomic::{AtomicU8, Ordering};
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Mark {
     New,
-    Rescan,
 
     // these are the marks that rotate
     Red,
@@ -22,14 +21,6 @@ impl Marker for Mark {
 
     fn is_new(&self) -> bool {
         *self == Self::New
-    }
-
-    fn new_rescan() -> Self {
-        Self::Rescan
-    }
-
-    fn is_rescan(&self) -> bool {
-        *self == Self::Rescan
     }
 }
 
@@ -48,7 +39,6 @@ impl From<u8> for Mark {
     fn from(value: u8) -> Self {
         match value {
             x if x == Mark::New as u8    => Mark::New,
-            x if x == Mark::Rescan as u8 => Mark::Rescan,
 
             x if x == Mark::Red as u8    => Mark::Red,
             x if x == Mark::Green as u8  => Mark::Green,
