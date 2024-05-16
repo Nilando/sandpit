@@ -1,4 +1,4 @@
-use crate::{Gc, GcCell, GcPtr, Mutator};
+use crate::{Gc, collections::GcArray, GcCell, GcPtr, Mutator};
 use std::alloc::Layout;
 
 #[test]
@@ -166,4 +166,25 @@ fn nested_gc_ptr_root() {
     let metrics = gc.metrics();
 
     assert_eq!(metrics.old_objects_count, 5);
+
+    gc.mutate(|root, _| assert_eq!(******root, 69));
+}
+
+#[test]
+fn push_array_until_yield() {
+    let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
+
+    gc.start_monitor();
+
+    gc.mutate(|root, m| loop {
+        let item = m.alloc(4096).unwrap();
+        root.push(m, item);
+
+        if m.yield_requested() {
+            break;
+        }
+    });
+
+    let metrics = gc.metrics();
+    assert_eq!(metrics.minor_collections, 1);
 }
