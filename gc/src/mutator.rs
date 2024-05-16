@@ -98,11 +98,14 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         unsafe {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());
+            // TODO: this might work but new_ptr could be null!
+            // let need_rescan = !self.allocator.is_old(new_ptr.as_nonnull());
 
             old_ptr.unsafe_set(new_ptr);
 
-            // TODO: if the new_ptr is already marked as old, we wouldn't need to trigger the barrier
-            self.rescan(update_ptr);
+            //if need_rescan {
+                self.rescan(update_ptr);
+            //}
         }
     }
 
