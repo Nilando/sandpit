@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use super::mutator::Mutator;
 use super::trace::Trace;
 
 pub struct GcPtr<T: Trace> {

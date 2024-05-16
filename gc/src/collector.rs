@@ -1,11 +1,10 @@
-use super::allocator::{Allocate, Allocator, GenerationalArena};
-use super::mutator::{Mutator, MutatorScope};
+use super::allocator::{Allocate, GenerationalArena};
+use super::mutator::{MutatorScope};
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
 
-use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, Mutex, RwLockReadGuard,
+    Arc, Mutex,
 };
 
 pub trait Collect {

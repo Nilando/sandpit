@@ -2,7 +2,7 @@ use super::allocator::Allocate;
 use super::collector::Collect;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc, Mutex,
+    Arc,
 };
 
 use std::thread;

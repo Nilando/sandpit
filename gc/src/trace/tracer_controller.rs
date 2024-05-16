@@ -3,7 +3,7 @@ use super::trace::Trace;
 use super::trace_packet::TracePacket;
 use super::tracer::TraceWorker;
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
+    atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
 
