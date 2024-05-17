@@ -5,7 +5,7 @@ use super::size_class::SizeClass;
 use super::Allocator;
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
-use std::ptr::{NonNull, write};
+use std::ptr::{write, NonNull};
 
 #[test]
 fn hello_alloc() {

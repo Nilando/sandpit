@@ -1,6 +1,6 @@
-use crate::{Gc, GcCell, GcPtr, Mutator, collections::GcArray};
+use crate::{collections::GcArray, Gc, GcCell, GcPtr, Mutator};
 use std::alloc::Layout;
-use std::mem::{size_of, align_of};
+use std::mem::{align_of, size_of};
 
 #[test]
 fn create_rooted_arena() {

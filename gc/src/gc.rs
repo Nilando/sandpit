@@ -3,7 +3,7 @@ use super::metrics::GcMetrics;
 use super::monitor::Monitor;
 use super::mutator::MutatorScope;
 use super::trace::Trace;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use super::allocator::Allocator;
 

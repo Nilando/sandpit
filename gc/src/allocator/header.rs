@@ -1,9 +1,9 @@
 use super::allocate::Marker;
 use super::block_meta::BlockMeta;
 use super::size_class::SizeClass;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::mem::{align_of, size_of};
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]

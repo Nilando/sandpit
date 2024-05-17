@@ -75,7 +75,7 @@ impl Allocate for Allocator {
         let header = Self::get_header(ptr);
 
         debug_assert!(Header::debug(header, ptr));
-        
+
         Header::get_mark(header)
     }
 

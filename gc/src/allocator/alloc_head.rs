@@ -4,7 +4,7 @@ use super::errors::AllocError;
 use super::size_class::SizeClass;
 use std::alloc::Layout;
 use std::cell::Cell;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
