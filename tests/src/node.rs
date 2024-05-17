@@ -337,10 +337,10 @@ fn build_2_trees_at_the_same_time() {
             let root = Node::alloc(m, 0).unwrap();
 
             loop {
-                Node::create_balanced_tree(&root, m, 1_000);
+                Node::create_balanced_tree(&root, m, 100_000);
 
                 let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..1_000).collect();
+                let expected: Vec<usize> = (0..100_000).collect();
                 assert_eq!(actual, expected);
 
                 if m.yield_requested() {
@@ -356,10 +356,10 @@ fn build_2_trees_at_the_same_time() {
             let root = Node::alloc(m, 0).unwrap();
 
             loop {
-                Node::create_balanced_tree(&root, m, 1_000);
+                Node::create_balanced_tree(&root, m, 100_000);
 
                 let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..1_000).collect();
+                let expected: Vec<usize> = (0..100_000).collect();
                 assert_eq!(actual, expected);
 
                 if m.yield_requested() {
