@@ -109,10 +109,11 @@ impl Header {
                 // debug_assert_eq!(header_ref.get_size() as usize, alloc_size);
             }
 
-            //debug_assert_eq!(header_ref.get_size_class(), size_class);
+            // debug_assert_eq!(header_ref.get_size_class(), size_class);
             //
             // TODO: find a way to ensure that these debug asserts can work
-            // with gc arrays
+            // with gc arrays. The data GcPtr points to a GcPtr<T> but really
+            // it points to a [GcPtr<T>; n]...
 
             true
         }
