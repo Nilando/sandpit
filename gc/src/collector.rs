@@ -85,6 +85,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     fn new_mutator(&self) -> MutatorScope<A> {
+        let _collection_lock = self.lock.lock().unwrap();
         let lock = self.tracer.yield_lock();
 
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)

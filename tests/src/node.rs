@@ -323,17 +323,16 @@ fn build_and_collect_balanced_tree_concurrent() {
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..10_000).collect();
-        assert_eq!(actual, expected)
+        assert!(actual == expected)
     });
 }
 
 #[test]
-fn build_2_trees_at_the_same_time() {
-    let gc: Arc<Gc<usize>> = Gc::build(|_| 0).into();
+fn multi_threaded_tree_building() {
+    let gc: Gc<usize> = Gc::build(|_| 0).into();
 
-    let g1 = gc.clone();
-    let t1 = std::thread::spawn(move || {
-        g1.mutate(|_, m| {
+    fn tree_builder(gc: &Gc<usize>) {
+        gc.mutate(|_, m| {
             let root = Node::alloc(m, 0).unwrap();
 
             loop {
@@ -341,37 +340,21 @@ fn build_2_trees_at_the_same_time() {
 
                 let actual: Vec<usize> = Node::collect(&root);
                 let expected: Vec<usize> = (0..100_000).collect();
-                assert_eq!(actual, expected);
+                assert!(actual == expected);
 
                 if m.yield_requested() {
                     break;
                 }
             }
         });
-    });
-
-    let g2 = gc.clone();
-    let t2 = std::thread::spawn(move || {
-        g2.mutate(|_, m| {
-            let root = Node::alloc(m, 0).unwrap();
-
-            loop {
-                Node::create_balanced_tree(&root, m, 100_000);
-
-                let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..100_000).collect();
-                assert_eq!(actual, expected);
-
-                if m.yield_requested() {
-                    break;
-                }
-            }
-        });
-    });
+    }
 
     gc.start_monitor();
 
-    t1.join().unwrap();
-    t2.join().unwrap();
+    std::thread::scope(|scope| {
+        for i in 0..1000 {
+            scope.spawn(|| tree_builder(&gc));
+        }
+    });
 }
 
