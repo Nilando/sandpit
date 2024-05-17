@@ -72,3 +72,10 @@ unsafe impl<T: Trace> Trace for crate::gc_ptr::GcPtr<T> {
         }
     }
 }
+
+unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+    }
+}
