@@ -1,5 +1,6 @@
-use crate::{collections::GcArray, Gc, GcCell, GcPtr, Mutator};
+use crate::{Gc, GcCell, GcPtr, Mutator, collections::GcArray};
 use std::alloc::Layout;
+use std::mem::{size_of, align_of};
 
 #[test]
 fn create_rooted_arena() {
@@ -187,4 +188,43 @@ fn push_array_until_yield() {
 
     let metrics = gc.metrics();
     assert_eq!(metrics.minor_collections, 1);
+}
+
+#[test]
+fn gc_ptr_size_and_align() {
+    assert_eq!(size_of::<GcPtr<()>>(), size_of::<GcPtr<u128>>());
+    assert_eq!(align_of::<GcPtr<()>>(), align_of::<GcPtr<u128>>());
+    assert_eq!(size_of::<GcArray<u8>>(), size_of::<GcPtr<u128>>());
+    assert_eq!(align_of::<GcArray<u8>>(), align_of::<GcPtr<u128>>());
+}
+
+// GCARRAY TESTS BELOW
+
+#[test]
+fn gc_array_root() {
+    let gc = Gc::build(|mutator| GcArray::<u8>::alloc(mutator).unwrap());
+
+    gc.major_collect();
+
+    let metrics = gc.metrics();
+
+    // one mark for the meta, and one mark for the data
+    assert_eq!(metrics.old_objects_count, 2);
+}
+
+#[test]
+fn count_array_objects() {
+    let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
+
+    gc.major_collect();
+
+    gc.mutate(|root, m| {
+        for i in 0..100_000 {
+            root.push(m, m.alloc(i).unwrap());
+        }
+    });
+
+    gc.major_collect();
+
+    assert_eq!(gc.metrics().old_objects_count, 2 + 100_000);
 }

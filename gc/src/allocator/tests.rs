@@ -3,9 +3,10 @@ use super::arena::Arena;
 use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
+use super::block_meta::BlockMeta;
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
-use std::ptr::write;
+use std::ptr::{NonNull, write};
 
 #[test]
 fn hello_alloc() {
@@ -128,13 +129,13 @@ fn arena_get_size() {
     let arena = Arena::new();
     let alloc = Allocator::new(&arena);
 
-    let small = Layout::from_size_align(1, align_of::<u8>()).unwrap();
-    let medium = Layout::from_size_align(512, align_of::<u8>()).unwrap();
-    let large = Layout::from_size_align(80_000, align_of::<u8>()).unwrap();
+    let small = Layout::new::<u8>();
+    let medium = Layout::new::<[u8; 512]>();
+    let large = Layout::new::<[u8; 80_000]>();
 
-    let p1 = alloc.alloc(small).unwrap();
-    let p2 = alloc.alloc(medium).unwrap();
-    let p3 = alloc.alloc(large).unwrap();
+    let p1: NonNull<u8> = alloc.alloc(small).unwrap();
+    let p2: NonNull<[u8; 512]> = alloc.alloc(medium).unwrap().cast();
+    let p3: NonNull<[u8; 80_000]> = alloc.alloc(large).unwrap().cast();
     Allocator::set_mark(p1, Mark::Red);
     Allocator::set_mark(p2, Mark::Red);
     Allocator::set_mark(p3, Mark::Red);

@@ -80,6 +80,7 @@ impl Node {
         if !this.right.is_null() {
             Self::traverse(&this.right, vals)
         }
+
         vals.push(this.val.get());
         if !this.left.is_null() {
             Self::traverse(&this.left, vals)
@@ -276,14 +277,22 @@ fn cyclic_graph() {
 fn build_and_collect_balanced_tree_sync() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    gc.major_collect();
+    for i in 0..100 {
+        gc.major_collect();
+        gc.minor_collect();
+    }
+
     assert_eq!(gc.metrics().old_objects_count, 1);
 
     gc.mutate(|root, m| {
         Node::create_balanced_tree(root, m, 10_000);
     });
 
-    gc.major_collect();
+    for i in 0..100 {
+        gc.major_collect();
+        gc.minor_collect();
+    }
+
     // at this major collect should set objects count to 0
     // then do a full trace of the tree... marking all
     assert_eq!(gc.metrics().old_objects_count, 10_000);
