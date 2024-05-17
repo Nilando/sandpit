@@ -1,7 +1,9 @@
 pub const BLOCK_SIZE: usize = 1024 * 32;
 pub const LINE_SIZE: usize = 128;
 
-// How many total lines are in a block
+// How many total lines are in a block, but one of these lines is actually just
+// for line mark bits. This is pretty confusing..probably desrves a rename.
+// Like RAW_LINES, and LINE_COUNT to make clear there is a distinction.
 pub const LINE_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
 
 pub const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINE_COUNT;
