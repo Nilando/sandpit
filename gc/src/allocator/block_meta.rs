@@ -17,6 +17,8 @@ impl BlockMeta {
     }
 
     pub fn from_block(block_ptr: *const u8) -> Self {
+        debug_assert!((block_ptr as usize % constants::BLOCK_SIZE) == 0);
+
         Self {
             lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *const AtomicU8 },
         }
@@ -31,10 +33,11 @@ impl BlockMeta {
 
     pub fn mark(&self, header: &Header, mark: Mark) {
         let addr = header as *const Header as usize;
-
         let relative_ptr = addr % constants::BLOCK_SIZE;
-
         let line = relative_ptr / constants::LINE_SIZE;
+
+        debug_assert!(header.get_size_class() != SizeClass::Large);
+        debug_assert!(Self::from_header(header as *const Header).lines == self.lines);
 
         if header.get_size_class() == SizeClass::Small {
             self.set_line(line, mark);
@@ -61,16 +64,18 @@ impl BlockMeta {
         self.get_line(constants::LINE_COUNT - 1)
     }
 
-    fn get_line(&self, line: usize) -> Mark {
-        self.mark_at(line).load(Ordering::SeqCst).into()
-    }
-
-    fn mark_at(&self, line: usize) -> &AtomicU8 {
-        unsafe { &*self.lines.add(line) }
+    fn get_line(&self, index: usize) -> Mark {
+        self.mark_at(index).load(Ordering::SeqCst).into()
     }
 
     pub fn set_line(&self, index: usize, mark: Mark) {
         self.mark_at(index).store(mark as u8, Ordering::SeqCst)
+    }
+
+    fn mark_at(&self, line: usize) -> &AtomicU8 {
+        debug_assert!(line < constants::LINE_COUNT);
+
+        unsafe { &*self.lines.add(line) }
     }
 
     pub fn set_block(&self, mark: Mark) {
@@ -102,12 +107,14 @@ impl BlockMeta {
                 if index == 0 && count >= lines_required {
                     let limit = index * constants::LINE_SIZE;
                     let cursor = end * constants::LINE_SIZE;
+
                     return Some((cursor, limit));
                 }
             } else {
                 if count > lines_required {
                     let limit = (index + 2) * constants::LINE_SIZE;
                     let cursor = end * constants::LINE_SIZE;
+
                     return Some((cursor, limit));
                 }
 
@@ -124,6 +131,17 @@ impl BlockMeta {
 mod tests {
     use super::super::block::Block;
     use super::*;
+    use super::{
+        super::allocate::{Allocate, GenerationalArena},
+        super::arena::Arena,
+        super::constants::{BLOCK_CAPACITY, BLOCK_SIZE},
+        super::size_class::SizeClass,
+        super::Allocator,
+        super::block_meta::BlockMeta,
+    };
+    use std::alloc::Layout;
+    use std::mem::{align_of, size_of};
+    use std::ptr::{NonNull, write};
 
     #[test]
     fn test_mark_block() {
@@ -240,5 +258,19 @@ mod tests {
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
 
         assert_eq!(got, expect);
+    }
+
+    #[test]
+    fn mark_block() {
+        let arena = Arena::new();
+        let alloc = Allocator::new(&arena);
+        let medium = Layout::new::<[u8; 512]>();
+        let ptr: NonNull<[u8; 512]> = alloc.alloc(medium).unwrap().cast();
+        let header = Allocator::get_header(ptr);
+
+        Allocator::set_mark(ptr, Mark::Red);
+
+        let meta = BlockMeta::from_header(header);
+        assert_eq!(meta.get_block(), Mark::Red);
     }
 }
