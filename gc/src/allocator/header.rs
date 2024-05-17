@@ -2,6 +2,8 @@ use super::allocate::Marker;
 use super::block_meta::BlockMeta;
 use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::mem::{align_of, size_of};
+use std::ptr::NonNull;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -91,6 +93,25 @@ impl Header {
             let meta = BlockMeta::from_header(ptr);
 
             meta.mark(self_ref, mark);
+        }
+    }
+
+    pub fn debug<T>(header: *const Header, ptr: NonNull<T>) -> bool {
+        unsafe {
+            let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
+            let header_size = size_of::<Header>();
+            let padding = (align - (header_size % align)) % align;
+            let alloc_size = header_size + padding + size_of::<T>();
+            let size_class = SizeClass::get_for_size(alloc_size).unwrap();
+            let header_ref = &*header;
+
+            if size_class != SizeClass::Large {
+                debug_assert_eq!(header_ref.get_size() as usize, alloc_size);
+            }
+
+            debug_assert_eq!(header_ref.get_size_class(), size_class);
+
+            true
         }
     }
 }

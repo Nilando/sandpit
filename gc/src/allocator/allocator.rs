@@ -24,6 +24,9 @@ impl Allocator {
         let padding = (align - (header_size % align)) % align;
         let ptr: *mut u8 = object.as_ptr().cast::<u8>();
 
+        debug_assert!((ptr as usize % align) == 0);
+        debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
+
         unsafe { ptr.sub(header_size + padding) as *const Header }
     }
 
@@ -51,6 +54,10 @@ impl Allocate for Allocator {
         let padding = (align - (header_size % align)) % align;
         let alloc_size = header_size + padding + layout.size();
         let size_class = SizeClass::get_for_size(alloc_size)?;
+        // Alloc size could be greater than u16, causing overflow conversion from (as u16).
+        // This is okay though, b/c in that case the object will be SizeClass::Large
+        // where the header size is unused. Normally the header size is used,
+        // for marking block lines, but large objects are stored in bump blocks.
         let header = Header::new(size_class, alloc_size as u16);
 
         unsafe {
@@ -65,14 +72,26 @@ impl Allocate for Allocator {
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        Header::get_mark(Self::get_header(ptr))
+        let header = Self::get_header(ptr);
+
+        debug_assert!(Header::debug(header, ptr));
+        
+        Header::get_mark(header)
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        Header::set_mark(Self::get_header(ptr), mark);
+        let header = Self::get_header(ptr);
+
+        debug_assert!(Header::debug(header, ptr));
+
+        Header::set_mark(header, mark);
     }
 
     fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
-        Header::get_mark(Self::get_header(ptr)) == self.get_current_mark()
+        let header = Self::get_header(ptr);
+
+        debug_assert!(Header::debug(header, ptr));
+
+        Header::get_mark(header) == self.get_current_mark()
     }
 }
