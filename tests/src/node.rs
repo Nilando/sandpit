@@ -1,6 +1,7 @@
 use gc::gc_derive::Trace;
 use gc::*;
 use rand::Rng;
+use std::sync::Arc;
 
 unsafe impl Send for Node {}
 unsafe impl Sync for Node {}
@@ -325,3 +326,52 @@ fn build_and_collect_balanced_tree_concurrent() {
         assert_eq!(actual, expected)
     });
 }
+
+#[test]
+fn build_2_trees_at_the_same_time() {
+    let gc: Arc<Gc<usize>> = Gc::build(|_| 0).into();
+
+    let g1 = gc.clone();
+    let t1 = std::thread::spawn(move || {
+        g1.mutate(|_, m| {
+            let root = Node::alloc(m, 0).unwrap();
+
+            loop {
+                Node::create_balanced_tree(&root, m, 1_000);
+
+                let actual: Vec<usize> = Node::collect(&root);
+                let expected: Vec<usize> = (0..1_000).collect();
+                assert_eq!(actual, expected);
+
+                if m.yield_requested() {
+                    break;
+                }
+            }
+        });
+    });
+
+    let g2 = gc.clone();
+    let t2 = std::thread::spawn(move || {
+        g2.mutate(|_, m| {
+            let root = Node::alloc(m, 0).unwrap();
+
+            loop {
+                Node::create_balanced_tree(&root, m, 1_000);
+
+                let actual: Vec<usize> = Node::collect(&root);
+                let expected: Vec<usize> = (0..1_000).collect();
+                assert_eq!(actual, expected);
+
+                if m.yield_requested() {
+                    break;
+                }
+            }
+        });
+    });
+
+    gc.start_monitor();
+
+    t1.join().unwrap();
+    t2.join().unwrap();
+}
+
