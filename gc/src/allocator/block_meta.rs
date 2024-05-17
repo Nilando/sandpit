@@ -134,14 +134,12 @@ mod tests {
     use super::{
         super::allocate::{Allocate, GenerationalArena},
         super::arena::Arena,
-        super::constants::{BLOCK_CAPACITY, BLOCK_SIZE},
-        super::size_class::SizeClass,
         super::Allocator,
         super::block_meta::BlockMeta,
     };
     use std::alloc::Layout;
-    use std::mem::{align_of, size_of};
-    use std::ptr::{NonNull, write};
+    
+    use std::ptr::{NonNull};
 
     #[test]
     fn test_mark_block() {

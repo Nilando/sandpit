@@ -3,7 +3,6 @@ use super::arena::Arena;
 use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use super::size_class::SizeClass;
 use super::Allocator;
-use super::block_meta::BlockMeta;
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
 use std::ptr::{NonNull, write};
