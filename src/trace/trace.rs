@@ -1,6 +1,6 @@
 use super::tracer::Tracer;
-use std::ptr::NonNull;
 use std::cell::Cell;
+use std::ptr::NonNull;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not contain
 /// any GcPtr's.

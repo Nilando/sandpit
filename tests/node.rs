@@ -1,5 +1,4 @@
-use sandpit::{Trace, GcPtr, Gc, Mutator, TraceLeaf, GcError};
-use std::sync::Arc;
+use sandpit::{Gc, GcError, GcPtr, Mutator, Trace};
 use std::cell::Cell;
 
 unsafe impl Send for Node {}
@@ -351,4 +350,3 @@ fn multi_threaded_tree_building() {
         }
     });
 }
-

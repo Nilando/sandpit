@@ -1,5 +1,4 @@
-use sandpit::collections::*;
-use sandpit::{collections::GcArray, Trace, Gc, Mutator, GcPtr, GcError};
+use sandpit::{collections::GcArray, Gc, GcPtr, Mutator, Trace};
 
 type List<T> = GcArray<ListItem<T>>;
 

@@ -1,7 +1,7 @@
 use crate::{collections::GcArray, Gc, GcPtr, Mutator};
 use std::alloc::Layout;
-use std::mem::{align_of, size_of};
 use std::cell::Cell;
+use std::mem::{align_of, size_of};
 
 #[test]
 fn create_rooted_arena() {
