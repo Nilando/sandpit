@@ -1,5 +1,5 @@
 use super::alloc_head::AllocHead;
-use super::allocate::{Allocate, GenerationalArena};
+use super::allocate::Allocate;
 use super::arena::Arena;
 use super::errors::AllocError;
 use super::header::Header;
