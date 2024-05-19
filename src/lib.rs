@@ -81,8 +81,6 @@ pub mod collections {
 pub use error::GcError;
 pub use gc::Gc;
 
-#[doc(hidden)]
-pub use derive::Trace;
 
 pub use gc_ptr::GcPtr;
 pub use metrics::GcMetrics;
@@ -91,6 +89,9 @@ pub use trace::{
     Trace,
     TraceLeaf
 };
+
+#[doc(hidden)]
+pub use derive::Trace;
 
 #[doc(hidden)]
 pub use trace::Tracer;
