@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::allocator::Allocator;
 
+/// A garbage collected arena through objects can be allocated into.
 pub struct Gc<T: Trace> {
     collector: Arc<Collector<Allocator, T>>,
     monitor: Arc<Monitor<Collector<Allocator, T>>>,

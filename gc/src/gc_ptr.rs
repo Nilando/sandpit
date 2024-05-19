@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 use super::trace::Trace;
 
+/// A pointer to a object stored in a Gc arena.
 pub struct GcPtr<T: Trace> {
     ptr: AtomicPtr<T>,
     _mark: PhantomData<*const ()>,

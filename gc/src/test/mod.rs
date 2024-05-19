@@ -1,6 +1,7 @@
-use crate::{collections::GcArray, Gc, GcCell, GcPtr, Mutator};
+use crate::{collections::GcArray, Gc, GcPtr, Mutator};
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
+use std::cell::Cell;
 
 #[test]
 fn create_rooted_arena() {
@@ -12,8 +13,8 @@ fn create_rooted_arena() {
 }
 
 #[test]
-fn gc_cell_swap() {
-    let gc: Gc<GcCell<usize>> = Gc::build(|_| GcCell::new(69));
+fn cell_root() {
+    let gc: Gc<Cell<usize>> = Gc::build(|_| Cell::new(69));
 
     gc.mutate(|root, _| {
         root.set(420);

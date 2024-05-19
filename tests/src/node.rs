@@ -2,6 +2,7 @@ use gc::gc_derive::Trace;
 use gc::*;
 use rand::Rng;
 use std::sync::Arc;
+use std::cell::Cell;
 
 unsafe impl Send for Node {}
 unsafe impl Sync for Node {}
@@ -10,7 +11,7 @@ unsafe impl Sync for Node {}
 pub struct Node {
     left: GcPtr<Node>,
     right: GcPtr<Node>,
-    val: GcCell<usize>,
+    val: Cell<usize>,
 }
 
 impl Node {
@@ -22,7 +23,7 @@ impl Node {
         Self {
             left: GcPtr::null(),
             right: GcPtr::null(),
-            val: GcCell::new(val),
+            val: Cell::new(val),
         }
     }
 

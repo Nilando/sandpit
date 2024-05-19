@@ -8,9 +8,14 @@ use std::ptr::write;
 use std::sync::Mutex;
 use std::sync::RwLockReadGuard;
 
+/// An interface for the mutator type which allows for interaction with the
+/// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
+
+    // TODO: remove this method! or make it private somehow.
     fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError>;
+
     fn write_barrier<A: Trace, B: Trace>(
         &self,
         update: GcPtr<A>,
