@@ -91,7 +91,7 @@ pub use trace::{
 };
 
 #[doc(hidden)]
-pub use derive::Trace;
+pub use derive::*;
 
 #[doc(hidden)]
 pub use trace::Tracer;
