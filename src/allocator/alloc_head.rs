@@ -199,7 +199,7 @@ mod tests {
         let mut med_ptrs = Vec::<*const [u8; constants::LINE_SIZE * 2]>::new();
         let medium_data = [255; constants::LINE_SIZE * 2];
 
-        for i in 0..1000 {
+        for _ in 0..1000 {
             let ptr = blocks.alloc(small_layout).unwrap();
             unsafe {
                 write(ptr as *mut u8, 0);

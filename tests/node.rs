@@ -271,7 +271,7 @@ fn cyclic_graph() {
 fn build_and_collect_balanced_tree_sync() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    for i in 0..100 {
+    for _ in 0..100 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -282,7 +282,7 @@ fn build_and_collect_balanced_tree_sync() {
         Node::create_balanced_tree(root, m, 10_000);
     });
 
-    for i in 0..100 {
+    for _ in 0..100 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -345,7 +345,7 @@ fn multi_threaded_tree_building() {
     gc.start_monitor();
 
     std::thread::scope(|scope| {
-        for i in 0..1000 {
+        for _ in 0..1000 {
             scope.spawn(|| tree_builder(&gc));
         }
     });
