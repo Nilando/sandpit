@@ -366,47 +366,31 @@ fn multi_threaded_root_mutation() {
         }
     });
 
+    fn tree_helper<M: Mutator>(node: GcPtr<Node>, m: &M) {
+        loop {
+            Node::create_balanced_tree(&node, m, 100_000);
+
+            if m.yield_requested() {
+                break;
+            }
+        }
+    }
+
     std::thread::scope(|scope| {
         scope.spawn(|| {
-            gc.mutate(|root, m| {
-                let node = Node::insert(&root.right, m, 0);
-
-                loop {
-                    Node::create_balanced_tree(&node, m, 100_000);
-
-                    if m.yield_requested() {
-                        break;
-                    }
-                }
-            });
+            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 0), m));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| {
-                let node = Node::insert(&root.right, m, 10);
-
-                loop {
-                    Node::create_balanced_tree(&node, m, 100_000);
-
-                    if m.yield_requested() {
-                        break;
-                    }
-                }
-            });
+            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 10), m));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| {
-                let node = Node::insert(&root.right, m, 20);
+            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 20), m));
+        });
 
-                loop {
-                    Node::create_balanced_tree(&node, m, 100_000);
-
-                    if m.yield_requested() {
-                        break;
-                    }
-                }
-            });
+        scope.spawn(|| {
+            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 30), m));
         });
     });
 }
