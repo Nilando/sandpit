@@ -6,6 +6,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock, RwLockReadGuard,
 };
+use crossbeam_channel::{unbounded, Sender, Receiver};
 
 const NUM_TRACER_THREADS: usize = 1;
 

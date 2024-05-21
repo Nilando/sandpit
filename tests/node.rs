@@ -45,20 +45,22 @@ impl Node {
         mutator.write_barrier(this.clone(), new_right, |this: &Node| &this.right);
     }
 
-    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) {
+    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) -> GcPtr<Node> {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
                 let node_ptr = Node::alloc(mutator, new_val).unwrap();
-                Node::set_left(this, mutator, node_ptr);
+                Node::set_left(this, mutator, node_ptr.clone());
+                node_ptr
             } else {
-                Node::insert(&this.left, mutator, new_val);
+                Node::insert(&this.left, mutator, new_val)
             }
         } else if this.right.is_null() {
             let node_ptr = Node::alloc(mutator, new_val).unwrap();
-            Node::set_right(this, mutator, node_ptr);
+            Node::set_right(this, mutator, node_ptr.clone());
+            node_ptr
         } else {
-            Node::insert(&this.right, mutator, new_val);
+            Node::insert(&this.right, mutator, new_val)
         }
     }
 
@@ -322,9 +324,9 @@ fn build_and_collect_balanced_tree_concurrent() {
 
 #[test]
 fn multi_threaded_tree_building() {
-    let gc: Gc<usize> = Gc::build(|_| 0).into();
+    let gc: Gc<()> = Gc::build(|_| ());
 
-    fn tree_builder(gc: &Gc<usize>) {
+    fn tree_builder(gc: &Gc<()>) {
         gc.mutate(|_, m| {
             let root = Node::alloc(m, 0).unwrap();
 
@@ -345,8 +347,66 @@ fn multi_threaded_tree_building() {
     gc.start_monitor();
 
     std::thread::scope(|scope| {
-        for _ in 0..1000 {
+        for _ in 0..8 {
             scope.spawn(|| tree_builder(&gc));
         }
+    });
+}
+
+#[test]
+fn multi_threaded_root_mutation() {
+    let gc: Gc<Node> = Gc::build(|m| {
+        let n1 = Node::alloc(m, 25).unwrap();
+        let n2 = Node::alloc(m, 5).unwrap();
+
+        Node {
+            left: n1,
+            right: n2,
+            val: Cell::new(15)
+        }
+    });
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            gc.mutate(|root, m| {
+                let node = Node::insert(&root.right, m, 0);
+
+                loop {
+                    Node::create_balanced_tree(&node, m, 100_000);
+
+                    if m.yield_requested() {
+                        break;
+                    }
+                }
+            });
+        });
+
+        scope.spawn(|| {
+            gc.mutate(|root, m| {
+                let node = Node::insert(&root.right, m, 10);
+
+                loop {
+                    Node::create_balanced_tree(&node, m, 100_000);
+
+                    if m.yield_requested() {
+                        break;
+                    }
+                }
+            });
+        });
+
+        scope.spawn(|| {
+            gc.mutate(|root, m| {
+                let node = Node::insert(&root.right, m, 20);
+
+                loop {
+                    Node::create_balanced_tree(&node, m, 100_000);
+
+                    if m.yield_requested() {
+                        break;
+                    }
+                }
+            });
+        });
     });
 }
