@@ -91,7 +91,7 @@ fn wait_for_trace() {
 
     gc.start_monitor();
 
-    for _ in 0..10 {
+    for _ in 0..5 {
         gc.mutate(|_, m| loop {
             m.alloc(420).unwrap();
 

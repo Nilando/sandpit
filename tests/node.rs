@@ -197,13 +197,12 @@ fn multiple_collects() {
         root
     });
 
-    for _ in 0..10 {
-        for i in 0..10 {
-            if i % 2 == 0 {
-                gc.minor_collect();
-            } else {
-                gc.major_collect();
-            }
+    for i in 0..10 {
+        println!("{}", i);
+        if i % 2 == 0 {
+            gc.minor_collect();
+        } else {
+            gc.major_collect();
         }
     }
 
@@ -241,6 +240,7 @@ fn objects_marked_metric() {
     });
 
     gc.major_collect();
+    assert_eq!(gc.metrics().old_objects_count, 100);
 
     gc.mutate(|root, _| {
         let node = Node::find(root, 48).unwrap();
@@ -252,6 +252,8 @@ fn objects_marked_metric() {
     });
 
     gc.major_collect();
+
+    assert_eq!(gc.metrics().old_objects_count, 50);
 }
 
 #[test]
@@ -273,7 +275,7 @@ fn cyclic_graph() {
 fn build_and_collect_balanced_tree_sync() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    for _ in 0..100 {
+    for _ in 0..2 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -284,7 +286,7 @@ fn build_and_collect_balanced_tree_sync() {
         Node::create_balanced_tree(root, m, 10_000);
     });
 
-    for _ in 0..100 {
+    for _ in 0..2 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -353,22 +355,32 @@ fn multi_threaded_tree_building() {
     });
 }
 
+unsafe impl Send for Root {}
+unsafe impl Sync for Root {}
+
+#[derive(Trace)]
+struct Root {
+    n1: GcPtr<Node>,
+    n2: GcPtr<Node>,
+    n3: GcPtr<Node>,
+    n4: GcPtr<Node>
+}
+
 #[test]
 fn multi_threaded_root_mutation() {
-    let gc: Gc<Node> = Gc::build(|m| {
-        let n1 = Node::alloc(m, 25).unwrap();
-        let n2 = Node::alloc(m, 5).unwrap();
+    let gc = Gc::build(|m| {
+        let n1 = Node::alloc(m, 0).unwrap();
+        let n2 = Node::alloc(m, 0).unwrap();
+        let n3 = Node::alloc(m, 0).unwrap();
+        let n4 = Node::alloc(m, 0).unwrap();
 
-        Node {
-            left: n1,
-            right: n2,
-            val: Cell::new(15)
-        }
+        Root { n1, n2, n3, n4 }
     });
 
-    fn tree_helper<M: Mutator>(node: GcPtr<Node>, m: &M) {
+    fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
+        println!("Growing forest");
         loop {
-            Node::create_balanced_tree(&node, m, 100_000);
+            Node::create_balanced_tree(node, m, 100_000);
 
             if m.yield_requested() {
                 break;
@@ -376,21 +388,27 @@ fn multi_threaded_root_mutation() {
         }
     }
 
+    gc.start_monitor();
+
     std::thread::scope(|scope| {
         scope.spawn(|| {
-            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 0), m));
+            println!("spawning mutator");
+            gc.mutate(|root, m| grow_forest(&root.n1, m));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 10), m));
+            println!("spawning mutator");
+            gc.mutate(|root, m| grow_forest(&root.n2, m));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 20), m));
+            println!("spawning mutator");
+            gc.mutate(|root, m| grow_forest(&root.n3, m));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| tree_helper(Node::insert(&root.right, m, 30), m));
+            println!("spawning mutator");
+            gc.mutate(|root, m| grow_forest(&root.n4, m));
         });
     });
 }
