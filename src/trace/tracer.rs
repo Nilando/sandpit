@@ -1,5 +1,3 @@
-use crossbeam_channel::{Sender, Receiver};
-use std::time::Instant;
 use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
@@ -19,8 +17,6 @@ pub struct TraceWorker<M: Marker> {
     controller: Arc<TracerController<M>>,
     marker: Arc<M>,
     work: Vec<TraceJob<M>>,
-    sender: Sender<Vec<TraceJob<M>>>,
-    receiver: Receiver<Vec<TraceJob<M>>>,
 }
 
 unsafe impl<M: Marker> Send for TraceWorker<M> {}
@@ -44,16 +40,12 @@ impl<M: Marker> TraceWorker<M> {
     pub fn new(
         controller: Arc<TracerController<M>>,
         marker: Arc<M>,
-        sender: Sender<Vec<TraceJob<M>>>,
-        receiver: Receiver<Vec<TraceJob<M>>>,
     ) -> Self {
 
         Self {
             controller,
             marker,
             work: vec![],
-            sender,
-            receiver,
         }
     }
 
@@ -67,7 +59,7 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     fn share_work(&mut self) {
-        if self.work.len() < MIN_SHARE_WORK || !self.sender.is_empty() {
+        if self.work.len() < MIN_SHARE_WORK || self.controller.has_work() {
             return
         }
 
@@ -77,13 +69,18 @@ impl<M: Marker> TraceWorker<M> {
             share_work.push(job);
         }
 
-        self.controller.incr_send();
-        self.sender.send(share_work).unwrap();
+        self.controller.send_work(share_work);
     }
 
     pub fn trace_loop(&mut self) {
         loop {
             if self.work.is_empty() {
+                // self.controller.recv_work();
+                //
+                // if self.controller.is_trace_complete() {
+                //   break;
+                // }
+                //
                 self.controller.start_waiting();
                 if self.controller.is_trace_completed() {
                     self.controller.stop_waiting();
@@ -91,17 +88,14 @@ impl<M: Marker> TraceWorker<M> {
                 }
 
                 loop {
-                    let duration = std::time::Duration::from_millis(5);
-                    let deadline = Instant::now().checked_add(duration).unwrap();
-
-                    match self.receiver.recv_deadline(deadline) {
-                        Ok(work) => {
+                    match self.controller.recv_work() {
+                        Some(work) => {
                             self.work = work;
                             self.controller.stop_waiting();
                             self.controller.incr_recv();
                             break;
                         }
-                        Err(_) => {
+                        None => {
                             if self.controller.is_trace_completed() {
                                 self.controller.stop_waiting();
                                 break;
@@ -117,12 +111,9 @@ impl<M: Marker> TraceWorker<M> {
 
         debug_assert_eq!(self.work.len(), 0);
         debug_assert_eq!(self.controller.sent(), self.controller.received());
-        debug_assert_eq!(self.sender.len(), 0);
+        debug_assert_eq!(self.controller.has_work(), false);
         debug_assert_eq!(self.controller.yield_flag(), true);
         debug_assert_eq!(self.controller.is_trace_completed(), true);
         debug_assert_eq!(self.controller.mutators_stopped(), true);
-    }
-
-    fn receive_work(&mut self) {
     }
 }

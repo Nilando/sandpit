@@ -31,7 +31,6 @@ pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
     tracer_controller: &'scope TracerController<TraceMarker<A>>,
     rescan: RefCell<Vec<TraceJob<TraceMarker<A>>>>,
-    sender: Sender<Vec<TraceJob<TraceMarker<A>>>>,
     _lock: RwLockReadGuard<'scope, ()>,
 }
 
@@ -42,14 +41,12 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
         _lock: RwLockReadGuard<'scope, ()>,
     ) -> Self {
         let allocator = A::new(arena);
-        let sender = tracer_controller.get_sender();
 
         Self {
             allocator,
             tracer_controller,
             // TODO: this could probably be something other than a mutex
             rescan: RefCell::new(vec![]),
-            sender,
             _lock,
         }
     }
@@ -58,8 +55,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
 impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     fn drop(&mut self) {
         let work = self.rescan.take();
-        self.tracer_controller.incr_send();
-        self.sender.send(work).unwrap();
+        self.tracer_controller.send_work(work);
     }
 }
 
@@ -132,8 +128,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
         if self.rescan.borrow().len() >= 10_000 {
             let work = self.rescan.take();
-            self.tracer_controller.incr_send();
-            self.sender.send(work).unwrap();
+            self.tracer_controller.send_work(work);
         }
     }
 }

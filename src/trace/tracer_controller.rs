@@ -1,4 +1,5 @@
 use super::marker::Marker;
+use std::time::Instant;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
@@ -66,16 +67,27 @@ impl<M: Marker> TracerController<M> {
         self.mutators_stopped_flag.load(Ordering::SeqCst)
     }
 
-    pub fn get_sender(&self) -> Sender<Vec<TraceJob<M>>> {
-        self.sender.clone()
+    pub fn has_work(&self) -> bool {
+        !self.receiver.is_empty()
+    }
+
+    pub fn send_work(&self, work: Vec<TraceJob<M>>) {
+        self.work_sent.fetch_add(1, Ordering::SeqCst);
+        self.sender.send(work).unwrap();
+    }
+
+    pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
+        let duration = std::time::Duration::from_millis(5);
+        let deadline = Instant::now().checked_add(duration).unwrap();
+
+        match self.receiver.recv_deadline(deadline) {
+            Ok(work) => Some(work),
+            Err(_) => None,
+        }
     }
 
     pub fn num_tracers(&self) -> usize {
         self.num_tracers
-    }
-
-    pub fn incr_send(&self) {
-        self.work_sent.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn incr_recv(&self) {
@@ -166,8 +178,6 @@ impl<M: Marker> TracerController<M> {
             let mut tracer = TraceWorker::new(
                 self.clone(),
                 marker.clone(),
-                self.sender.clone(),
-                self.receiver.clone(),
             );
 
             if i == 0 {
