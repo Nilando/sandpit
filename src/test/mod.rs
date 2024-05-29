@@ -124,7 +124,7 @@ fn start_monitor_multiple_times() {
 fn counts_collections() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    for i in 0..10 {
+    for _ in 0..10 {
         gc.major_collect();
         gc.minor_collect();
     }

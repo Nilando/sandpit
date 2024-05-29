@@ -2,7 +2,7 @@ use crossbeam_channel::{Sender, Receiver};
 use std::time::Instant;
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_packet::TraceJob;
+use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;

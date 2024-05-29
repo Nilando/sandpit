@@ -1,6 +1,6 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_packet::TraceJob;
+use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
