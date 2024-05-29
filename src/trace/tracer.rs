@@ -1,4 +1,5 @@
 use crossbeam_channel::{Sender, Receiver};
+use std::time::Instant;
 use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_packet::TraceJob;
@@ -7,6 +8,8 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 const MIN_SHARE_WORK: usize = 1_000;
+const WORK_CHUNK_SIZE: usize = 10_000;
+//const SHARE_RATIO: f64 = 0.5;
 
 pub trait Tracer {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -55,7 +58,7 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     fn do_work(&mut self) {
-        for _ in 0..10_000 {
+        for _ in 0..WORK_CHUNK_SIZE {
             match self.work.pop() {
                 Some(job) => job.trace(self),
                 None => break,
@@ -75,46 +78,51 @@ impl<M: Marker> TraceWorker<M> {
         }
 
         self.controller.incr_send();
-
         self.sender.send(share_work).unwrap();
     }
 
     pub fn trace_loop(&mut self) {
         loop {
             if self.work.is_empty() {
+                self.controller.start_waiting();
                 if self.controller.is_trace_completed() {
+                    self.controller.stop_waiting();
                     break;
                 }
 
-                self.controller.start_waiting();
+                loop {
+                    let duration = std::time::Duration::from_millis(5);
+                    let deadline = Instant::now().checked_add(duration).unwrap();
 
-                if self.controller.tracers_waiting() == self.controller.num_tracers() &&
-                    self.controller.sent() == self.controller.received() {
-                    if self.controller.mutators_stopped() {
-                        self.controller.signal_trace_end();
-                        self.controller.stop_waiting();
-                        break;
-                    } else {
-                        self.controller.wait_for_mutators();
-                        self.controller.stop_waiting();
-                        continue;
+                    match self.receiver.recv_deadline(deadline) {
+                        Ok(work) => {
+                            self.work = work;
+                            self.controller.stop_waiting();
+                            self.controller.incr_recv();
+                            break;
+                        }
+                        Err(_) => {
+                            if self.controller.is_trace_completed() {
+                                self.controller.stop_waiting();
+                                break;
+                            }
+                        }
                     }
                 }
-
-                println!("recv: {:?}", self.controller.received());
-                println!("sent: {:?}", self.controller.sent());
-                println!("waiting: {}", self.controller.tracers_waiting());
-
-                let work = self.receiver.recv().unwrap();
-                self.work = work;
-
-                self.controller.stop_waiting();
-                println!("stopping wait");
-                self.controller.incr_recv();
             }
 
             self.do_work();
             self.share_work();
         }
+
+        debug_assert_eq!(self.work.len(), 0);
+        debug_assert_eq!(self.controller.sent(), self.controller.received());
+        debug_assert_eq!(self.sender.len(), 0);
+        debug_assert_eq!(self.controller.yield_flag(), true);
+        debug_assert_eq!(self.controller.is_trace_completed(), true);
+        debug_assert_eq!(self.controller.mutators_stopped(), true);
+    }
+
+    fn receive_work(&mut self) {
     }
 }

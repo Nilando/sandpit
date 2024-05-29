@@ -94,8 +94,8 @@ impl<M: Marker> TracerController<M> {
         self.tracers_waiting.load(Ordering::SeqCst)
     }
 
-    pub fn start_waiting(&self) {
-        self.tracers_waiting.fetch_add(1, Ordering::SeqCst);
+    pub fn start_waiting(&self) -> usize {
+        self.tracers_waiting.fetch_add(1, Ordering::SeqCst)
     }
 
     pub fn stop_waiting(&self) {
@@ -103,57 +103,62 @@ impl<M: Marker> TracerController<M> {
     }
 
     pub fn is_trace_completed(&self) -> bool {
-        self.trace_end_flag.load(Ordering::SeqCst)
-    }
+        if self.trace_end_flag.load(Ordering::SeqCst) {
+            return true;
+        }
 
-    pub fn signal_trace_end(&self) {
-        self.trace_end_flag.store(true, Ordering::SeqCst);
-
-        for _ in 0..(self.num_tracers() - 1) {
-            self.incr_send();
-            self.sender.send(vec![]).unwrap();
+        if  self.tracers_waiting() == self.num_tracers() &&
+            self.sent() == self.received() &&
+            self.mutators_stopped() {
+                self.trace_end_flag.store(true, Ordering::SeqCst);
+            return true;
+        } else {
+            return false;
         }
     }
 
     pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         self.clone().spawn_tracers(root, marker.clone());
-        self.wait_for_tracers();
+        self.wait_for_tracers_to_start();
         self.monitor_trace();
     }
 
-    fn wait_for_tracers(&self) {
+    fn wait_for_tracers_to_start(&self) {
         let time = std::time::Duration::from_millis(1000);
 
         std::thread::sleep(time);
     }
 
-    pub fn wait_for_mutators(&self) {
-        let mutator_lock = self.yield_lock.write().unwrap();
-        drop(mutator_lock);
+    fn wait_for_mutators(&self) {
+        self.yield_flag.store(true, Ordering::SeqCst);
+        let _mutator_lock = self.yield_lock.write().unwrap();
+        self.mutators_stopped_flag.store(true, Ordering::SeqCst);
     }
 
-    pub fn monitor_trace(self: Arc<Self>) {
-        // TODO: wait until a certain amount of marking has been done
-        //let _tracer_finish_lock = self.tracer_end_lock.lock().unwrap();
-        self.yield_flag.store(true, Ordering::SeqCst);
-        self.wait_for_mutators();
-        self.mutators_stopped_flag.store(true, Ordering::SeqCst);
-        //drop(_tracer_finish_lock);
-
-        println!("waiting for tracers!!!!");
+    fn wait_for_tracers_to_finish(&self) {
         let _tracer_lock = self.tracer_lock.write().unwrap();
-        println!("TRACERS FINISHED");
 
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);
         debug_assert_eq!(self.tracers_waiting(), 0);
-        println!("tracer debugs completed!");
+        debug_assert_eq!(self.yield_flag(), true);
+        debug_assert_eq!(self.is_trace_completed(), true);
+        debug_assert_eq!(self.mutators_stopped(), true);
+    }
 
+    fn monitor_trace(self: Arc<Self>) {
+        self.wait_for_mutators();
+        self.wait_for_tracers_to_finish();
+        self.clean_up();
+    }
+
+    fn clean_up(&self) {
         self.yield_flag.store(false, Ordering::SeqCst);
-        self.trace_end_flag.store(false, Ordering::SeqCst);
         self.mutators_stopped_flag.store(false, Ordering::SeqCst);
+        self.trace_end_flag.store(false, Ordering::SeqCst);
         self.work_received.store(0, Ordering::SeqCst);
         self.work_sent.store(0, Ordering::SeqCst);
+        self.tracers_waiting.store(0, Ordering::SeqCst);
     }
 
     fn spawn_tracers<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
@@ -172,7 +177,6 @@ impl<M: Marker> TracerController<M> {
             let binding = self.clone();
             std::thread::spawn(move|| {
                 let _lock = binding.tracer_lock();
-
                 tracer.trace_loop();
             });
         }

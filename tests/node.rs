@@ -198,7 +198,6 @@ fn multiple_collects() {
     });
 
     for i in 0..10 {
-        println!("{}", i);
         if i % 2 == 0 {
             gc.minor_collect();
         } else {
@@ -378,7 +377,6 @@ fn multi_threaded_root_mutation() {
     });
 
     fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
-        println!("Growing forest");
         loop {
             Node::create_balanced_tree(node, m, 100_000);
 
@@ -392,22 +390,18 @@ fn multi_threaded_root_mutation() {
 
     std::thread::scope(|scope| {
         scope.spawn(|| {
-            println!("spawning mutator");
             gc.mutate(|root, m| grow_forest(&root.n1, m));
         });
 
         scope.spawn(|| {
-            println!("spawning mutator");
             gc.mutate(|root, m| grow_forest(&root.n2, m));
         });
 
         scope.spawn(|| {
-            println!("spawning mutator");
             gc.mutate(|root, m| grow_forest(&root.n3, m));
         });
 
         scope.spawn(|| {
-            println!("spawning mutator");
             gc.mutate(|root, m| grow_forest(&root.n4, m));
         });
     });

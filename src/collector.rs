@@ -10,6 +10,7 @@ use std::sync::{
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
+
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
     fn get_major_collections(&self) -> usize;
@@ -28,22 +29,16 @@ pub struct Collector<A: Allocate, T: Trace> {
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn major_collect(&self) {
-        println!("waiting for major collection lock");
         let _lock = self.lock.lock().unwrap();
-        println!("major collect");
         self.old_objects.store(0, Ordering::SeqCst);
         self.major_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
-        println!("finishing major collect");
     }
 
     fn minor_collect(&self) {
-        println!("waiting for minor collection lock");
         let _lock = self.lock.lock().unwrap();
-        println!("minor collect");
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.current_mark()).into());
-        println!("finishing minor collect");
     }
 
     fn get_major_collections(&self) -> usize {
@@ -86,13 +81,11 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
     pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<A>)) {
         let mut mutator = self.new_mutator();
-        println!("creating mutator finished");
 
         callback(&self.root, &mut mutator);
     }
 
     fn new_mutator(&self) -> MutatorScope<A> {
-        println!("creating mutator");
         let _collection_lock = self.lock.lock().unwrap();
         let lock = self.tracer.yield_lock();
 
@@ -101,8 +94,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        self.old_objects
-            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

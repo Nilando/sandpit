@@ -2,12 +2,11 @@ use crossbeam_channel::Sender;
 use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, TraceMarker, TracePacket, TraceJob, TracerController};
+use super::trace::{Trace, TraceMarker, TraceJob, TracerController};
 
 use std::cell::RefCell;
 use std::alloc::Layout;
 use std::ptr::write;
-use std::sync::Mutex;
 use std::sync::RwLockReadGuard;
 
 /// An interface for the mutator type which allows for interaction with the
@@ -131,7 +130,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
         self.rescan.borrow_mut().push(TraceJob::new(ptr));
 
-        if self.sender.is_empty() {
+        if self.rescan.borrow().len() >= 10_000 {
             let work = self.rescan.take();
             self.tracer_controller.incr_send();
             self.sender.send(work).unwrap();
