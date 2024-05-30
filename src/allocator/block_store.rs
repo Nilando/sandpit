@@ -1,9 +1,9 @@
 use super::block::Block;
+use super::header::Header;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
 use super::header::Mark;
 use std::alloc::Layout;
-use std::collections::LinkedList;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
@@ -12,7 +12,7 @@ pub struct BlockStore {
     free: Mutex<Vec<BumpBlock>>,
     recycle: Mutex<Vec<BumpBlock>>,
     rest: Mutex<Vec<BumpBlock>>,
-    large: Mutex<LinkedList<Block>>,
+    large: Mutex<Vec<Block>>,
 }
 
 impl BlockStore {
@@ -22,7 +22,7 @@ impl BlockStore {
             free: Mutex::new(vec![]),
             recycle: Mutex::new(vec![]),
             rest: Mutex::new(vec![]),
-            large: Mutex::new(LinkedList::new()),
+            large: Mutex::new(vec![]),
         }
     }
 
@@ -73,16 +73,18 @@ impl BlockStore {
         let block = Block::new(layout)?;
         let ptr = block.as_ptr();
 
-        self.large.lock().unwrap().push_front(block);
+        self.large.lock().unwrap().push(block);
         Ok(ptr)
     }
 
     pub fn refresh(&self, mark: Mark) {
         let mut free = self.free.lock().unwrap();
         let mut rest = self.rest.lock().unwrap();
+        let mut large = self.large.lock().unwrap();
         let mut recycle = self.recycle.lock().unwrap();
         let mut new_rest = vec![];
         let mut new_recycle = vec![];
+        let mut new_large = vec![];
 
         loop {
             match recycle.pop() {
@@ -118,8 +120,21 @@ impl BlockStore {
             }
         }
 
+        loop {
+            match large.pop() {
+                Some(block) => {
+                    let header_ptr = block.as_ptr() as *const Header;
+                    if Header::get_mark(header_ptr) == mark {
+                        new_large.push(block);
+                    }
+                }
+                None => break,
+            }
+        }
+
         *rest = new_rest;
         *recycle = new_recycle;
+        *large = new_large;
 
         // TODO: ADD 10 as a CONFIG FREE_RATE
         for _ in 0..10_000 {
