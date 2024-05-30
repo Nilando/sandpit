@@ -60,8 +60,6 @@ impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
 
 impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     fn yield_requested(&self) -> bool {
-        // TODO: this should also check how much memory is left,
-        // as well as how long the tracer has been running
         self.tracer_controller.yield_flag()
     }
 
@@ -103,6 +101,9 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         new_ptr: GcPtr<Y>,
         callback: fn(&X) -> &GcPtr<Y>,
     ) {
+        // 1. find position within the current timeslice
+        // 2. if now is within the collectors time portion of the time slice,
+        //      wait here until next timeslice
         unsafe {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());

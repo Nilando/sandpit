@@ -15,9 +15,6 @@ pub struct TraceWorker<M: Marker> {
     work: Vec<TraceJob<M>>,
 }
 
-unsafe impl<M: Marker> Send for TraceWorker<M> {}
-unsafe impl<M: Marker> Sync for TraceWorker<M> {}
-
 impl<M: Marker> Tracer for TraceWorker<M> {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
         if !self.marker.set_mark(ptr) {
@@ -48,6 +45,10 @@ impl<M: Marker> TraceWorker<M> {
                 None => break,
             }
         }
+    }
+
+    pub fn flush_work(&mut self) {
+        self.controller.send_work(self.work.clone());
     }
 
     fn share_work(&mut self) {

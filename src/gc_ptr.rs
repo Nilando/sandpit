@@ -21,7 +21,7 @@ impl<T: Trace> Deref for GcPtr<T> {
                 panic!("Attempt to deref a null GC ptr")
             }
 
-            NonNull::new_unchecked(ptr).as_ref()
+            NonNull::new(ptr).unwrap().as_ref()
         }
     }
 }

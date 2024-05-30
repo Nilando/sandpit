@@ -17,6 +17,16 @@ pub struct Monitor<T: Collect + 'static> {
     //config vars
     max_old_growth_rate: f32,
     arena_size_ratio_trigger: f32,
+    // max_headroom = ((prev_arena_size * arena_size_ratio_trigger) * 0.5) - current_size
+    // available_headroom = max_headroom - current_size
+    // C = collector_time
+    // M = mutator_time
+    // H = max_headroom / available_headroom
+    // timeslice_size = 2
+    // min_collector_time = 0.6
+    // M = (timeslice_size - 0.6) * H 
+    // C = timeslice_size - M
+    // C = how long the mutators are paused
     wait_duration: u64,
 }
 
