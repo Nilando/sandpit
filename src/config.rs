@@ -30,6 +30,8 @@ pub struct GcConfig {
     pub mutator_share_min: usize,
 }
 
+// The GcConfig can be updated after the Gc is created, but the update will only take place
+// until tracing has completed.
 impl GcConfig {
     pub fn default() -> Self {
         GcConfig {
