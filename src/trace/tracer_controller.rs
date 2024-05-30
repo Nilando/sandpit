@@ -17,7 +17,6 @@ unsafe impl<M: Marker> Sync for TracerController<M> {}
 pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
-    mutators_stopped_flag: AtomicBool,
     tracer_lock: RwLock<()>,
     trace_end_flag: AtomicBool,
     // TODO: store in GcArray instead of vec?
@@ -39,7 +38,6 @@ impl<M: Marker> TracerController<M> {
         Self {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
-            mutators_stopped_flag: AtomicBool::new(false),
             trace_end_flag: AtomicBool::new(false),
             tracer_lock: RwLock::new(()),
             tracers_waiting: AtomicUsize::new(0),
@@ -64,7 +62,7 @@ impl<M: Marker> TracerController<M> {
     }
 
     pub fn mutators_stopped(&self) -> bool {
-        self.mutators_stopped_flag.load(Ordering::SeqCst)
+        self.yield_lock.try_write().is_ok()
     }
 
     pub fn has_work(&self) -> bool {
@@ -77,7 +75,7 @@ impl<M: Marker> TracerController<M> {
     }
 
     pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
-        let duration = std::time::Duration::from_millis(5);
+        let duration = std::time::Duration::from_millis(10);
         let deadline = Instant::now().checked_add(duration).unwrap();
 
         match self.receiver.recv_deadline(deadline) {
@@ -120,53 +118,40 @@ impl<M: Marker> TracerController<M> {
         }
 
         if  self.tracers_waiting() == self.num_tracers() &&
-            self.sent() == self.received() &&
-            self.mutators_stopped() {
+            self.sent() == self.received() {
+            if self.mutators_stopped() {
                 self.trace_end_flag.store(true, Ordering::SeqCst);
-            return true;
-        } else {
-            return false;
+                return true;
+            } else {
+                self.yield_flag.store(true, Ordering::SeqCst);
+            }
         }
+
+        return false
     }
 
     pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         self.clone().spawn_tracers(root, marker.clone());
-        self.wait_for_tracers_to_start();
-        self.monitor_trace();
+        self.wait_for_tracers();
+        self.clean_up();
     }
 
-    fn wait_for_tracers_to_start(&self) {
-        let time = std::time::Duration::from_millis(1000);
-
-        std::thread::sleep(time);
-    }
-
-    fn wait_for_mutators(&self) {
-        self.yield_flag.store(true, Ordering::SeqCst);
-        let _mutator_lock = self.yield_lock.write().unwrap();
-        self.mutators_stopped_flag.store(true, Ordering::SeqCst);
-    }
-
-    fn wait_for_tracers_to_finish(&self) {
+    fn wait_for_tracers(&self) {
+        println!("sent: {}", self.sent());
+        println!("recv: {}", self.received());
+        println!("waiting: {}", self.tracers_waiting());
         let _tracer_lock = self.tracer_lock.write().unwrap();
+        println!("done");
 
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);
         debug_assert_eq!(self.tracers_waiting(), 0);
-        debug_assert_eq!(self.yield_flag(), true);
         debug_assert_eq!(self.is_trace_completed(), true);
         debug_assert_eq!(self.mutators_stopped(), true);
     }
 
-    fn monitor_trace(self: Arc<Self>) {
-        self.wait_for_mutators();
-        self.wait_for_tracers_to_finish();
-        self.clean_up();
-    }
-
     fn clean_up(&self) {
         self.yield_flag.store(false, Ordering::SeqCst);
-        self.mutators_stopped_flag.store(false, Ordering::SeqCst);
         self.trace_end_flag.store(false, Ordering::SeqCst);
         self.work_received.store(0, Ordering::SeqCst);
         self.work_sent.store(0, Ordering::SeqCst);
@@ -174,6 +159,8 @@ impl<M: Marker> TracerController<M> {
     }
 
     fn spawn_tracers<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
+        let (sender, receiver) = crossbeam_channel::unbounded::<()>();
+
         for i in 0..NUM_TRACER_THREADS {
             let mut tracer = TraceWorker::new(
                 self.clone(),
@@ -185,10 +172,18 @@ impl<M: Marker> TracerController<M> {
             }
 
             let binding = self.clone();
+            let sender = sender.clone();
             std::thread::spawn(move|| {
                 let _lock = binding.tracer_lock();
+
+                sender.send(());
+
                 tracer.trace_loop();
             });
+        }
+
+        for _ in 0..NUM_TRACER_THREADS {
+            receiver.recv().unwrap();
         }
     }
 }
