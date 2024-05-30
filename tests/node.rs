@@ -1,9 +1,6 @@
 use sandpit::{Gc, GcError, GcPtr, Mutator, Trace};
 use std::cell::Cell;
 
-unsafe impl Send for Node {}
-unsafe impl Sync for Node {}
-
 #[derive(Trace)]
 pub struct Node {
     left: GcPtr<Node>,
