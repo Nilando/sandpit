@@ -103,12 +103,8 @@ impl<M: Marker> TraceWorker<M> {
                             }
                         }
                     }
-                        //println!("sent: {}", self.controller.sent());
-                        //println!("recv: {}", self.controller.received());
-                        //println!("waiting: {}", self.controller.tracers_waiting());
                 }
             }
-
 
             self.do_work();
             self.share_work();

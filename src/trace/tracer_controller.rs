@@ -137,11 +137,7 @@ impl<M: Marker> TracerController<M> {
     }
 
     fn wait_for_tracers(&self) {
-        println!("sent: {}", self.sent());
-        println!("recv: {}", self.received());
-        println!("waiting: {}", self.tracers_waiting());
         let _tracer_lock = self.tracer_lock.write().unwrap();
-        println!("done");
 
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);
