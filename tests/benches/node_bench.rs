@@ -65,8 +65,6 @@ fn sync_collection() {
 fn concurrent_collection() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    gc.start_monitor();
-
     gc.mutate(|root, m| {
         for _ in 0..100 {
             Node::create_balanced_tree(root, m, TREE_SIZE);

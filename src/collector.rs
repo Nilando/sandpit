@@ -1,4 +1,5 @@
 use super::allocator::{Allocate, GenerationalArena};
+use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
 
@@ -59,9 +60,9 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 }
 
 impl<A: Allocate, T: Trace> Collector<A, T> {
-    pub fn build(callback: fn(&mut MutatorScope<A>) -> T) -> Self {
+    pub fn build(callback: fn(&mut MutatorScope<A>) -> T, config: &GcConfig) -> Self {
         let arena = A::Arena::new();
-        let tracer = Arc::new(TracerController::new());
+        let tracer = Arc::new(TracerController::new(config));
         let lock = tracer.yield_lock();
         let mut mutator = MutatorScope::new(&arena, &tracer, lock);
         let root = callback(&mut mutator);
