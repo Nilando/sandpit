@@ -6,8 +6,12 @@ VERSION 0.1.1
     - free large objects
     - Handling mutator panics? I think this may actually work already
     - GcError
-    - GcConfig
     - Change Block to be Box<[u8]>
     - purge of unsafe
     - Defragmentation?
     - GcArray of TraceLeaf
+
+COMPLETED
+    - GcConfig
+        - TODO: allow for bringing your own allocator
+    - tracer channels

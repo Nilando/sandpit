@@ -1,3 +1,4 @@
+/// This structure contains the configuration settings for a garbage collector.
 #[derive(Copy, Clone, Debug)]
 pub struct GcConfig {
     // The number of tracer threads, not including the thread that is used for 
@@ -12,11 +13,6 @@ pub struct GcConfig {
     // The amount of miliseconds a tracer will wait for work before checking again or finishing its trace.
     pub trace_wait_time: u64,
 
-    // The rate at which the arena will free unused memory.
-    pub arena_free_ratio: f32,//TODO
-    // The initial size of the arena in bytes (may not be exact)
-    pub arena_init_cap: usize,//TODO
-
     // Once the amount of marked objects surpasses the max old object count
     // a major collection will be triggered. The max old object count is calculated
     // by multiplying this value by the amount of old objects marked in the
@@ -27,7 +23,7 @@ pub struct GcConfig {
     pub monitor_arena_size_ratio_trigger: f32,
     // This setting this flag on or off will enable the monitor respectively.
     pub monitor_wait_time: u64,
-    pub monitor_on: bool, //TODO
+    pub monitor_on: bool,
 
     // The minimum amount of work a mutator must accumulate before sending to
     // be traced.
@@ -42,8 +38,6 @@ impl GcConfig {
             trace_share_min: 20_000,
             trace_share_ratio: 0.5,
             trace_wait_time: 1,
-            arena_free_ratio: 0.5,
-            arena_init_cap: 1024 * 1024 * 1024,
             monitor_max_old_growth_rate: 10.0,
             monitor_arena_size_ratio_trigger: 2.0,
             monitor_wait_time: 10,
