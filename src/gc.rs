@@ -1,4 +1,5 @@
 use super::collector::{Collect, Collector};
+use super::config::GcConfig;
 use super::metrics::GcMetrics;
 use super::monitor::Monitor;
 use super::mutator::MutatorScope;
@@ -7,10 +8,11 @@ use std::sync::Arc;
 
 use super::allocator::Allocator;
 
-/// A garbage collected arena through objects can be allocated into.
+/// A garbage collected arena where objects can be allocated into.
 pub struct Gc<T: Trace> {
     collector: Arc<Collector<Allocator, T>>,
     monitor: Arc<Monitor<Collector<Allocator, T>>>,
+    config: GcConfig,
 }
 
 unsafe impl<T: Send + Trace> Send for Gc<T> {}
@@ -22,21 +24,19 @@ impl<T: Trace> Drop for Gc<T> {
     }
 }
 
-/*
- * struct GcConfig {
- *  num tracer threads
- *  dealloc rate
- * }
- */
-
 impl<T: Trace> Gc<T> {
     // The build callback must return a root of type T, which will permanently be the
     // Gc's root type.
     pub fn build(callback: fn(&mut MutatorScope<Allocator>) -> T) -> Self {
-        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(callback));
-        let monitor = Arc::new(Monitor::new(collector.clone()));
+        let config = GcConfig::default();
+        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(callback, &config));
+        let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
-        Self { collector, monitor }
+        if config.monitor_on {
+            monitor.clone().start();
+        }
+
+        Self { collector, monitor, config }
     }
 
     // MutatorScope is a sealed type but the user utilize it through the public
@@ -59,6 +59,10 @@ impl<T: Trace> Gc<T> {
 
     pub fn stop_monitor(&self) {
         self.monitor.stop();
+    }
+    
+    pub fn get_config(&self) -> GcConfig {
+        self.config
     }
 
     pub fn metrics(&self) -> GcMetrics {

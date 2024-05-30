@@ -206,6 +206,7 @@ unsafe impl<T: Trace> Trace for GcArray<T> {
 }
 
 unsafe impl<T: Trace> Trace for GcArrayMeta<T> {
+    // TODO: instead of tracing an array all at once, create a job for each value?
     fn trace<R: Tracer>(&self, tracer: &mut R) {
         let len = self.len.load(Ordering::SeqCst);
 

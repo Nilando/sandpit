@@ -125,7 +125,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
         self.rescan.borrow_mut().push(TraceJob::new(ptr));
 
-        if self.rescan.borrow().len() >= 10_000 {
+        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
             let work = self.rescan.take();
             self.tracer_controller.send_work(work);
         }

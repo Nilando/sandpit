@@ -214,8 +214,6 @@ fn multiple_collects() {
 fn monitor_requests_yield() {
     let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-    gc.start_monitor();
-
     gc.mutate(|root, mutator| loop {
         Node::insert(root, mutator, 0);
 
@@ -305,8 +303,6 @@ fn build_and_collect_balanced_tree_sync() {
 fn build_and_collect_balanced_tree_concurrent() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    gc.start_monitor();
-
     gc.mutate(|root, m| {
         for _ in 0..1000 {
             Node::create_balanced_tree(root, m, 10_000);
@@ -344,8 +340,6 @@ fn multi_threaded_tree_building() {
             }
         });
     }
-
-    gc.start_monitor();
 
     std::thread::scope(|scope| {
         for _ in 0..8 {
@@ -385,8 +379,6 @@ fn multi_threaded_root_mutation() {
             }
         }
     }
-
-    gc.start_monitor();
 
     std::thread::scope(|scope| {
         scope.spawn(|| {

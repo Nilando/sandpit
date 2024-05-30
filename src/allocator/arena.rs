@@ -24,6 +24,7 @@ impl Arena {
 impl GenerationalArena for Arena {
     type Mark = Mark;
 
+    // TODO: take free rate, and a init size as config
     fn new() -> Self {
         Self {
             block_store: Arc::new(BlockStore::new()),

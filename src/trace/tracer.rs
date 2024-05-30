@@ -5,10 +5,6 @@ use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-const MIN_SHARE_WORK: usize = 1_000;
-const WORK_CHUNK_SIZE: usize = 10_000;
-//const SHARE_RATIO: f64 = 0.5;
-
 pub trait Tracer {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
 }
@@ -46,7 +42,7 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     fn do_work(&mut self) {
-        for _ in 0..WORK_CHUNK_SIZE {
+        for _ in 0..self.controller.trace_chunk_size {
             match self.work.pop() {
                 Some(job) => job.trace(self),
                 None => break,
@@ -55,12 +51,12 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     fn share_work(&mut self) {
-        if self.work.len() < MIN_SHARE_WORK || self.controller.has_work() {
+        if self.work.len() < self.controller.trace_share_min || self.controller.has_work() {
             return;
         }
 
         let mut share_work = vec![];
-        for _ in 0..(self.work.len() / 2) {
+        for _ in 0..(self.work.len() as f32 * self.controller.trace_share_ratio).floor() as usize {
             let job = self.work.pop().unwrap();
             share_work.push(job);
         }

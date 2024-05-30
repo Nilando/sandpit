@@ -89,8 +89,6 @@ fn alloc_into_free_blocks() {
 fn wait_for_trace() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    gc.start_monitor();
-
     for _ in 0..5 {
         gc.mutate(|_, m| loop {
             m.alloc(420).unwrap();
@@ -106,7 +104,9 @@ fn wait_for_trace() {
 fn start_monitor_multiple_times() {
     let gc: Gc<GcPtr<usize>> = Gc::build(|mutator| mutator.alloc(69).unwrap());
 
-    gc.start_monitor();
+    for _ in 0..10 {
+        gc.start_monitor();
+    }
 
     gc.mutate(|_, m| loop {
         m.alloc(420).unwrap();
@@ -175,8 +175,6 @@ fn nested_gc_ptr_root() {
 #[test]
 fn push_array_until_yield() {
     let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
-
-    gc.start_monitor();
 
     gc.mutate(|root, m| loop {
         let item = m.alloc(4096).unwrap();

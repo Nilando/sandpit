@@ -1,4 +1,5 @@
 use super::marker::Marker;
+use crate::config::GcConfig;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
@@ -8,8 +9,6 @@ use std::sync::{
     Arc, RwLock, RwLockReadGuard,
 };
 use std::time::Instant;
-
-const NUM_TRACER_THREADS: usize = 3;
 
 unsafe impl<M: Marker> Send for TracerController<M> {}
 unsafe impl<M: Marker> Sync for TracerController<M> {}
@@ -29,13 +28,22 @@ pub struct TracerController<M: Marker> {
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
     num_tracers: usize,
+
+    //config vars
+    pub trace_share_min: usize,
+    pub trace_chunk_size: usize,
+    pub trace_share_ratio: f32,
+    pub trace_wait_time: u64,
+    pub mutator_share_min: usize,
 }
 
 impl<M: Marker> TracerController<M> {
-    pub fn new() -> Self {
+    pub fn new(config: &GcConfig) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
 
         Self {
+            sender,
+            receiver,
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             trace_end_flag: AtomicBool::new(false),
@@ -43,9 +51,13 @@ impl<M: Marker> TracerController<M> {
             tracers_waiting: AtomicUsize::new(0),
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
-            num_tracers: NUM_TRACER_THREADS,
-            sender,
-            receiver,
+
+            num_tracers: config.tracer_threads,
+            trace_share_min: config.trace_share_min,
+            trace_chunk_size: config.trace_chunk_size,
+            trace_share_ratio: config.trace_share_ratio,
+            trace_wait_time: config.trace_wait_time,
+            mutator_share_min: config.mutator_share_min,
         }
     }
 
@@ -75,7 +87,7 @@ impl<M: Marker> TracerController<M> {
     }
 
     pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
-        let duration = std::time::Duration::from_millis(10);
+        let duration = std::time::Duration::from_millis(self.trace_wait_time);
         let deadline = Instant::now().checked_add(duration).unwrap();
 
         match self.receiver.recv_deadline(deadline) {
@@ -119,9 +131,13 @@ impl<M: Marker> TracerController<M> {
 
         if self.tracers_waiting() == self.num_tracers() && self.sent() == self.received() {
             if self.mutators_stopped() {
+                // Let the other tracers no they should stop by raising this flag
                 self.trace_end_flag.store(true, Ordering::SeqCst);
                 return true;
             } else {
+                // The tracers are out of work but the mutators are still running
+                // Raise the yield flag to request the mutators to stop, so tracing
+                // can complete.
                 self.yield_flag.store(true, Ordering::SeqCst);
             }
         }
@@ -156,7 +172,7 @@ impl<M: Marker> TracerController<M> {
     fn spawn_tracers<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         let (sender, receiver) = crossbeam_channel::unbounded::<()>();
 
-        for i in 0..NUM_TRACER_THREADS {
+        for i in 0..self.num_tracers {
             let mut tracer = TraceWorker::new(self.clone(), marker.clone());
 
             if i == 0 {
@@ -174,7 +190,9 @@ impl<M: Marker> TracerController<M> {
             });
         }
 
-        for _ in 0..NUM_TRACER_THREADS {
+        // wait for the tracers to all start up before attempting to wait for them
+        // for them to finish
+        for _ in 0..self.num_tracers {
             receiver.recv().unwrap();
         }
     }

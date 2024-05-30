@@ -1,4 +1,5 @@
 use super::collector::Collect;
+use super::config::GcConfig;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
@@ -7,27 +8,34 @@ use std::sync::{
 use std::thread;
 use std::time;
 
-const MAX_OLD_GROWTH_RATE: f64 = 10.0;
-const ARENA_SIZE_RATIO_TRIGGER: f64 = 2.0;
-
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
     flag: AtomicBool,
     prev_arena_size: AtomicUsize,
     max_old_objects: AtomicUsize,
+
+    //config vars
+    max_old_growth_rate: f32,
+    arena_size_ratio_trigger: f32,
+    wait_duration: u64,
 }
 
 unsafe impl<T: Collect + 'static> Send for Monitor<T> {}
 unsafe impl<T: Collect + 'static> Sync for Monitor<T> {}
 
 impl<T: Collect + 'static> Monitor<T> {
-    pub fn new(collector: Arc<T>) -> Self {
+    pub fn new(collector: Arc<T>, config: &GcConfig) -> Self {
         let prev_arena_size = collector.get_arena_size();
+
         Self {
             collector,
             flag: AtomicBool::new(false),
             prev_arena_size: AtomicUsize::new(prev_arena_size),
+            // TODO make this a config var
             max_old_objects: AtomicUsize::new(0),
+            max_old_growth_rate: config.monitor_max_old_growth_rate,
+            arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
+            wait_duration: config.monitor_wait_time
         }
     }
 
@@ -88,14 +96,14 @@ impl<T: Collect + 'static> Monitor<T> {
         let arena_size = self.collector.get_arena_size();
         let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
 
-        arena_size as f64 >= (prev_arena_size as f64 * ARENA_SIZE_RATIO_TRIGGER)
+        arena_size as f32 >= (prev_arena_size as f32 * self.arena_size_ratio_trigger)
     }
 
     fn update_old_max(&self) {
         let old_objects = self.collector.get_old_objects_count();
 
         self.max_old_objects.store(
-            (old_objects as f64 * MAX_OLD_GROWTH_RATE).floor() as usize,
+            (old_objects as f32 * self.max_old_growth_rate).floor() as usize,
             Ordering::SeqCst,
         );
     }
@@ -105,7 +113,7 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     fn sleep(&self) {
-        let ten_millis = time::Duration::from_millis(10);
+        let ten_millis = time::Duration::from_millis(self.wait_duration);
 
         thread::sleep(ten_millis);
     }
