@@ -362,7 +362,7 @@ struct Root {
     n1: GcPtr<Node>,
     n2: GcPtr<Node>,
     n3: GcPtr<Node>,
-    n4: GcPtr<Node>
+    n4: GcPtr<Node>,
 }
 
 #[test]

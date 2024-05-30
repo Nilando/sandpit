@@ -37,11 +37,7 @@ impl<M: Marker> Tracer for TraceWorker<M> {
 }
 
 impl<M: Marker> TraceWorker<M> {
-    pub fn new(
-        controller: Arc<TracerController<M>>,
-        marker: Arc<M>,
-    ) -> Self {
-
+    pub fn new(controller: Arc<TracerController<M>>, marker: Arc<M>) -> Self {
         Self {
             controller,
             marker,
@@ -60,7 +56,7 @@ impl<M: Marker> TraceWorker<M> {
 
     fn share_work(&mut self) {
         if self.work.len() < MIN_SHARE_WORK || self.controller.has_work() {
-            return
+            return;
         }
 
         let mut share_work = vec![];

@@ -1,11 +1,10 @@
-use crossbeam_channel::Sender;
 use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, TraceMarker, TraceJob, TracerController};
+use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
-use std::cell::RefCell;
 use std::alloc::Layout;
+use std::cell::RefCell;
 use std::ptr::write;
 use std::sync::RwLockReadGuard;
 

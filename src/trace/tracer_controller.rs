@@ -1,13 +1,13 @@
 use super::marker::Marker;
-use std::time::Instant;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
+use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, RwLock, RwLockReadGuard,
 };
-use crossbeam_channel::{Sender, Receiver};
+use std::time::Instant;
 
 const NUM_TRACER_THREADS: usize = 3;
 
@@ -28,7 +28,7 @@ pub struct TracerController<M: Marker> {
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
-    num_tracers: usize
+    num_tracers: usize,
 }
 
 impl<M: Marker> TracerController<M> {
@@ -45,7 +45,7 @@ impl<M: Marker> TracerController<M> {
             work_received: AtomicUsize::new(0),
             num_tracers: NUM_TRACER_THREADS,
             sender,
-            receiver
+            receiver,
         }
     }
 
@@ -117,8 +117,7 @@ impl<M: Marker> TracerController<M> {
             return true;
         }
 
-        if  self.tracers_waiting() == self.num_tracers() &&
-            self.sent() == self.received() {
+        if self.tracers_waiting() == self.num_tracers() && self.sent() == self.received() {
             if self.mutators_stopped() {
                 self.trace_end_flag.store(true, Ordering::SeqCst);
                 return true;
@@ -127,7 +126,7 @@ impl<M: Marker> TracerController<M> {
             }
         }
 
-        return false
+        return false;
     }
 
     pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
@@ -158,10 +157,7 @@ impl<M: Marker> TracerController<M> {
         let (sender, receiver) = crossbeam_channel::unbounded::<()>();
 
         for i in 0..NUM_TRACER_THREADS {
-            let mut tracer = TraceWorker::new(
-                self.clone(),
-                marker.clone(),
-            );
+            let mut tracer = TraceWorker::new(self.clone(), marker.clone());
 
             if i == 0 {
                 root.trace(&mut tracer);
@@ -169,7 +165,7 @@ impl<M: Marker> TracerController<M> {
 
             let binding = self.clone();
             let sender = sender.clone();
-            std::thread::spawn(move|| {
+            std::thread::spawn(move || {
                 let _lock = binding.tracer_lock();
 
                 sender.send(());

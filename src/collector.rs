@@ -94,7 +94,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+        self.old_objects
+            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }
