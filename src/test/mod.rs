@@ -227,5 +227,6 @@ fn count_array_objects() {
 
     gc.major_collect();
 
+    // TODO: is this a bug?
     //assert_eq!(gc.metrics().old_objects_count, 2 + 100_000);
 }
