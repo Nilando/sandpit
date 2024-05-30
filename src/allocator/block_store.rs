@@ -122,7 +122,7 @@ impl BlockStore {
         *recycle = new_recycle;
 
         // TODO: ADD 10 as a CONFIG FREE_RATE
-        for _ in 0..10 {
+        for _ in 0..10_000 {
             if free.len() == 0 {
                 break;
             }

@@ -22,6 +22,13 @@ impl<T: Trace> Drop for Gc<T> {
     }
 }
 
+/*
+ * struct GcConfig {
+ *  num tracer threads
+ *  dealloc rate
+ * }
+ */
+
 impl<T: Trace> Gc<T> {
     // The build callback must return a root of type T, which will permanently be the
     // Gc's root type.

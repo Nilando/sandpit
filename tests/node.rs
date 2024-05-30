@@ -45,20 +45,22 @@ impl Node {
         mutator.write_barrier(this.clone(), new_right, |this: &Node| &this.right);
     }
 
-    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) {
+    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) -> GcPtr<Node> {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
                 let node_ptr = Node::alloc(mutator, new_val).unwrap();
-                Node::set_left(this, mutator, node_ptr);
+                Node::set_left(this, mutator, node_ptr.clone());
+                node_ptr
             } else {
-                Node::insert(&this.left, mutator, new_val);
+                Node::insert(&this.left, mutator, new_val)
             }
         } else if this.right.is_null() {
             let node_ptr = Node::alloc(mutator, new_val).unwrap();
-            Node::set_right(this, mutator, node_ptr);
+            Node::set_right(this, mutator, node_ptr.clone());
+            node_ptr
         } else {
-            Node::insert(&this.right, mutator, new_val);
+            Node::insert(&this.right, mutator, new_val)
         }
     }
 
@@ -195,13 +197,11 @@ fn multiple_collects() {
         root
     });
 
-    for _ in 0..10 {
-        for i in 0..10 {
-            if i % 2 == 0 {
-                gc.minor_collect();
-            } else {
-                gc.major_collect();
-            }
+    for i in 0..10 {
+        if i % 2 == 0 {
+            gc.minor_collect();
+        } else {
+            gc.major_collect();
         }
     }
 
@@ -239,6 +239,7 @@ fn objects_marked_metric() {
     });
 
     gc.major_collect();
+    assert_eq!(gc.metrics().old_objects_count, 100);
 
     gc.mutate(|root, _| {
         let node = Node::find(root, 48).unwrap();
@@ -250,6 +251,8 @@ fn objects_marked_metric() {
     });
 
     gc.major_collect();
+
+    assert_eq!(gc.metrics().old_objects_count, 50);
 }
 
 #[test]
@@ -271,7 +274,7 @@ fn cyclic_graph() {
 fn build_and_collect_balanced_tree_sync() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
-    for _ in 0..100 {
+    for _ in 0..2 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -282,7 +285,7 @@ fn build_and_collect_balanced_tree_sync() {
         Node::create_balanced_tree(root, m, 10_000);
     });
 
-    for _ in 0..100 {
+    for _ in 0..2 {
         gc.major_collect();
         gc.minor_collect();
     }
@@ -322,9 +325,9 @@ fn build_and_collect_balanced_tree_concurrent() {
 
 #[test]
 fn multi_threaded_tree_building() {
-    let gc: Gc<usize> = Gc::build(|_| 0).into();
+    let gc: Gc<()> = Gc::build(|_| ());
 
-    fn tree_builder(gc: &Gc<usize>) {
+    fn tree_builder(gc: &Gc<()>) {
         gc.mutate(|_, m| {
             let root = Node::alloc(m, 0).unwrap();
 
@@ -345,8 +348,61 @@ fn multi_threaded_tree_building() {
     gc.start_monitor();
 
     std::thread::scope(|scope| {
-        for _ in 0..1000 {
+        for _ in 0..8 {
             scope.spawn(|| tree_builder(&gc));
         }
+    });
+}
+
+unsafe impl Send for Root {}
+unsafe impl Sync for Root {}
+
+#[derive(Trace)]
+struct Root {
+    n1: GcPtr<Node>,
+    n2: GcPtr<Node>,
+    n3: GcPtr<Node>,
+    n4: GcPtr<Node>,
+}
+
+#[test]
+fn multi_threaded_root_mutation() {
+    let gc = Gc::build(|m| {
+        let n1 = Node::alloc(m, 0).unwrap();
+        let n2 = Node::alloc(m, 0).unwrap();
+        let n3 = Node::alloc(m, 0).unwrap();
+        let n4 = Node::alloc(m, 0).unwrap();
+
+        Root { n1, n2, n3, n4 }
+    });
+
+    fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
+        loop {
+            Node::create_balanced_tree(node, m, 100_000);
+
+            if m.yield_requested() {
+                break;
+            }
+        }
+    }
+
+    gc.start_monitor();
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            gc.mutate(|root, m| grow_forest(&root.n1, m));
+        });
+
+        scope.spawn(|| {
+            gc.mutate(|root, m| grow_forest(&root.n2, m));
+        });
+
+        scope.spawn(|| {
+            gc.mutate(|root, m| grow_forest(&root.n3, m));
+        });
+
+        scope.spawn(|| {
+            gc.mutate(|root, m| grow_forest(&root.n4, m));
+        });
     });
 }

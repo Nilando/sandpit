@@ -1,11 +1,11 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, TraceMarker, TracePacket, TracerController};
+use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
 use std::alloc::Layout;
+use std::cell::RefCell;
 use std::ptr::write;
-use std::sync::Mutex;
 use std::sync::RwLockReadGuard;
 
 /// An interface for the mutator type which allows for interaction with the
@@ -29,7 +29,7 @@ pub trait Mutator {
 pub struct MutatorScope<'scope, A: Allocate> {
     allocator: A,
     tracer_controller: &'scope TracerController<TraceMarker<A>>,
-    trace_packet: Mutex<TracePacket<TraceMarker<A>>>,
+    rescan: RefCell<Vec<TraceJob<TraceMarker<A>>>>,
     _lock: RwLockReadGuard<'scope, ()>,
 }
 
@@ -45,7 +45,7 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
             allocator,
             tracer_controller,
             // TODO: this could probably be something other than a mutex
-            trace_packet: Mutex::new(TracePacket::new()),
+            rescan: RefCell::new(vec![]),
             _lock,
         }
     }
@@ -53,8 +53,8 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
 
 impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     fn drop(&mut self) {
-        let packet_ref = &mut *self.trace_packet.lock().unwrap();
-        self.tracer_controller.push_packet(packet_ref.clone());
+        let work = self.rescan.take();
+        self.tracer_controller.send_work(work);
     }
 }
 
@@ -106,14 +106,10 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         unsafe {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());
-            // TODO: this might work but new_ptr could be null!
-            // let need_rescan = !self.allocator.is_old(new_ptr.as_nonnull());
 
             old_ptr.unsafe_set(new_ptr);
 
-            //if need_rescan {
             self.rescan(update_ptr);
-            //}
         }
     }
 
@@ -127,13 +123,11 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new);
 
-        let packet_ref = &mut *self.trace_packet.lock().unwrap();
+        self.rescan.borrow_mut().push(TraceJob::new(ptr));
 
-        if packet_ref.is_full() {
-            self.tracer_controller.push_packet(packet_ref.clone());
-            packet_ref.drain();
+        if self.rescan.borrow().len() >= 10_000 {
+            let work = self.rescan.take();
+            self.tracer_controller.send_work(work);
         }
-
-        packet_ref.push(ptr);
     }
 }

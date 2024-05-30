@@ -1,9 +1,13 @@
 use super::marker::Marker;
 use super::trace::Trace;
-use super::trace_packet::TracePacket;
+use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use std::ptr::NonNull;
 use std::sync::Arc;
+
+const MIN_SHARE_WORK: usize = 1_000;
+const WORK_CHUNK_SIZE: usize = 10_000;
+//const SHARE_RATIO: f64 = 0.5;
 
 pub trait Tracer {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -12,9 +16,7 @@ pub trait Tracer {
 pub struct TraceWorker<M: Marker> {
     controller: Arc<TracerController<M>>,
     marker: Arc<M>,
-    switch: bool,
-    p1: TracePacket<M>,
-    p2: TracePacket<M>,
+    work: Vec<TraceJob<M>>,
 }
 
 unsafe impl<M: Marker> Send for TraceWorker<M> {}
@@ -30,11 +32,7 @@ impl<M: Marker> Tracer for TraceWorker<M> {
             return;
         }
 
-        if self.next_packet().is_full() {
-            self.send_packet();
-        }
-
-        self.push_job(ptr);
+        self.work.push(TraceJob::new(ptr));
     }
 }
 
@@ -43,94 +41,75 @@ impl<M: Marker> TraceWorker<M> {
         Self {
             controller,
             marker,
-            switch: false,
-            p1: TracePacket::new(),
-            p2: TracePacket::new(),
+            work: vec![],
         }
     }
 
-    pub fn trace_obj<T: Trace>(&mut self, obj: &T) {
-        obj.trace(self);
+    fn do_work(&mut self) {
+        for _ in 0..WORK_CHUNK_SIZE {
+            match self.work.pop() {
+                Some(job) => job.trace(self),
+                None => break,
+            }
+        }
+    }
+
+    fn share_work(&mut self) {
+        if self.work.len() < MIN_SHARE_WORK || self.controller.has_work() {
+            return;
+        }
+
+        let mut share_work = vec![];
+        for _ in 0..(self.work.len() / 2) {
+            let job = self.work.pop().unwrap();
+            share_work.push(job);
+        }
+
+        self.controller.send_work(share_work);
     }
 
     pub fn trace_loop(&mut self) {
         loop {
-            if self.current_packet().is_empty() {
-                self.switch = !self.switch;
-                if self.current_packet().is_empty() {
-                    self.get_new_packet();
-                }
-
-                if self.current_packet().is_empty() {
+            if self.work.is_empty() {
+                // TODO:
+                // self.controller.recv_work();
+                //
+                // if self.controller.is_trace_complete() {
+                //   break;
+                // }
+                //
+                self.controller.start_waiting();
+                if self.controller.is_trace_completed() {
+                    self.controller.stop_waiting();
                     break;
                 }
-            }
 
-            self.trace_packet();
-
-            self.switch = !self.switch;
-        }
-    }
-
-    fn get_new_packet(&mut self) {
-        if let Some(new_tracing_packet) = self.controller.pop_packet() {
-            if self.switch {
-                self.p1 = new_tracing_packet;
-            } else {
-                self.p2 = new_tracing_packet;
-            }
-        }
-    }
-
-    fn current_packet(&self) -> &TracePacket<M> {
-        if self.switch {
-            &self.p1
-        } else {
-            &self.p2
-        }
-    }
-
-    fn next_packet(&mut self) -> &TracePacket<M> {
-        if !self.switch {
-            &self.p1
-        } else {
-            &self.p2
-        }
-    }
-
-    fn trace_packet(&mut self) {
-        if self.switch {
-            loop {
-                match self.p1.pop() {
-                    Some(job) => job.trace(self),
-                    None => break,
+                loop {
+                    match self.controller.recv_work() {
+                        Some(work) => {
+                            self.work = work;
+                            self.controller.stop_waiting();
+                            self.controller.incr_recv();
+                            break;
+                        }
+                        None => {
+                            if self.controller.is_trace_completed() {
+                                self.controller.stop_waiting();
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-        } else {
-            loop {
-                match self.p2.pop() {
-                    Some(job) => job.trace(self),
-                    None => break,
-                }
-            }
-        }
-    }
 
-    fn push_job<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !self.switch {
-            self.p1.push(ptr);
-        } else {
-            self.p2.push(ptr);
+            self.do_work();
+            self.share_work();
         }
-    }
 
-    fn send_packet(&mut self) {
-        if !self.switch {
-            self.controller.push_packet(self.p1.clone());
-            self.p1.drain();
-        } else {
-            self.controller.push_packet(self.p2.clone());
-            self.p2.drain();
-        }
+        debug_assert_eq!(self.work.len(), 0);
+        debug_assert_eq!(self.controller.sent(), self.controller.received());
+        debug_assert_eq!(self.controller.has_work(), false);
+        debug_assert_eq!(self.controller.is_trace_completed(), true);
+        //debug_assert_eq!(self.controller.mutators_stopped(), true); TODO: why isn't this true?
     }
 }

@@ -10,6 +10,7 @@ use std::sync::{
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
+
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
     fn get_major_collections(&self) -> usize;

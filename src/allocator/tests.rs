@@ -87,7 +87,7 @@ fn refresh_arena() {
     }
     assert!(arena.get_size() > 10 * BLOCK_SIZE);
     arena.refresh();
-    assert_eq!(arena.get_size(), 10 * BLOCK_SIZE);
+    assert_eq!(arena.get_size(), BLOCK_SIZE);
 }
 
 #[test]
