@@ -26,6 +26,7 @@ pub struct Collector<A: Allocate, T: Trace> {
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
     old_objects: AtomicUsize,
+    prev_arena_size: AtomicUsize,
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
@@ -66,6 +67,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let lock = tracer.yield_lock();
         let mut mutator = MutatorScope::new(&arena, &tracer, lock);
         let root = callback(&mut mutator);
+        let prev_arena_size = AtomicUsize::new(arena.get_size());
 
         drop(mutator);
 
@@ -77,6 +79,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
             old_objects: AtomicUsize::new(0),
+            prev_arena_size,
         }
     }
 
@@ -93,10 +96,51 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
+    // TODO: differentiate sync and concurrent collections
+    // sync collections need not track headroom
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        self.old_objects
-            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+
+        // TODO: should this be done in a separate thread? otherwise a collection is guaranteed
+        // to take 1.4ms
+        let prev_size = self.arena.get_size();
+        let max_headroom_ratio = 0.5;
+        let arena_size_ratio_trigger = 2.0;
+        let timeslice_size = 2.0;
+        let min_collector_slice = 0.6;
+        let one_mili_in_nanos = 1_000_000.0;
+        let max_headroom = ((prev_size as f64 / arena_size_ratio_trigger ) * max_headroom_ratio) as usize;
+
+        loop {
+            // we've ran out of headroom, stop the mutators
+            if self.arena.get_size() >= (max_headroom + prev_size) {
+                self.tracer.raise_yield_flag();
+                break;
+            }
+
+            let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
+            let headroom_ratio = available_headroom as f64 / max_headroom as f64;
+            let m = (timeslice_size - min_collector_slice) * headroom_ratio;
+            let mutator_duration = std::time::Duration::from_nanos((one_mili_in_nanos * m) as u64);
+            std::thread::sleep(mutator_duration);
+
+            if !self.tracer.is_tracing() {
+                break;
+            }
+
+            let c = timeslice_size - m;
+            let collector_duration = std::time::Duration::from_nanos((one_mili_in_nanos * c) as u64);
+            let _lock = self.tracer.get_write_barrier_lock();
+            std::thread::sleep(collector_duration);
+            
+            if !self.tracer.is_tracing() {
+                break;
+            }
+        }
+
+        self.tracer.wait_for_trace_completion();
+        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
+        self.prev_arena_size.store(self.get_arena_size(), Ordering::SeqCst);
     }
 }

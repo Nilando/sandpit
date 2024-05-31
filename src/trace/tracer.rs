@@ -66,12 +66,6 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     pub fn trace_loop(&mut self) {
-        //
-        // trace for M time,
-        // raise barrier_flag
-        // trace for C time
-        // lower barrier_flag
-        //
         loop {
             if self.work.is_empty() {
                 // TODO:

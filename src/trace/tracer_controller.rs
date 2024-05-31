@@ -5,6 +5,7 @@ use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
+    Mutex, MutexGuard,
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, RwLock, RwLockReadGuard,
 };
@@ -14,6 +15,7 @@ pub struct TracerController<M: Marker> {
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     trace_end_flag: AtomicBool,
+    trace_lock: RwLock<()>,
     // TODO: store in GcArray instead of vec?
     // this will be tricky since then tracing will require
     // access to a mutator, or at least the arena in some way
@@ -23,6 +25,7 @@ pub struct TracerController<M: Marker> {
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
+    write_barrier_lock: Mutex<()>,
 
     // config vars
     pub num_tracers: usize,
@@ -31,20 +34,6 @@ pub struct TracerController<M: Marker> {
     pub trace_share_ratio: f32,
     pub trace_wait_time: u64,
     pub mutator_share_min: usize,
-    // max_headroom = ((prev_arena_size * arena_size_ratio_trigger) * 0.5) - current_size
-    // available_headroom = max_headroom - current_size
-    // C = collector_time
-    // M = mutator_time
-    // H = max_headroom / available_headroom
-    // timeslice_size = 2
-    // min_collector_time = 0.6
-    // M = (timeslice_size - 0.6) * H 
-    // C = timeslice_size - M
-    // C = how long the mutators are paused
-    // TODO: The tracer controller needs:
-    // prev_arena_size
-    // arena_size_ratio_trigger
-    // and current arena size
 }
 
 impl<M: Marker> TracerController<M> {
@@ -58,9 +47,11 @@ impl<M: Marker> TracerController<M> {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             trace_end_flag: AtomicBool::new(false),
+            trace_lock: RwLock::new(()),
             tracers_waiting: AtomicUsize::new(0),
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
+            write_barrier_lock: Mutex::new(()),
 
             num_tracers: config.tracer_threads,
             trace_share_min: config.trace_share_min,
@@ -75,6 +66,10 @@ impl<M: Marker> TracerController<M> {
         self.yield_flag.load(Ordering::SeqCst)
     }
 
+    pub fn raise_yield_flag(&self) {
+        self.yield_flag.store(true, Ordering::SeqCst);
+    }
+
     pub fn yield_lock(&self) -> RwLockReadGuard<()> {
         self.yield_lock.read().unwrap()
     }
@@ -83,12 +78,16 @@ impl<M: Marker> TracerController<M> {
         self.yield_lock.try_write().is_ok()
     }
 
-    pub fn has_work(&self) -> bool {
-        !self.receiver.is_empty()
+    pub fn get_write_barrier_lock(&self) -> MutexGuard<()> {
+        self.write_barrier_lock.lock().unwrap()
     }
 
-    pub fn num_tracers(&self) -> usize {
-        self.num_tracers
+    pub fn is_write_barrier_locked(&self) -> bool {
+        self.write_barrier_lock.try_lock().is_ok()
+    }
+
+    pub fn has_work(&self) -> bool {
+        !self.receiver.is_empty()
     }
 
     pub fn incr_recv(&self) {
@@ -135,7 +134,7 @@ impl<M: Marker> TracerController<M> {
             return true;
         }
 
-        if self.tracers_waiting() == self.num_tracers() && self.sent() == self.received() {
+        if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
             if self.mutators_stopped() {
                 // Let the other tracers no they should stop by raising this flag
                 self.trace_end_flag.store(true, Ordering::SeqCst);
@@ -151,10 +150,25 @@ impl<M: Marker> TracerController<M> {
         return false;
     }
 
+    pub fn wait_for_trace_completion(&self) {
+        self.trace_lock.write().unwrap();
+
+        debug_assert_eq!(self.sent(), self.received());
+        debug_assert_eq!(self.sender.len(), 0);
+        debug_assert_eq!(self.tracers_waiting(), 0);
+        debug_assert_eq!(self.is_trace_completed(), true);
+        debug_assert_eq!(self.mutators_stopped(), true);
+
+        self.clean_up();
+    }
+
+    pub fn is_tracing(&self) -> bool {
+        self.trace_lock.try_write().is_err()
+    }
+
     pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
         self.clone().trace_root(root, marker.clone());
         self.clone().spawn_tracers(marker.clone());
-        self.clean_up();
     }
 
     fn clean_up(&self) {
@@ -181,36 +195,18 @@ impl<M: Marker> TracerController<M> {
             let marker = marker.clone();
 
             std::thread::spawn(move || {
+                let _lock = controller.trace_lock.read().unwrap();
                 let mut tracer = TraceWorker::new(controller.clone(), marker);
 
-                tracer.trace_loop();
-
                 sender.send(()).unwrap();
+
+                tracer.trace_loop();
             });
         }
 
-        /*
-        let now_in_nanos = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
-        let timeslice_size = 2_000_000;
-        let remainder = now_in_nanos % timeslice_size;
-        */
-
-        // wait M time
-        // is trace finished?
-        // grab write_barrier
-        // trace for C time
-        // is trace finished?
-        // drop write_barrier
-
-        // wait for tracers to finish
+        // wait for tracers to start
         for _ in 0..self.num_tracers {
             receiver.recv().unwrap();
         }
-
-        debug_assert_eq!(self.sent(), self.received());
-        debug_assert_eq!(self.sender.len(), 0);
-        debug_assert_eq!(self.tracers_waiting(), 0);
-        debug_assert_eq!(self.is_trace_completed(), true);
-        debug_assert_eq!(self.mutators_stopped(), true);
     }
 }

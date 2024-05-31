@@ -306,7 +306,7 @@ fn build_and_collect_balanced_tree_concurrent() {
         }
     });
 
-    gc.minor_collect();
+    gc.major_collect();
     assert_eq!(gc.metrics().old_objects_count, 10_000);
 
     gc.mutate(|root, _| {
@@ -325,10 +325,10 @@ fn multi_threaded_tree_building() {
             let root = Node::alloc(m, 0).unwrap();
 
             loop {
-                Node::create_balanced_tree(&root, m, 100_000);
+                Node::create_balanced_tree(&root, m, 1_000_000);
 
                 let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..100_000).collect();
+                let expected: Vec<usize> = (0..1_000_000).collect();
                 assert!(actual == expected);
 
                 if m.yield_requested() {
@@ -339,7 +339,7 @@ fn multi_threaded_tree_building() {
     }
 
     std::thread::scope(|scope| {
-        for _ in 0..8 {
+        for _ in 0..100 {
             scope.spawn(|| tree_builder(&gc));
         }
     });
@@ -369,7 +369,7 @@ fn multi_threaded_root_mutation() {
 
     fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
         loop {
-            Node::create_balanced_tree(node, m, 100_000);
+            Node::create_balanced_tree(node, m, 10_000_000);
 
             if m.yield_requested() {
                 break;
