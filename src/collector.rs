@@ -2,6 +2,7 @@ use super::allocator::{Allocate, GenerationalArena};
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
+use std::time::Duration;
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -103,6 +104,18 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
+    fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
+        let one_mili_in_nanos = 1_000_000.0;
+        let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
+        let headroom_ratio = available_headroom as f32 / max_headroom as f32;
+        let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
+        let mutator_duration = Duration::from_nanos((one_mili_in_nanos * m) as u64);
+        let c = self.timeslice_size - m;
+        let collector_duration = Duration::from_nanos((one_mili_in_nanos * c) as u64);
+
+        (mutator_duration, collector_duration)
+    }
+
     // TODO: differentiate sync and concurrent collections
     // sync collections need not track headroom
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
@@ -112,7 +125,6 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         // to take 1.4ms
         // TODO: get these vars from config
         let prev_size = self.arena.get_size();
-        let one_mili_in_nanos = 1_000_000.0;
         let max_headroom = ((prev_size as f32 / self.arena_size_ratio_trigger ) * self.max_headroom_ratio) as usize;
 
         loop {
@@ -122,20 +134,14 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
                 break;
             }
 
-            let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
-            let headroom_ratio = available_headroom as f32 / max_headroom as f32;
-            let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
-            let mutator_duration = std::time::Duration::from_nanos((one_mili_in_nanos * m) as u64);
+            let (mutator_duration, collector_duration) = self.split_timeslice(max_headroom, prev_size);
+
             std::thread::sleep(mutator_duration);
 
             if !self.tracer.is_tracing() {
                 break;
             }
 
-            let c = self.timeslice_size - m;
-            let collector_duration = std::time::Duration::from_nanos((one_mili_in_nanos * c) as u64);
-            // TODO: maybe instead of a yield lock on the write barrier, we could request that the
-            // mutators yield? tradeoff there forsure
             let _lock = self.tracer.get_write_barrier_lock();
             std::thread::sleep(collector_duration);
             

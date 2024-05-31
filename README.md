@@ -1,5 +1,4 @@
 VERSION 0.1.1
-    - Trigger yield from space/time limits
     - #[derive(TraceLeaf)]
     - Mutation Input and Output
     - fuzzer test suite
@@ -17,3 +16,4 @@ COMPLETED
     - tracer channels
     - add GcConfig
     - free large objects
+    - Trigger yield from space/time limits
