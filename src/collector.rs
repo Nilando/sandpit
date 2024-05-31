@@ -109,9 +109,12 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
         let headroom_ratio = available_headroom as f32 / max_headroom as f32;
         let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
-        let mutator_duration = Duration::from_nanos((one_mili_in_nanos * m) as u64);
-        let c = self.timeslice_size - m;
-        let collector_duration = Duration::from_nanos((one_mili_in_nanos * c) as u64);
+        let mutator_nanos = (one_mili_in_nanos * m) as u64;
+        let collector_nanos = (self.timeslice_size * one_mili_in_nanos) as u64 - mutator_nanos;
+        let mutator_duration = Duration::from_nanos(mutator_nanos);
+        let collector_duration = Duration::from_nanos(collector_nanos);
+
+        debug_assert_eq!(collector_nanos + mutator_nanos, (one_mili_in_nanos * self.timeslice_size) as u64);
 
         (mutator_duration, collector_duration)
     }
