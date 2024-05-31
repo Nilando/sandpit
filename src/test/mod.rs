@@ -228,3 +228,17 @@ fn count_array_objects() {
     // TODO: is this a bug?
     //assert_eq!(gc.metrics().old_objects_count, 2 + 100_000);
 }
+
+#[test]
+fn extract_and_insert() {
+    let gc = Gc::build(|_| Cell::new(0));
+    let val = gc.extract(|root| root.get());
+
+    assert!(val == 0);
+
+    gc.insert(69, |root, new_val| {root.set(new_val); });
+
+    let val = gc.extract(|root| root.get());
+
+    assert!(val == 69);
+}

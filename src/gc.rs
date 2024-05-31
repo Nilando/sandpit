@@ -1,4 +1,5 @@
 use super::collector::{Collect, Collector};
+use super::trace::TraceLeaf;
 use super::config::GcConfig;
 use super::metrics::GcMetrics;
 use super::monitor::Monitor;
@@ -43,6 +44,14 @@ impl<T: Trace> Gc<T> {
     // Mutator trait which in implements. Here &T is the root.
     pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<Allocator>)) {
         self.collector.mutate(callback);
+    }
+
+    pub fn insert<L: TraceLeaf>(&self, value: L, callback: fn(&T, L)) {
+        self.collector.insert(callback, value);
+    }
+
+    pub fn extract<L: TraceLeaf>(&self, callback: fn(&T) -> L) -> L {
+        self.collector.extract(callback)
     }
 
     pub fn major_collect(&self) {
