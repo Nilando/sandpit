@@ -105,6 +105,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
+        // Algorithm taken from webkit riptide collector:
         let one_mili_in_nanos = 1_000_000.0;
         let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
         let headroom_ratio = available_headroom as f32 / max_headroom as f32;
@@ -119,14 +120,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         (mutator_duration, collector_duration)
     }
 
-    // TODO: differentiate sync and concurrent collections
-    // sync collections need not track headroom
-    fn collect(&self, marker: Arc<TraceMarker<A>>) {
-        self.tracer.clone().trace(&self.root, marker.clone());
-
-        // TODO: should this be done in a separate thread? otherwise a collection is guaranteed
-        // to take 1.4ms
-        // TODO: get these vars from config
+    fn run_space_time_manager(&self) {
         let prev_size = self.arena.get_size();
         let max_headroom = ((prev_size as f32 / self.arena_size_ratio_trigger ) * self.max_headroom_ratio) as usize;
 
@@ -152,7 +146,16 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
                 break;
             }
         }
+    }
 
+    // TODO: differentiate sync and concurrent collections
+    // sync collections need not track headroom
+    fn collect(&self, marker: Arc<TraceMarker<A>>) {
+        self.tracer.clone().trace(&self.root, marker.clone());
+        // TODO: should this be done in a separate thread? otherwise a collection is guaranteed
+        // to take 1.4ms
+        // TODO: get these vars from config
+        self.run_space_time_manager();
         self.tracer.wait_for_trace_completion();
         self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
