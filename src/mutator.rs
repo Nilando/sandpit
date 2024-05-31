@@ -3,6 +3,7 @@ use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
+use std::time::SystemTime;
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::write;
@@ -60,8 +61,6 @@ impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
 
 impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     fn yield_requested(&self) -> bool {
-        // TODO: this should also check how much memory is left,
-        // as well as how long the tracer has been running
         self.tracer_controller.yield_flag()
     }
 
@@ -103,6 +102,10 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         new_ptr: GcPtr<Y>,
         callback: fn(&X) -> &GcPtr<Y>,
     ) {
+        if self.tracer_controller.is_write_barrier_locked() {
+            self.tracer_controller.get_write_barrier_lock();
+        }
+
         unsafe {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());

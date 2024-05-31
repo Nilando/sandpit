@@ -129,12 +129,10 @@ impl<T: Trace> GcArray<T> {
     }
 
     pub fn alloc_with_capacity<M: Mutator>(mutator: &M, capacity: usize) -> Result<Self, GcError> {
-        let layout = unsafe {
-            Layout::from_size_align_unchecked(
-                size_of::<GcPtr<T>>() * capacity,
-                align_of::<GcPtr<T>>(),
-            )
-        };
+        let layout = Layout::from_size_align(
+            size_of::<GcPtr<T>>() * capacity,
+            align_of::<GcPtr<T>>(),
+        ).unwrap();
         let data_ptr = mutator.alloc_layout(layout)?;
         let casted_ptr = unsafe { data_ptr.cast() };
         let meta = GcArrayMeta::new(casted_ptr, 0, capacity);

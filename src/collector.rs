@@ -2,6 +2,7 @@ use super::allocator::{Allocate, GenerationalArena};
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
+use std::time::Duration;
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -26,6 +27,12 @@ pub struct Collector<A: Allocate, T: Trace> {
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
     old_objects: AtomicUsize,
+
+    //config vars
+    arena_size_ratio_trigger: f32,
+    max_headroom_ratio: f32,
+    timeslice_size: f32,
+    slice_min: f32,
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
@@ -77,6 +84,10 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
             old_objects: AtomicUsize::new(0),
+            arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
+            max_headroom_ratio: config.collector_max_headroom_ratio,
+            timeslice_size: config.collector_timeslize,
+            slice_min: config.collector_slice_min,
         }
     }
 
@@ -93,10 +104,60 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
+    fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
+        // Algorithm taken from webkit riptide collector:
+        let one_mili_in_nanos = 1_000_000.0;
+        let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
+        let headroom_ratio = available_headroom as f32 / max_headroom as f32;
+        let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
+        let mutator_nanos = (one_mili_in_nanos * m) as u64;
+        let collector_nanos = (self.timeslice_size * one_mili_in_nanos) as u64 - mutator_nanos;
+        let mutator_duration = Duration::from_nanos(mutator_nanos);
+        let collector_duration = Duration::from_nanos(collector_nanos);
+
+        debug_assert_eq!(collector_nanos + mutator_nanos, (one_mili_in_nanos * self.timeslice_size) as u64);
+
+        (mutator_duration, collector_duration)
+    }
+
+    fn run_space_time_manager(&self) {
+        let prev_size = self.arena.get_size();
+        let max_headroom = ((prev_size as f32 / self.arena_size_ratio_trigger ) * self.max_headroom_ratio) as usize;
+
+        loop {
+            // we've ran out of headroom, stop the mutators
+            if self.arena.get_size() >= (max_headroom + prev_size) {
+                self.tracer.raise_yield_flag();
+                break;
+            }
+
+            let (mutator_duration, collector_duration) = self.split_timeslice(max_headroom, prev_size);
+
+            std::thread::sleep(mutator_duration);
+
+            if !self.tracer.is_tracing() {
+                break;
+            }
+
+            let _lock = self.tracer.get_write_barrier_lock();
+            std::thread::sleep(collector_duration);
+            
+            if !self.tracer.is_tracing() {
+                break;
+            }
+        }
+    }
+
+    // TODO: differentiate sync and concurrent collections
+    // sync collections need not track headroom
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        self.old_objects
-            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+        // TODO: should this be done in a separate thread? otherwise a collection is guaranteed
+        // to take 1.4ms
+        // TODO: get these vars from config
+        self.run_space_time_manager();
+        self.tracer.wait_for_trace_completion();
+        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

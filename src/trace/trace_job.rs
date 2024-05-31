@@ -3,6 +3,9 @@ use super::trace::Trace;
 use super::tracer::TraceWorker;
 use std::ptr::NonNull;
 
+unsafe impl<M: Marker> Send for TraceJob<M> {}
+unsafe impl<M: Marker> Sync for TraceJob<M> {}
+
 pub struct TraceJob<M: Marker> {
     ptr: NonNull<()>,
     dyn_trace: fn(NonNull<()>, &mut TraceWorker<M>),

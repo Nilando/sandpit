@@ -28,6 +28,10 @@ pub struct GcConfig {
     // The minimum amount of work a mutator must accumulate before sending to
     // be traced.
     pub mutator_share_min: usize,
+
+    pub collector_max_headroom_ratio: f32,
+    pub collector_timeslize: f32,
+    pub collector_slice_min: f32,
 }
 
 // The GcConfig can be updated after the Gc is created, but the update will only take place
@@ -45,6 +49,9 @@ impl GcConfig {
             monitor_wait_time: 10,
             monitor_on: true,
             mutator_share_min: 10_000,
+            collector_max_headroom_ratio: 2.0,
+            collector_timeslize: 2.0,
+            collector_slice_min: 0.6,
         }
     }
 }
