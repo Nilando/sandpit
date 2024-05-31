@@ -31,6 +31,20 @@ pub struct TracerController<M: Marker> {
     pub trace_share_ratio: f32,
     pub trace_wait_time: u64,
     pub mutator_share_min: usize,
+    // max_headroom = ((prev_arena_size * arena_size_ratio_trigger) * 0.5) - current_size
+    // available_headroom = max_headroom - current_size
+    // C = collector_time
+    // M = mutator_time
+    // H = max_headroom / available_headroom
+    // timeslice_size = 2
+    // min_collector_time = 0.6
+    // M = (timeslice_size - 0.6) * H 
+    // C = timeslice_size - M
+    // C = how long the mutators are paused
+    // TODO: The tracer controller needs:
+    // prev_arena_size
+    // arena_size_ratio_trigger
+    // and current arena size
 }
 
 impl<M: Marker> TracerController<M> {
@@ -174,6 +188,19 @@ impl<M: Marker> TracerController<M> {
                 sender.send(()).unwrap();
             });
         }
+
+        /*
+        let now_in_nanos = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+        let timeslice_size = 2_000_000;
+        let remainder = now_in_nanos % timeslice_size;
+        */
+
+        // wait M time
+        // is trace finished?
+        // grab write_barrier
+        // trace for C time
+        // is trace finished?
+        // drop write_barrier
 
         // wait for tracers to finish
         for _ in 0..self.num_tracers {

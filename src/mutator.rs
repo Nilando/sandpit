@@ -3,6 +3,7 @@ use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
+use std::time::SystemTime;
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::write;
@@ -101,9 +102,9 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         new_ptr: GcPtr<Y>,
         callback: fn(&X) -> &GcPtr<Y>,
     ) {
-        // 1. find position within the current timeslice
-        // 2. if now is within the collectors time portion of the time slice,
-        //      wait here until next timeslice
+        // if try non block grab writer_barrier
+        // if err then wait to grab it
+
         unsafe {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());
