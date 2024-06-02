@@ -23,14 +23,19 @@ pub unsafe trait Trace: 'static {
 // TRACE LEAF IMPLS
 // ****************************************************************************
 
+pub fn assert_trace_leaf<T: TraceLeaf>() {}
+
 unsafe impl<L: TraceLeaf> Trace for L {
     fn trace<T: Tracer>(&self, _: &mut T) {
         // TODO: This ensure the function is never compiled
-        // const { assert!(false) }
+        // it may be worth it to make traceleaf NOT a sub trait
+        // and then make a union type to use internally?...
     }
+
     fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {
         unimplemented!()
     }
+
     fn needs_trace() -> bool {
         false
     }

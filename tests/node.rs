@@ -1,4 +1,4 @@
-use sandpit::{Gc, GcError, GcPtr, Mutator, Trace};
+use sandpit::{Gc, GcError, GcPtr, Mutator, Trace, TraceLeaf};
 use std::cell::Cell;
 
 #[derive(Trace)]
@@ -411,4 +411,11 @@ fn insert_and_extract_node_val() {
     let val = gc.extract(|root| Node::find(root, 420).unwrap().val.get());
 
     assert!(val == 420);
+}
+
+
+#[derive(TraceLeaf)]
+struct TestLeaf<T> {
+    foo: usize,
+    bar: T,
 }
