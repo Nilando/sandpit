@@ -21,8 +21,10 @@ impl<M: Marker> Tracer for TraceWorker<M> {
             return;
         }
 
-        if !T::needs_trace() {
-            return;
+        unsafe {
+            if !ptr.as_ref().needs_trace() {
+                return;
+            }
         }
 
         self.work.push(TraceJob::new(ptr));

@@ -3,7 +3,6 @@ use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
-use std::time::SystemTime;
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::write;

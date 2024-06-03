@@ -4,17 +4,20 @@ use std::ptr::NonNull;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not contain
 /// any GcPtr's.
-pub unsafe trait TraceLeaf: 'static {}
+pub unsafe trait TraceLeaf: Trace {}
+
 /// Types allocated in a Gc are required to implement this trait.
 pub unsafe trait Trace: 'static {
     fn trace<T: Tracer>(&self, tracer: &mut T);
+
     fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
     where
         Self: Sized,
     {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
     }
-    fn needs_trace() -> bool {
+
+    fn needs_trace(&self) -> bool {
         true
     }
 }
@@ -23,15 +26,25 @@ pub unsafe trait Trace: 'static {
 // TRACE LEAF IMPLS
 // ****************************************************************************
 
+unsafe impl<L: AssertTraceLeaf> TraceLeaf for L {}
+
+pub unsafe trait AssertTraceLeaf: TraceLeaf {
+    fn assert_leaf_fields(&self);
+    fn assert_leaf<T: TraceLeaf>() {}
+}
+
 unsafe impl<L: TraceLeaf> Trace for L {
     fn trace<T: Tracer>(&self, _: &mut T) {
         // TODO: This ensure the function is never compiled
-        // const { assert!(false) }
+        // it may be worth it to make traceleaf NOT a sub trait
+        // and then make a union type to use internally?...
     }
+
     fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {
         unimplemented!()
     }
-    fn needs_trace() -> bool {
+
+    fn needs_trace(&self) -> bool {
         false
     }
 }

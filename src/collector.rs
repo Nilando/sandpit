@@ -1,4 +1,5 @@
 use super::allocator::{Allocate, GenerationalArena};
+use super::trace::TraceLeaf;
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
@@ -91,10 +92,30 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         }
     }
 
+    pub fn insert<L: TraceLeaf>(&self, callback: fn(&T, L), value: L) {
+        self.lock.lock().unwrap();
+        let _lock = self.tracer.yield_lock();
+
+        callback(&self.root, value);
+    }
+
+    pub fn extract<L: TraceLeaf>(&self, callback: fn(&T) -> L) -> L {
+        self.lock.lock().unwrap();
+        let _lock = self.tracer.yield_lock();
+
+        callback(&self.root)
+    }
+
     pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<A>)) {
         let mut mutator = self.new_mutator();
 
         callback(&self.root, &mut mutator);
+    }
+
+    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(&self, callback: fn(&T, &mut MutatorScope<A>, input: I) -> O, input: I) -> O {
+        let mut mutator = self.new_mutator();
+
+        callback(&self.root, &mut mutator, input)
     }
 
     fn new_mutator(&self) -> MutatorScope<A> {

@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use gc::{Gc, Mutator};
-use tests::Node;
+use sandpit::{Gc, Mutator};
 
 const TREE_SIZE: usize = 10_000;
 
