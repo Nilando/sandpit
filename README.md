@@ -1,6 +1,4 @@
 VERSION 0.1.1
-    - #[derive(TraceLeaf)]
-    - Mutation Input and Output
     - fuzzer test suite
     - Handling mutator panics? I think this may actually work already
     - GcError
@@ -11,8 +9,12 @@ VERSION 0.1.1
     - allow for bringing your own allocator
     - add allocator config
     - editing config while gc is running?
+    - review the trace and traceleaf derives
+        - they dont work for things like unit/unamed structs
 
 COMPLETED
+    - #[derive(TraceLeaf)]
+    - Mutation Input and Output
     - tracer channels
     - add GcConfig
     - free large objects

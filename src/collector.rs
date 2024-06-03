@@ -112,6 +112,12 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         callback(&self.root, &mut mutator);
     }
 
+    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(&self, callback: fn(&T, &mut MutatorScope<A>, input: I) -> O, input: I) -> O {
+        let mut mutator = self.new_mutator();
+
+        callback(&self.root, &mut mutator, input)
+    }
+
     fn new_mutator(&self) -> MutatorScope<A> {
         let _collection_lock = self.lock.lock().unwrap();
         let lock = self.tracer.yield_lock();

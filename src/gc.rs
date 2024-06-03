@@ -46,6 +46,10 @@ impl<T: Trace> Gc<T> {
         self.collector.mutate(callback);
     }
 
+    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(&self, callback: fn(&T, &mut MutatorScope<Allocator>, input: I) -> O, input: I) -> O {
+        self.collector.mutate_io(callback, input)
+    }
+
     pub fn insert<L: TraceLeaf>(&self, value: L, callback: fn(&T, L)) {
         self.collector.insert(callback, value);
     }

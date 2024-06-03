@@ -413,7 +413,6 @@ fn insert_and_extract_node_val() {
     assert!(val == 420);
 }
 
-
 #[derive(TraceLeaf)]
 struct TestLeaf<T: TraceLeaf> {
     foo: usize,
