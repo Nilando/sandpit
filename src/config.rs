@@ -40,15 +40,15 @@ impl GcConfig {
     pub fn default() -> Self {
         GcConfig {
             tracer_threads: 2,
-            trace_chunk_size: 10_000,
-            trace_share_min: 20_000,
+            trace_chunk_size: 500,
+            trace_share_min: 1000,
             trace_share_ratio: 0.5,
             trace_wait_time: 1,
             monitor_max_old_growth_rate: 10.0,
             monitor_arena_size_ratio_trigger: 2.0,
             monitor_wait_time: 10,
             monitor_on: true,
-            mutator_share_min: 10_000,
+            mutator_share_min: 1000,
             collector_max_headroom_ratio: 2.0,
             collector_timeslize: 2.0,
             collector_slice_min: 0.6,

@@ -173,9 +173,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     // sync collections need not track headroom
     fn collect(&self, marker: Arc<TraceMarker<A>>) {
         self.tracer.clone().trace(&self.root, marker.clone());
-        // TODO: should this be done in a separate thread? otherwise a collection is guaranteed
+        // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
         // to take 1.4ms
-        // TODO: get these vars from config
         self.run_space_time_manager();
         self.tracer.wait_for_trace_completion();
         self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);

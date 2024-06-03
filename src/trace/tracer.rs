@@ -109,6 +109,6 @@ impl<M: Marker> TraceWorker<M> {
         debug_assert_eq!(self.controller.sent(), self.controller.received());
         debug_assert_eq!(self.controller.has_work(), false);
         debug_assert_eq!(self.controller.is_trace_completed(), true);
-        //debug_assert_eq!(self.controller.mutators_stopped(), true); TODO: why isn't this true?
+        debug_assert_eq!(self.controller.mutators_stopped(), true)
     }
 }

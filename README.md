@@ -1,10 +1,10 @@
 VERSION 0.1.1
     - fuzzer test suite
-    - Handling mutator panics? I think this may actually work already
     - GcError
     - Change Block to be Box<[u8]>
     - purge of unsafe
     - Defragmentation?
+    - review of gcarray
     - GcArray of TraceLeaf
     - allow for bringing your own allocator
     - add allocator config
