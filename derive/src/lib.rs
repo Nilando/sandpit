@@ -91,7 +91,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(TraceLeaf)]
-pub fn trace_leaf(input: TokenStream) -> TokenStream {
+pub fn traceleaf(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let generics = add_trait_bounds(input.generics);
@@ -108,7 +108,7 @@ pub fn trace_leaf(input: TokenStream) -> TokenStream {
                 let field_ty = &field.ty;
 
                 quote! {
-                    sandpit::assert_trace_leaf<#field_ty>();
+                    Self::assert_leaf::<#field_ty>();
                 }
             })
             .collect::<Vec<_>>(),
@@ -131,8 +131,8 @@ pub fn trace_leaf(input: TokenStream) -> TokenStream {
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of
     let expanded = quote! {
-        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
-            fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
+        unsafe impl #impl_generics sandpit::AssertTraceLeaf for #name #ty_generics #where_clause {
+            fn assert_leaf_fields(&self) {
                 #(#trace_body)*
             }
         }

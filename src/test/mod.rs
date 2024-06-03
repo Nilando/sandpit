@@ -2,7 +2,6 @@ use crate::{collections::GcArray, Gc, GcPtr, Mutator};
 use std::alloc::Layout;
 use std::cell::Cell;
 use std::mem::{align_of, size_of};
-use derive::TraceLeaf;
 
 #[test]
 fn create_rooted_arena() {

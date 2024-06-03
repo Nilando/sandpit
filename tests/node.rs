@@ -415,7 +415,7 @@ fn insert_and_extract_node_val() {
 
 
 #[derive(TraceLeaf)]
-struct TestLeaf<T> {
+struct TestLeaf<T: TraceLeaf> {
     foo: usize,
     bar: T,
 }
