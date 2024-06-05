@@ -29,6 +29,8 @@ pub unsafe trait Trace: 'static {
 unsafe impl<L: AssertTraceLeaf> TraceLeaf for L {}
 
 pub unsafe trait AssertTraceLeaf: TraceLeaf {
+    // this function should go through every field type and assert that each type
+    // is a leaf
     fn assert_leaf_fields(&self);
     fn assert_leaf<T: TraceLeaf>() {}
 }

@@ -53,15 +53,6 @@
 //     gc.mutate(|_, _| {});
 // });
 // ```
-//
-// TODO:
-// - Fixing Bugs and adding tests is the #1 priority!
-// - add a way to pass in config to the gc when building
-// - multi threading tests
-// - Sharing work between tracer threads!
-//     - there should be some more bench marks to help
-//       validate optimizations like this
-// - Returning values from the GcArena
 extern crate self as sandpit;
 
 mod allocator;

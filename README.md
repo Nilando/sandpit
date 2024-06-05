@@ -1,6 +1,6 @@
 VERSION 0.1.1
     - fuzzer test suite
-    - GcError
+    - GcError Overview
     - Change Block to be Box<[u8]>
     - purge of unsafe
     - Defragmentation?
@@ -11,6 +11,7 @@ VERSION 0.1.1
     - editing config while gc is running?
     - review the trace and traceleaf derives
         - they dont work for things like unit/unamed structs
+    - track collection times
 
 COMPLETED
     - #[derive(TraceLeaf)]
@@ -19,3 +20,4 @@ COMPLETED
     - add GcConfig
     - free large objects
     - Trigger yield from space/time limits
+    - using derives inside of /src

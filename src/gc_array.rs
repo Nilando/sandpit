@@ -1,7 +1,8 @@
 use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::mutator::Mutator;
-use super::trace::{Trace, Tracer};
+use super::trace::Tracer;
+use crate::Trace;
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,6 +13,7 @@ pub struct GcArrayMeta<T: Trace> {
     cap: AtomicUsize,
 }
 
+#[derive(Trace)]
 pub struct GcArray<T: Trace> {
     meta: GcPtr<GcArrayMeta<T>>,
 }
@@ -194,12 +196,6 @@ impl<T: Trace> Iterator for GcArrayIter<T> {
         } else {
             None
         }
-    }
-}
-
-unsafe impl<T: Trace> Trace for GcArray<T> {
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
-        self.meta.trace(tracer)
     }
 }
 
