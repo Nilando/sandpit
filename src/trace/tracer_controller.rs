@@ -12,6 +12,9 @@ use std::sync::{
 use std::time::Instant;
 
 pub struct TracerController<M: Marker> {
+    sender: Sender<Vec<TraceJob<M>>>,
+    receiver: Receiver<Vec<TraceJob<M>>>,
+
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
     trace_end_flag: AtomicBool,
@@ -20,8 +23,6 @@ pub struct TracerController<M: Marker> {
     // this will be tricky since then tracing will require
     // access to a mutator, or at least the arena in some way
     // or should this be some kind of channel?
-    sender: Sender<Vec<TraceJob<M>>>,
-    receiver: Receiver<Vec<TraceJob<M>>>,
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,

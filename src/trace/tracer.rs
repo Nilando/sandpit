@@ -40,31 +40,8 @@ impl<M: Marker> TraceWorker<M> {
         }
     }
 
-    fn do_work(&mut self) {
-        for _ in 0..self.controller.trace_chunk_size {
-            match self.work.pop() {
-                Some(job) => job.trace(self),
-                None => break,
-            }
-        }
-    }
-
     pub fn flush_work(&mut self) {
         self.controller.send_work(self.work.clone());
-    }
-
-    fn share_work(&mut self) {
-        if self.work.len() < self.controller.trace_share_min || self.controller.has_work() {
-            return;
-        }
-
-        let mut share_work = vec![];
-        for _ in 0..(self.work.len() as f32 * self.controller.trace_share_ratio).floor() as usize {
-            let job = self.work.pop().unwrap();
-            share_work.push(job);
-        }
-
-        self.controller.send_work(share_work);
     }
 
     pub fn trace_loop(&mut self) {
@@ -110,5 +87,28 @@ impl<M: Marker> TraceWorker<M> {
         debug_assert_eq!(self.controller.has_work(), false);
         debug_assert_eq!(self.controller.is_trace_completed(), true);
         debug_assert_eq!(self.controller.mutators_stopped(), true)
+    }
+
+    fn do_work(&mut self) {
+        for _ in 0..self.controller.trace_chunk_size {
+            match self.work.pop() {
+                Some(job) => job.trace(self),
+                None => break,
+            }
+        }
+    }
+
+    fn share_work(&mut self) {
+        if self.work.len() < self.controller.trace_share_min || self.controller.has_work() {
+            return;
+        }
+
+        let mut share_work = vec![];
+        for _ in 0..(self.work.len() as f32 * self.controller.trace_share_ratio).floor() as usize {
+            let job = self.work.pop().unwrap();
+            share_work.push(job);
+        }
+
+        self.controller.send_work(share_work);
     }
 }
