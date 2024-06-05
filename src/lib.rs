@@ -62,6 +62,7 @@
 //     - there should be some more bench marks to help
 //       validate optimizations like this
 // - Returning values from the GcArena
+extern crate self as sandpit;
 
 mod allocator;
 mod collector;

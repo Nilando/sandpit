@@ -1,5 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sandpit::{Gc, Mutator};
+
+#[path = "../tests/node.rs"]
+mod node;
+
+use sandpit::Gc;
+use node::Node;
 
 const TREE_SIZE: usize = 10_000;
 

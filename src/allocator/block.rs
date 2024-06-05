@@ -5,9 +5,6 @@ use std::ptr::NonNull;
 
 pub type BlockPtr = NonNull<u8>;
 
-// TODO: what if block was just a Box<[u8]> ?
-// I think with that we could remove a ton of unsafe code!
-
 pub struct Block {
     ptr: BlockPtr,
     layout: Layout,
