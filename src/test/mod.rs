@@ -1,4 +1,4 @@
-use crate::{collections::GcArray, Gc, GcPtr, Mutator};
+use crate::{Gc, GcPtr, Mutator, Trace};
 use std::alloc::Layout;
 use std::cell::Cell;
 use std::mem::{align_of, size_of};
@@ -69,10 +69,11 @@ fn alloc_into_free_blocks() {
 
     fn alloc_medium_and_small(gc: &Gc<GcPtr<usize>>) {
         gc.mutate(|_, m| {
-            let medium_layout = unsafe { Layout::from_size_align_unchecked(200, 8) };
             for _ in 0..10_000 {
                 m.alloc(420).unwrap();
-                m.alloc_layout(medium_layout).unwrap();
+                let data: [u8; 1000] = [0; 1000];
+
+                m.alloc(data).unwrap();
             }
         });
     }
@@ -173,61 +174,11 @@ fn nested_gc_ptr_root() {
 }
 
 #[test]
-fn push_array_until_yield() {
-    let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
-
-    gc.mutate(|root, m| loop {
-        let item = m.alloc(4096).unwrap();
-        root.push(m, item);
-
-        if m.yield_requested() {
-            break;
-        }
-    });
-
-    let metrics = gc.metrics();
-    assert_eq!(metrics.minor_collections, 1);
-}
-
-#[test]
 fn gc_ptr_size_and_align() {
     assert_eq!(size_of::<GcPtr<()>>(), size_of::<GcPtr<u128>>());
     assert_eq!(align_of::<GcPtr<()>>(), align_of::<GcPtr<u128>>());
-    assert_eq!(size_of::<GcArray<u8>>(), size_of::<GcPtr<u128>>());
-    assert_eq!(align_of::<GcArray<u8>>(), align_of::<GcPtr<u128>>());
 }
 
-// GCARRAY TESTS BELOW
-
-#[test]
-fn gc_array_root() {
-    let gc = Gc::build(|mutator| GcArray::<u8>::alloc(mutator).unwrap());
-
-    gc.major_collect();
-
-    let metrics = gc.metrics();
-
-    // one mark for the meta, and one mark for the data
-    assert_eq!(metrics.old_objects_count, 2);
-}
-
-#[test]
-fn count_array_objects() {
-    let gc = Gc::build(|mutator| GcArray::<usize>::alloc(mutator).unwrap());
-
-    gc.major_collect();
-
-    gc.mutate(|root, m| {
-        for i in 0..100_000 {
-            root.push(m, m.alloc(i).unwrap());
-        }
-    });
-
-    gc.major_collect();
-
-    // TODO: is this a bug?
-    //assert_eq!(gc.metrics().old_objects_count, 2 + 100_000);
-}
 
 #[test]
 fn extract_and_insert() {

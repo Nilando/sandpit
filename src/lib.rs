@@ -59,17 +59,12 @@ mod allocator;
 mod collector;
 mod error;
 mod gc;
-mod gc_array;
 mod gc_ptr;
 mod metrics;
 mod monitor;
 mod mutator;
 mod trace;
 mod config;
-
-pub mod collections {
-    pub use crate::gc_array::{GcArray, GcArrayIter};
-}
 
 pub use error::GcError;
 pub use gc::Gc;

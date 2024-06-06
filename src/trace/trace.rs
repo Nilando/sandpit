@@ -71,6 +71,16 @@ unsafe impl TraceLeaf for std::sync::atomic::AtomicUsize {}
 // TRACE IMPLS
 // ****************************************************************************
 
+unsafe impl<const N: usize, L: Trace> Trace for [L; N] {
+    fn trace<T: Tracer>(&self, tracer: &mut T) {
+        if !self.needs_trace() { return }
+
+        for item in self.iter() {
+            item.trace(tracer)
+        }
+    }
+}
+
 unsafe impl<T: Trace> Trace for Option<T> {
     fn trace<R: Tracer>(&self, tracer: &mut R) {
         if let Some(value) = self.as_ref() {

@@ -12,10 +12,6 @@ use std::sync::RwLockReadGuard;
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
-
-    // TODO: remove this method! or make it private somehow.
-    fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError>;
-
     fn write_barrier<A: Trace, B: Trace>(
         &self,
         update: GcPtr<A>,
@@ -75,19 +71,6 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
                 unsafe { write(ptr.as_ptr().cast(), obj) }
-
-                Ok(GcPtr::new(ptr.cast()))
-            }
-            Err(_) => todo!(),
-        }
-    }
-
-    fn alloc_layout(&self, layout: Layout) -> Result<GcPtr<()>, GcError> {
-        match self.allocator.alloc(layout) {
-            Ok(ptr) => {
-                for i in 0..layout.size() {
-                    unsafe { write(ptr.as_ptr().add(i), 0) }
-                }
 
                 Ok(GcPtr::new(ptr.cast()))
             }
