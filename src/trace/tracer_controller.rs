@@ -102,30 +102,31 @@ impl<M: Marker> TracerController<M> {
         self.work_received.load(Ordering::SeqCst)
     }
 
-    pub fn tracers_waiting(&self) -> usize {
-        self.tracers_waiting.load(Ordering::SeqCst)
-    }
-
-    pub fn start_waiting(&self) -> usize {
-        self.tracers_waiting.fetch_add(1, Ordering::SeqCst)
-    }
-
-    pub fn stop_waiting(&self) {
-        self.tracers_waiting.fetch_sub(1, Ordering::SeqCst);
-    }
-
     pub fn send_work(&self, work: Vec<TraceJob<M>>) {
         self.work_sent.fetch_add(1, Ordering::SeqCst);
         self.sender.send(work).unwrap();
     }
 
-    pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
+    pub fn recv_work(&self) -> Vec<TraceJob<M>> {
+        self.start_waiting();
+
         let duration = std::time::Duration::from_millis(self.trace_wait_time);
         let deadline = Instant::now().checked_add(duration).unwrap();
 
-        match self.receiver.recv_deadline(deadline) {
-            Ok(work) => Some(work),
-            Err(_) => None,
+        loop {
+            match self.receiver.recv_deadline(deadline) {
+                Ok(work) => {
+                    self.stop_waiting();
+                    self.incr_recv();
+                    return work;
+                }
+                Err(_) => {
+                    if self.is_trace_completed() {
+                        self.stop_waiting();
+                        return vec![];
+                    }
+                }
+            }
         }
     }
 
@@ -208,5 +209,17 @@ impl<M: Marker> TracerController<M> {
         for _ in 0..self.num_tracers {
             receiver.recv().unwrap();
         }
+    }
+
+    fn tracers_waiting(&self) -> usize {
+        self.tracers_waiting.load(Ordering::SeqCst)
+    }
+
+    fn start_waiting(&self) -> usize {
+        self.tracers_waiting.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn stop_waiting(&self) {
+        self.tracers_waiting.fetch_sub(1, Ordering::SeqCst);
     }
 }

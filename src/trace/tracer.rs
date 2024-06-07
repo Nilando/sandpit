@@ -46,36 +46,10 @@ impl<M: Marker> TraceWorker<M> {
 
     pub fn trace_loop(&mut self) {
         loop {
-            if self.work.is_empty() {
-                // TODO:
-                // self.controller.recv_work();
-                //
-                // if self.controller.is_trace_complete() {
-                //   break;
-                // }
-                //
-                self.controller.start_waiting();
-                if self.controller.is_trace_completed() {
-                    self.controller.stop_waiting();
-                    break;
-                }
-
-                loop {
-                    match self.controller.recv_work() {
-                        Some(work) => {
-                            self.work = work;
-                            self.controller.stop_waiting();
-                            self.controller.incr_recv();
-                            break;
-                        }
-                        None => {
-                            if self.controller.is_trace_completed() {
-                                self.controller.stop_waiting();
-                                break;
-                            }
-                        }
-                    }
-                }
+            if self.controller.is_trace_completed() {
+                break;
+            } else if self.work.is_empty() {
+                self.work = self.controller.recv_work();
             }
 
             self.do_work();
