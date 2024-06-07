@@ -93,6 +93,8 @@ impl<T: Trace> Gc<T> {
             // Running count of how many times major/minor collections have happend.
             major_collections: self.collector.get_major_collections(),
             minor_collections: self.collector.get_minor_collections(),
+            major_collect_avg_time: self.collector.get_major_collect_avg_time(),
+            minor_collect_avg_time: self.collector.get_minor_collect_avg_time(),
 
             // How many old objects there were as per the last trace.
             old_objects_count: self.collector.get_old_objects_count(),
@@ -107,6 +109,8 @@ impl<T: Trace> Gc<T> {
             max_old_objects: self.monitor.get_max_old_objects(),
             // The size of the arena at the end of the last collection.
             prev_arena_size: self.monitor.get_prev_arena_size(),
+
+
         }
     }
 }

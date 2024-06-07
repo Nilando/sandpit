@@ -3,7 +3,7 @@ use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::TraceLeaf;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -18,6 +18,8 @@ pub trait Collect {
     fn get_arena_size(&self) -> usize;
     fn get_major_collections(&self) -> usize;
     fn get_minor_collections(&self) -> usize;
+    fn get_major_collect_avg_time(&self) -> usize;
+    fn get_minor_collect_avg_time(&self) -> usize;
 }
 
 pub struct Collector<A: Allocate, T: Trace> {
@@ -28,26 +30,40 @@ pub struct Collector<A: Allocate, T: Trace> {
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
     old_objects: AtomicUsize,
+    // time stored in milisceonds
+    minor_collect_avg_time: AtomicUsize,
+    major_collect_avg_time: AtomicUsize,
 
     //config vars
     arena_size_ratio_trigger: f32,
     max_headroom_ratio: f32,
     timeslice_size: f32,
     slice_min: f32,
+
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn major_collect(&self) {
         let _lock = self.lock.lock().unwrap();
+        let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
         self.major_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
+
+        // update collection time
+        let elapsed_time = start_time.elapsed().as_millis() as usize;
+        self.update_collection_time(&self.major_collect_avg_time, elapsed_time, self.get_major_collections());
     }
 
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
+        let start_time = Instant::now();
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.current_mark()).into());
+
+        // update collection time
+        let elapsed_time = start_time.elapsed().as_millis() as usize;
+        self.update_collection_time(&self.minor_collect_avg_time, elapsed_time, self.get_minor_collections());
     }
 
     fn get_major_collections(&self) -> usize {
@@ -64,6 +80,14 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 
     fn get_old_objects_count(&self) -> usize {
         self.old_objects.load(Ordering::SeqCst)
+    }
+
+    fn get_major_collect_avg_time(&self) -> usize {
+        self.major_collect_avg_time.load(Ordering::SeqCst)
+    }
+
+    fn get_minor_collect_avg_time(&self) -> usize {
+        self.minor_collect_avg_time.load(Ordering::SeqCst)
     }
 }
 
@@ -84,6 +108,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
             lock: Mutex::new(()),
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
+            major_collect_avg_time: AtomicUsize::new(0),
+            minor_collect_avg_time: AtomicUsize::new(0),
             old_objects: AtomicUsize::new(0),
             arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
             max_headroom_ratio: config.collector_max_headroom_ratio,
@@ -127,6 +153,17 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let lock = self.tracer.yield_lock();
 
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
+    }
+
+    fn update_collection_time(&self, average: &AtomicUsize, elapsed_time: usize, num_collections: usize) { 
+        let avg = average.load(Ordering::SeqCst);
+        let update = elapsed_time.abs_diff(avg)/ num_collections;
+
+        if avg > elapsed_time {
+            average.fetch_sub(update, Ordering::SeqCst);
+        } else {
+            average.fetch_add(update, Ordering::SeqCst);
+        }
     }
 
     fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {

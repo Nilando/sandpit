@@ -18,12 +18,6 @@ pub struct Monitor<T: Collect + 'static> {
     max_old_growth_rate: f32,
     arena_size_ratio_trigger: f32,
     wait_duration: u64,
-    // History {
-    //   size of gc arena
-    //   how many old objects
-    //   max old objects
-    //   prev arena size
-    // }
 }
 
 unsafe impl<T: Collect + 'static> Send for Monitor<T> {}
