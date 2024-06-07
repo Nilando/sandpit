@@ -74,10 +74,6 @@ impl<M: Marker> TracerController<M> {
         self.yield_lock.read().unwrap()
     }
 
-    pub fn mutators_stopped(&self) -> bool {
-        self.yield_lock.try_write().is_ok()
-    }
-
     pub fn get_write_barrier_lock(&self) -> MutexGuard<()> {
         self.write_barrier_lock.lock().unwrap()
     }
@@ -92,14 +88,6 @@ impl<M: Marker> TracerController<M> {
 
     pub fn incr_recv(&self) {
         self.work_received.fetch_add(1, Ordering::SeqCst);
-    }
-
-    pub fn sent(&self) -> usize {
-        self.work_sent.load(Ordering::SeqCst)
-    }
-
-    pub fn received(&self) -> usize {
-        self.work_received.load(Ordering::SeqCst)
     }
 
     pub fn send_work(&self, work: Vec<TraceJob<M>>) {
@@ -202,6 +190,11 @@ impl<M: Marker> TracerController<M> {
                 sender.send(()).unwrap();
 
                 tracer.trace_loop();
+
+                debug_assert_eq!(controller.sent(), controller.received());
+                debug_assert_eq!(controller.has_work(), false);
+                debug_assert_eq!(controller.is_trace_completed(), true);
+                debug_assert_eq!(controller.mutators_stopped(), true)
             });
         }
 
@@ -221,5 +214,17 @@ impl<M: Marker> TracerController<M> {
 
     fn stop_waiting(&self) {
         self.tracers_waiting.fetch_sub(1, Ordering::SeqCst);
+    }
+
+    fn sent(&self) -> usize {
+        self.work_sent.load(Ordering::SeqCst)
+    }
+
+    fn received(&self) -> usize {
+        self.work_received.load(Ordering::SeqCst)
+    }
+
+    fn mutators_stopped(&self) -> bool {
+        self.yield_lock.try_write().is_ok()
     }
 }

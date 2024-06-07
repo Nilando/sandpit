@@ -57,10 +57,6 @@ impl<M: Marker> TraceWorker<M> {
         }
 
         debug_assert_eq!(self.work.len(), 0);
-        debug_assert_eq!(self.controller.sent(), self.controller.received());
-        debug_assert_eq!(self.controller.has_work(), false);
-        debug_assert_eq!(self.controller.is_trace_completed(), true);
-        debug_assert_eq!(self.controller.mutators_stopped(), true)
     }
 
     fn do_work(&mut self) {
