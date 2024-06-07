@@ -196,28 +196,21 @@ mod tests {
         let medium_layout = Layout::new::<[u8; constants::LINE_SIZE * 2]>();
         let small_layout = Layout::from_size_align(constants::LINE_SIZE, 8).unwrap();
         let mut small_ptrs = Vec::<*const u8>::new();
-        let mut med_ptrs = Vec::<*const [u8; constants::LINE_SIZE * 2]>::new();
-        let medium_data = [255; constants::LINE_SIZE * 2];
+        let mut med_ptrs = Vec::<*const u8>::new();
 
-        for _ in 0..1000 {
+        for _ in 0..2000 {
             let ptr = blocks.alloc(small_layout).unwrap();
-            unsafe {
-                write(ptr as *mut u8, 0);
-            }
             small_ptrs.push(ptr);
+
             let med_ptr = blocks.alloc(medium_layout).unwrap();
-            unsafe {
-                write(med_ptr as *mut [u8; constants::LINE_SIZE * 2], medium_data);
-            }
-            med_ptrs.push(med_ptr as *mut [u8; constants::LINE_SIZE * 2]);
+            med_ptrs.push(med_ptr);
         }
 
-        for ptr in small_ptrs.iter() {
-            unsafe { assert!(**ptr == 0) }
-        }
+        while !small_ptrs.is_empty() {
+            let ptr = small_ptrs.pop().unwrap();
 
-        for ptr in med_ptrs.iter() {
-            unsafe { assert!(**ptr == medium_data) }
+            assert!(!med_ptrs.contains(&ptr));
+            assert!(!small_ptrs.contains(&ptr));
         }
     }
 }
