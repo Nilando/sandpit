@@ -93,6 +93,8 @@ impl<T: Trace> Gc<T> {
             // Running count of how many times major/minor collections have happend.
             major_collections: self.collector.get_major_collections(),
             minor_collections: self.collector.get_minor_collections(),
+
+            //average collect times in millis
             major_collect_avg_time: self.collector.get_major_collect_avg_time(),
             minor_collect_avg_time: self.collector.get_minor_collect_avg_time(),
 

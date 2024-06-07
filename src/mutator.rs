@@ -89,8 +89,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
 
         unsafe {
-            let ptr = update_ptr.as_nonnull();
-            let old_ptr = callback(ptr.as_ref());
+            let old_ptr = callback(&update_ptr);
 
             old_ptr.swap(new_ptr);
         }
