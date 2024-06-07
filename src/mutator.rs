@@ -20,6 +20,7 @@ pub trait Mutator {
     );
     fn rescan<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
+    fn new_null<T: Trace>(&self) -> GcPtr<T>;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
@@ -78,6 +79,10 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
     }
 
+    fn new_null<T: Trace>(&self) -> GcPtr<T> {
+        GcPtr::null()
+    }
+
     fn write_barrier<X: Trace, Y: Trace>(
         &self,
         update_ptr: GcPtr<X>,
@@ -88,11 +93,10 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
             drop(self.tracer_controller.get_write_barrier_lock());
         }
 
-        unsafe {
-            let old_ptr = callback(&update_ptr);
+        let old_ptr = callback(&update_ptr);
 
-            old_ptr.swap(new_ptr);
-        }
+        // this is safe b/c we will rescan this pointer
+        unsafe { old_ptr.swap(new_ptr); }
 
         self.rescan(update_ptr);
     }

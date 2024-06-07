@@ -28,14 +28,14 @@ impl<T: Trace> Deref for GcPtr<T> {
 }
 
 impl<T: Trace> GcPtr<T> {
-    pub fn new(ptr: NonNull<T>) -> Self {
+    pub(crate) fn new(ptr: NonNull<T>) -> Self {
         Self {
             ptr: AtomicPtr::from(ptr.as_ptr()),
             _mark: PhantomData::<*const ()>,
         }
     }
 
-    pub fn null() -> Self {
+    pub(crate) fn null() -> Self {
         Self {
             ptr: AtomicPtr::new(std::ptr::null_mut()),
             _mark: PhantomData::<*const ()>,

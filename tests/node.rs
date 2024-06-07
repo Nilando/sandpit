@@ -10,13 +10,13 @@ pub struct Node {
 
 impl Node {
     pub fn alloc<M: Mutator>(mutator: &M, val: usize) -> Result<GcPtr<Self>, GcError> {
-        mutator.alloc(Node::new(val))
+        mutator.alloc(Node::new(val, mutator))
     }
 
-    pub fn new(val: usize) -> Self {
+    pub fn new<M: Mutator>(val: usize, mutator: &M) -> Self {
         Self {
-            left: GcPtr::null(),
-            right: GcPtr::null(),
+            left: mutator.new_null(),
+            right: mutator.new_null(),
             val: Cell::new(val),
         }
     }
