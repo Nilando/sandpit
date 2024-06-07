@@ -41,7 +41,6 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
         Self {
             allocator,
             tracer_controller,
-            // TODO: this could probably be something other than a mutex
             rescan: RefCell::new(vec![]),
             _lock,
         }
