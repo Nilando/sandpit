@@ -1,10 +1,10 @@
 use super::collector::{Collect, Collector};
-use super::trace::TraceLeaf;
 use super::config::GcConfig;
 use super::metrics::GcMetrics;
 use super::monitor::Monitor;
 use super::mutator::MutatorScope;
 use super::trace::Trace;
+use super::trace::TraceLeaf;
 use std::sync::Arc;
 
 use super::allocator::Allocator;
@@ -37,7 +37,11 @@ impl<T: Trace> Gc<T> {
             monitor.clone().start();
         }
 
-        Self { collector, monitor, config }
+        Self {
+            collector,
+            monitor,
+            config,
+        }
     }
 
     // MutatorScope is a sealed type but the user utilize it through the public
@@ -46,7 +50,11 @@ impl<T: Trace> Gc<T> {
         self.collector.mutate(callback);
     }
 
-    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(&self, callback: fn(&T, &mut MutatorScope<Allocator>, input: I) -> O, input: I) -> O {
+    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(
+        &self,
+        callback: fn(&T, &mut MutatorScope<Allocator>, input: I) -> O,
+        input: I,
+    ) -> O {
         self.collector.mutate_io(callback, input)
     }
 
@@ -73,7 +81,7 @@ impl<T: Trace> Gc<T> {
     pub fn stop_monitor(&self) {
         self.monitor.stop();
     }
-    
+
     pub fn get_config(&self) -> GcConfig {
         self.config
     }

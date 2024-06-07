@@ -1,7 +1,7 @@
 use super::block::Block;
-use super::header::Header;
 use super::bump_block::BumpBlock;
 use super::errors::AllocError;
+use super::header::Header;
 use super::header::Mark;
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicUsize, Ordering};

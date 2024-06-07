@@ -57,6 +57,7 @@ extern crate self as sandpit;
 
 mod allocator;
 mod collector;
+mod config;
 mod error;
 mod gc;
 mod gc_ptr;
@@ -64,15 +65,14 @@ mod metrics;
 mod monitor;
 mod mutator;
 mod trace;
-mod config;
 
+pub use config::GcConfig;
 pub use error::GcError;
 pub use gc::Gc;
-pub use config::GcConfig;
 pub use gc_ptr::GcPtr;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
-pub use trace::{Trace, TraceLeaf, AssertTraceLeaf};
+pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 
 #[doc(hidden)]
 pub use derive::*;

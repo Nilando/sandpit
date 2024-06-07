@@ -80,8 +80,8 @@ impl BumpBlock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::constants::{LINE_COUNT, LINE_SIZE};
+    use super::*;
 
     #[test]
     fn test_empty_block() {
@@ -90,7 +90,7 @@ mod tests {
         for i in 0..BLOCK_CAPACITY {
             let ptr = b.inner_alloc(Layout::new::<u8>()).unwrap();
 
-            let offset = BLOCK_CAPACITY - (i+1);
+            let offset = BLOCK_CAPACITY - (i + 1);
             assert_eq!(b.cursor, offset);
             assert!(ptr as usize == b.block.as_ptr() as usize + offset);
         }
@@ -124,7 +124,7 @@ mod tests {
         for i in 0..(BLOCK_CAPACITY / 2) {
             let ptr = b.inner_alloc(Layout::new::<u8>()).unwrap();
 
-            let offset = (BLOCK_CAPACITY/2) - (i+1);
+            let offset = (BLOCK_CAPACITY / 2) - (i + 1);
             assert_eq!(b.cursor, offset);
             assert!(ptr as usize == b.block.as_ptr() as usize + offset);
         }

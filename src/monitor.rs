@@ -18,7 +18,6 @@ pub struct Monitor<T: Collect + 'static> {
     max_old_growth_rate: f32,
     arena_size_ratio_trigger: f32,
     wait_duration: u64,
-
     // History {
     //   size of gc arena
     //   how many old objects
@@ -42,7 +41,7 @@ impl<T: Collect + 'static> Monitor<T> {
             max_old_objects: AtomicUsize::new(0),
             max_old_growth_rate: config.monitor_max_old_growth_rate,
             arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
-            wait_duration: config.monitor_wait_time
+            wait_duration: config.monitor_wait_time,
         }
     }
 

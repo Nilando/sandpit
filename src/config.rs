@@ -1,7 +1,7 @@
 /// This structure contains the configuration settings for a garbage collector.
 #[derive(Copy, Clone, Debug)]
 pub struct GcConfig {
-    // The number of tracer threads, not including the thread that is used for 
+    // The number of tracer threads, not including the thread that is used for
     // monitoring.
     pub tracer_threads: usize,
     // The amount of work a tracer does before attempting to share its work.

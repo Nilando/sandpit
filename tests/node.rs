@@ -400,13 +400,17 @@ fn multi_threaded_root_mutation() {
 fn insert_and_extract_node_val() {
     let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
-    gc.mutate(|root, mutator| { Node::insert(root, mutator, 333); } );
+    gc.mutate(|root, mutator| {
+        Node::insert(root, mutator, 333);
+    });
 
     let val = gc.extract(|root| Node::find(root, 333).unwrap().val.get());
 
     assert!(val == 333);
 
-    gc.insert(420, |root, new_val| Node::find(root, 333).unwrap().val.set(new_val));
+    gc.insert(420, |root, new_val| {
+        Node::find(root, 333).unwrap().val.set(new_val)
+    });
 
     let val = gc.extract(|root| Node::find(root, 420).unwrap().val.get());
 

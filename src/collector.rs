@@ -1,7 +1,7 @@
 use super::allocator::{Allocate, GenerationalArena};
-use super::trace::TraceLeaf;
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
+use super::trace::TraceLeaf;
 use super::trace::{Marker, Trace, TraceMarker, TracerController};
 use std::time::Duration;
 
@@ -112,7 +112,11 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         callback(&self.root, &mut mutator);
     }
 
-    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(&self, callback: fn(&T, &mut MutatorScope<A>, input: I) -> O, input: I) -> O {
+    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(
+        &self,
+        callback: fn(&T, &mut MutatorScope<A>, input: I) -> O,
+        input: I,
+    ) -> O {
         let mut mutator = self.new_mutator();
 
         callback(&self.root, &mut mutator, input)
@@ -136,14 +140,18 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         let mutator_duration = Duration::from_nanos(mutator_nanos);
         let collector_duration = Duration::from_nanos(collector_nanos);
 
-        debug_assert_eq!(collector_nanos + mutator_nanos, (one_mili_in_nanos * self.timeslice_size) as u64);
+        debug_assert_eq!(
+            collector_nanos + mutator_nanos,
+            (one_mili_in_nanos * self.timeslice_size) as u64
+        );
 
         (mutator_duration, collector_duration)
     }
 
     fn run_space_time_manager(&self) {
         let prev_size = self.arena.get_size();
-        let max_headroom = ((prev_size as f32 / self.arena_size_ratio_trigger ) * self.max_headroom_ratio) as usize;
+        let max_headroom =
+            ((prev_size as f32 / self.arena_size_ratio_trigger) * self.max_headroom_ratio) as usize;
 
         loop {
             // we've ran out of headroom, stop the mutators
@@ -152,7 +160,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
                 break;
             }
 
-            let (mutator_duration, collector_duration) = self.split_timeslice(max_headroom, prev_size);
+            let (mutator_duration, collector_duration) =
+                self.split_timeslice(max_headroom, prev_size);
 
             std::thread::sleep(mutator_duration);
 
@@ -162,7 +171,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
             let _lock = self.tracer.get_write_barrier_lock();
             std::thread::sleep(collector_duration);
-            
+
             if !self.tracer.is_tracing() {
                 break;
             }
@@ -177,7 +186,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         // to take 1.4ms
         self.run_space_time_manager();
         self.tracer.wait_for_trace_completion();
-        self.old_objects.fetch_add(marker.get_mark_count(), Ordering::SeqCst);
+        self.old_objects
+            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

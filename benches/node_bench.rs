@@ -3,8 +3,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 #[path = "../tests/node.rs"]
 mod node;
 
-use sandpit::Gc;
 use node::Node;
+use sandpit::Gc;
 
 const TREE_SIZE: usize = 10_000;
 

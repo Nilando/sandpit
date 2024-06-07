@@ -1,13 +1,12 @@
 use super::marker::Marker;
-use crate::config::GcConfig;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
+use crate::config::GcConfig;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
-    Mutex, MutexGuard,
     atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc, RwLock, RwLockReadGuard,
+    Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
 };
 use std::time::Instant;
 

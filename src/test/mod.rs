@@ -179,7 +179,6 @@ fn gc_ptr_size_and_align() {
     assert_eq!(align_of::<GcPtr<()>>(), align_of::<GcPtr<u128>>());
 }
 
-
 #[test]
 fn extract_and_insert() {
     let gc = Gc::build(|_| Cell::new(0));
@@ -187,7 +186,9 @@ fn extract_and_insert() {
 
     assert!(val == 0);
 
-    gc.insert(69, |root, new_val| {root.set(new_val); });
+    gc.insert(69, |root, new_val| {
+        root.set(new_val);
+    });
 
     let val = gc.extract(|root| root.get());
 
