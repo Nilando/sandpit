@@ -14,15 +14,16 @@ pub struct GcPtr<T: Trace> {
 impl<T: Trace> Deref for GcPtr<T> {
     type Target = T;
 
+    // this is safe b/c we can only have a gcptr within a mutation context,
+    // and gcptrs are guaranteed not to be swept during that context
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            let ptr = self.as_ptr();
-            if ptr.is_null() {
-                panic!("Attempt to deref a null GC ptr")
-            }
+        let ptr = self.as_ptr();
 
-            NonNull::new(ptr).unwrap().as_ref()
+        if ptr.is_null() {
+            panic!("Attempt to deref a null GC ptr")
         }
+
+        unsafe { &*ptr }
     }
 }
 
@@ -45,25 +46,21 @@ impl<T: Trace> GcPtr<T> {
         self.ptr.store(std::ptr::null_mut(), Ordering::SeqCst)
     }
 
-    pub unsafe fn as_ptr(&self) -> *mut T {
+    pub fn as_ptr(&self) -> *mut T {
         self.ptr.load(Ordering::SeqCst)
     }
 
-    pub unsafe fn as_nonnull(&self) -> NonNull<T> {
+    pub fn as_nonnull(&self) -> NonNull<T> {
         let ptr = self.ptr.load(Ordering::SeqCst);
 
         NonNull::new(ptr).unwrap()
     }
 
-    pub unsafe fn cast<V: Trace>(&self) -> GcPtr<V> {
-        GcPtr::new(NonNull::new_unchecked(self.as_ptr().cast()))
-    }
-
     pub fn is_null(&self) -> bool {
-        unsafe { self.as_ptr().is_null() }
+        self.as_ptr().is_null()
     }
 
-    pub unsafe fn unsafe_set(&self, new_ptr: GcPtr<T>) {
+    pub unsafe fn swap(&self, new_ptr: GcPtr<T>) {
         self.ptr
             .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
     }

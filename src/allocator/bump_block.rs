@@ -1,13 +1,13 @@
 use super::block::Block;
 use super::block_meta::BlockMeta;
-use super::constants;
+use super::constants::{BLOCK_CAPACITY, SMALL_OBJECT_MIN};
 use super::errors::AllocError;
 use super::header::Mark;
 use std::alloc::Layout;
 
 pub struct BumpBlock {
-    cursor: *const u8,
-    limit: *const u8,
+    cursor: usize,
+    limit: usize,
     block: Block,
     meta: BlockMeta,
 }
@@ -17,8 +17,8 @@ impl BumpBlock {
         let inner_block = Block::default()?;
         let block_ptr = inner_block.as_ptr();
         let block = BumpBlock {
-            cursor: unsafe { block_ptr.add(constants::BLOCK_CAPACITY) },
-            limit: block_ptr,
+            cursor: BLOCK_CAPACITY,
+            limit: 0,
             block: inner_block,
             meta: BlockMeta::new(block_ptr),
         };
@@ -29,37 +29,40 @@ impl BumpBlock {
     pub fn reset_hole(&mut self, mark: Mark) {
         self.meta.free_unmarked(mark);
 
+        if self.meta.get_block() != mark {
+            self.cursor = BLOCK_CAPACITY;
+            self.limit = 0;
+            return;
+        }
+
         if let Some((cursor, limit)) = self
             .meta
-            .find_next_available_hole(constants::BLOCK_CAPACITY, constants::SMALL_OBJECT_MIN)
+            .find_next_available_hole(BLOCK_CAPACITY, SMALL_OBJECT_MIN)
         {
-            self.cursor = unsafe { self.block.as_ptr().add(cursor) };
-            self.limit = unsafe { self.block.as_ptr().add(limit) };
+            self.cursor = cursor;
+            self.limit = limit;
         } else {
-            self.cursor = self.block.as_ptr();
-            self.limit = self.block.as_ptr();
+            self.cursor = 0;
+            self.limit = 0;
         }
     }
 
     pub fn inner_alloc(&mut self, layout: Layout) -> Option<*const u8> {
         loop {
-            let ptr = self.cursor as usize;
-            let next_ptr = ptr.checked_sub(layout.size())? & !(layout.align() - 1);
+            let next_ptr = self.cursor.checked_sub(layout.size())? & !(layout.align() - 1);
 
             if self.limit as usize <= next_ptr {
-                let diff = ptr - next_ptr;
-                self.cursor = unsafe { self.cursor.sub(diff) };
-                return Some(self.cursor);
-            }
+                self.cursor = next_ptr;
 
-            let block_relative_limit = self.limit as usize - self.block.as_ptr() as usize;
+                return Some(self.block.at_offset(self.cursor));
+            }
 
             if let Some((cursor, limit)) = self
                 .meta
-                .find_next_available_hole(block_relative_limit, layout.size())
+                .find_next_available_hole(self.limit, layout.size())
             {
-                self.cursor = unsafe { self.block.as_ptr().add(cursor) };
-                self.limit = unsafe { self.block.as_ptr().add(limit) };
+                self.cursor = cursor;
+                self.limit = limit;
             } else {
                 return None;
             }
@@ -78,78 +81,76 @@ impl BumpBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn loop_check_allocate(b: &mut BumpBlock) -> usize {
-        let mut v = Vec::new();
-        let mut index = 0;
-        let layout = Layout::from_size_align(16, 8).unwrap();
-
-        loop {
-            if let Some(ptr) = b.inner_alloc(layout) {
-                let u32ptr = ptr as *mut u32;
-
-                assert!(!v.contains(&u32ptr));
-
-                v.push(u32ptr);
-                unsafe { *u32ptr = index }
-
-                index += 1;
-            } else {
-                break;
-            }
-        }
-
-        for (index, u32ptr) in v.iter().enumerate() {
-            unsafe {
-                assert_eq!(**u32ptr, index as u32);
-            }
-        }
-
-        index as usize
-    }
+    use super::super::constants::{LINE_COUNT, LINE_SIZE};
 
     #[test]
     fn test_empty_block() {
         let mut b = BumpBlock::new().unwrap();
 
-        let count = loop_check_allocate(&mut b);
-        let expect = constants::BLOCK_CAPACITY / 16;
+        for i in 0..BLOCK_CAPACITY {
+            let ptr = b.inner_alloc(Layout::new::<u8>()).unwrap();
 
-        assert_eq!(count, expect);
+            let offset = BLOCK_CAPACITY - (i+1);
+            assert_eq!(b.cursor, offset);
+            assert!(ptr as usize == b.block.as_ptr() as usize + offset);
+        }
+
+        assert!(b.inner_alloc(Layout::new::<u8>()).is_none());
+    }
+
+    #[test]
+    fn test_full_block() {
+        let mut b = BumpBlock::new().unwrap();
+
+        for i in 0..LINE_COUNT {
+            b.meta.set_line(i, Mark::Red);
+        }
+
+        b.reset_hole(Mark::Red);
+
+        assert!(b.inner_alloc(Layout::new::<u8>()).is_none());
     }
 
     #[test]
     fn test_half_block() {
         let mut b = BumpBlock::new().unwrap();
 
-        for i in 0..(constants::LINE_COUNT / 2) {
+        for i in ((LINE_COUNT - 2) / 2)..LINE_COUNT {
             b.meta.set_line(i, Mark::Red);
         }
-        let occupied_bytes = (constants::LINE_COUNT / 2) * constants::LINE_SIZE;
 
-        b.limit = b.cursor; // block is recycled
+        b.reset_hole(Mark::Red);
 
-        let count = loop_check_allocate(&mut b);
-        let expect = (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / 16;
+        for i in 0..(BLOCK_CAPACITY / 2) {
+            let ptr = b.inner_alloc(Layout::new::<u8>()).unwrap();
 
-        assert_eq!(count, expect);
+            let offset = (BLOCK_CAPACITY/2) - (i+1);
+            assert_eq!(b.cursor, offset);
+            assert!(ptr as usize == b.block.as_ptr() as usize + offset);
+        }
+
+        assert!(b.inner_alloc(Layout::new::<u8>()).is_none());
+        assert_eq!(b.cursor, 0);
+        assert_eq!(b.limit, 0);
     }
 
     #[test]
     fn test_conservatively_marked_block() {
         let mut b = BumpBlock::new().unwrap();
 
-        for i in 0..constants::LINE_COUNT {
+        for i in 0..LINE_COUNT {
             if i % 2 == 0 {
                 b.meta.set_line(i, Mark::Red);
             }
         }
 
-        b.limit = b.cursor;
+        b.meta.set_block(Mark::Red);
 
-        let count = loop_check_allocate(&mut b);
+        b.reset_hole(Mark::Red);
 
-        assert_eq!(count, 0);
+        assert!(b.inner_alloc(Layout::new::<u8>()).is_none());
+        assert_eq!(b.cursor, 0);
+        assert_eq!(b.limit, 0);
     }
 
     #[test]
@@ -157,6 +158,6 @@ mod tests {
         let block = BumpBlock::new().unwrap();
         let expect = block.current_hole_size();
 
-        assert_eq!(expect, constants::BLOCK_CAPACITY);
+        assert_eq!(expect, BLOCK_CAPACITY);
     }
 }

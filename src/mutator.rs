@@ -92,14 +92,14 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
             let ptr = update_ptr.as_nonnull();
             let old_ptr = callback(ptr.as_ref());
 
-            old_ptr.unsafe_set(new_ptr);
-
-            self.rescan(update_ptr);
+            old_ptr.swap(new_ptr);
         }
+
+        self.rescan(update_ptr);
     }
 
     fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
-        let ptr = unsafe { gc_ptr.as_nonnull() };
+        let ptr = gc_ptr.as_nonnull();
 
         if !self.allocator.is_old(ptr) {
             return;
