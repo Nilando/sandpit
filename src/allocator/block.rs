@@ -3,10 +3,8 @@ use super::errors::BlockError;
 use std::alloc::{alloc, dealloc, Layout};
 use std::ptr::NonNull;
 
-pub type BlockPtr = NonNull<u8>;
-
 pub struct Block {
-    ptr: BlockPtr,
+    ptr: NonNull<u8>,
     layout: Layout,
 }
 
@@ -34,7 +32,7 @@ impl Block {
         self.layout.size()
     }
 
-    fn alloc_block(layout: Layout) -> Result<BlockPtr, BlockError> {
+    fn alloc_block(layout: Layout) -> Result<NonNull<u8>, BlockError> {
         unsafe {
             let ptr = alloc(layout);
 
@@ -45,14 +43,10 @@ impl Block {
             }
         }
     }
-
-    fn dealloc_block(ptr: BlockPtr, layout: Layout) {
-        unsafe { dealloc(ptr.as_ptr(), layout) }
-    }
 }
 
 impl Drop for Block {
     fn drop(&mut self) {
-        Block::dealloc_block(self.ptr, self.layout);
+        unsafe { dealloc(self.ptr.as_ptr(), self.layout) }
     }
 }
