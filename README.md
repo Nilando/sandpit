@@ -30,7 +30,7 @@ VERSION 0.1.1
         - should making a vec(dyn len array) fall on the user of this library?
     - Mutator Context?
         - the presence of a GcPtr, GcArray, or Mutator all indicate we are in a mutator context
-
+    - add non blocking versions of the gc mutate functions?
             
 
 COMPLETED

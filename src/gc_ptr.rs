@@ -60,6 +60,15 @@ impl<T: Trace> GcPtr<T> {
         self.as_ptr().is_null()
     }
 
+    // This is unsafe b/c if the object holding this ptr has already been scanned,
+    // then if the collector finishes collection with out rescanning that object,
+    // this will become dangling.
+    //
+    // Either the swapped pointer must be guaranteed to not exist before the end 
+    // of this mutation scope, or the object containing this ptr must be rescanned
+    //
+    // Instead of using this directly, use the mutators write_barrier, which is safe
+    // b/c it ensured the object is rescanned
     pub unsafe fn swap(&self, new_ptr: GcPtr<T>) {
         self.ptr
             .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
