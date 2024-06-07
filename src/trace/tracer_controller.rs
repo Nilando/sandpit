@@ -151,7 +151,7 @@ impl<M: Marker> TracerController<M> {
     }
 
     pub fn wait_for_trace_completion(&self) {
-        self.trace_lock.write().unwrap();
+        drop(self.trace_lock.write().unwrap());
 
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);

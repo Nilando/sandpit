@@ -1,6 +1,7 @@
 use super::tracer::Tracer;
 use std::cell::Cell;
 use std::ptr::NonNull;
+use std::sync::atomic::AtomicUsize;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not contain
 /// any GcPtr's.
@@ -51,21 +52,19 @@ unsafe impl<L: TraceLeaf> Trace for L {
     }
 }
 
-unsafe impl TraceLeaf for () {}
-unsafe impl TraceLeaf for bool {}
-unsafe impl TraceLeaf for u8 {}
-unsafe impl TraceLeaf for u16 {}
-unsafe impl TraceLeaf for u32 {}
-unsafe impl TraceLeaf for u64 {}
-unsafe impl TraceLeaf for u128 {}
-unsafe impl TraceLeaf for usize {}
-unsafe impl TraceLeaf for i8 {}
-unsafe impl TraceLeaf for i16 {}
-unsafe impl TraceLeaf for i32 {}
-unsafe impl TraceLeaf for i64 {}
-unsafe impl TraceLeaf for i128 {}
-unsafe impl TraceLeaf for isize {}
-unsafe impl TraceLeaf for std::sync::atomic::AtomicUsize {}
+macro_rules! impl_trace_leaf {
+    ($($t:ty),*) => {
+        $(unsafe impl TraceLeaf for $t {})*
+    };
+}
+
+impl_trace_leaf!(
+    (),
+    bool,
+    u8, u16, u32, u64, u128, usize,
+    i8, i16, i32, i64, i128, isize,
+    AtomicUsize
+);
 
 // ****************************************************************************
 // TRACE IMPLS

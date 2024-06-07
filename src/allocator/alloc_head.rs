@@ -124,7 +124,6 @@ impl AllocHead {
 mod tests {
     use super::super::constants;
     use super::*;
-    use std::ptr::write;
 
     #[test]
     fn test_recycle_alloc() {

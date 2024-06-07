@@ -85,7 +85,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         callback: fn(&X) -> &GcPtr<Y>,
     ) {
         if self.tracer_controller.is_write_barrier_locked() {
-            self.tracer_controller.get_write_barrier_lock();
+            drop(self.tracer_controller.get_write_barrier_lock());
         }
 
         unsafe {

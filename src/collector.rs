@@ -93,14 +93,14 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     pub fn insert<L: TraceLeaf>(&self, callback: fn(&T, L), value: L) {
-        self.lock.lock().unwrap();
+        drop(self.lock.lock().unwrap());
         let _lock = self.tracer.yield_lock();
 
         callback(&self.root, value);
     }
 
     pub fn extract<L: TraceLeaf>(&self, callback: fn(&T) -> L) -> L {
-        self.lock.lock().unwrap();
+        drop(self.lock.lock().unwrap());
         let _lock = self.tracer.yield_lock();
 
         callback(&self.root)

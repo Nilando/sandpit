@@ -25,7 +25,7 @@ impl Block {
     }
 
     pub fn at_offset(&self, offset: usize) -> *const u8 {
-        assert!(offset < BLOCK_SIZE);
+        debug_assert!(offset < BLOCK_SIZE);
 
         unsafe { self.ptr.as_ptr().add(offset) }
     }

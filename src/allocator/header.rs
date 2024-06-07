@@ -2,7 +2,6 @@ use super::allocate::Marker;
 use super::block_meta::BlockMeta;
 use super::size_class::SizeClass;
 use std::mem::{align_of, size_of};
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
@@ -96,7 +95,7 @@ impl Header {
         }
     }
 
-    pub fn debug<T>(header: *const Header, ptr: NonNull<T>) -> bool {
+    pub fn debug<T>(header: *const Header) -> bool {
         unsafe {
             let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
             let header_size = size_of::<Header>();

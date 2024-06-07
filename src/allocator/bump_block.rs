@@ -80,7 +80,7 @@ impl BumpBlock {
 
 #[cfg(test)]
 mod tests {
-    use super::super::constants::{LINE_COUNT, LINE_SIZE};
+    use super::super::constants::LINE_COUNT;
     use super::*;
 
     #[test]

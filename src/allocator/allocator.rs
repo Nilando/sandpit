@@ -74,7 +74,7 @@ impl Allocate for Allocator {
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
         let header = Self::get_header(ptr);
 
-        debug_assert!(Header::debug(header, ptr));
+        debug_assert!(Header::debug::<T>(header));
 
         Header::get_mark(header)
     }
@@ -82,7 +82,7 @@ impl Allocate for Allocator {
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         let header = Self::get_header(ptr);
 
-        debug_assert!(Header::debug(header, ptr));
+        debug_assert!(Header::debug::<T>(header));
 
         Header::set_mark(header, mark);
     }
@@ -90,7 +90,7 @@ impl Allocate for Allocator {
     fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
         let header = Self::get_header(ptr);
 
-        debug_assert!(Header::debug(header, ptr));
+        debug_assert!(Header::debug::<T>(header));
 
         Header::get_mark(header) == self.get_current_mark()
     }

@@ -1,5 +1,4 @@
-use crate::{Gc, GcPtr, Mutator, Trace};
-use std::alloc::Layout;
+use crate::{Gc, GcPtr, Mutator};
 use std::cell::Cell;
 use std::mem::{align_of, size_of};
 
