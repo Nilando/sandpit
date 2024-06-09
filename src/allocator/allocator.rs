@@ -17,24 +17,6 @@ pub struct Allocator {
     current_mark: Arc<AtomicU8>,
 }
 
-impl Allocator {
-    pub fn get_header<'a, T>(object: NonNull<T>) -> &'a Header {
-        let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
-        let header_size = size_of::<Header>();
-        let padding = (align - (header_size % align)) % align;
-        let ptr: *mut u8 = object.as_ptr().cast::<u8>();
-
-        debug_assert!((ptr as usize % align) == 0);
-        debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
-
-        unsafe { &*(ptr.sub(header_size + padding) as *const Header) }
-    }
-
-    fn get_current_mark(&self) -> Mark {
-        Mark::from(self.current_mark.load(Ordering::SeqCst))
-    }
-}
-
 impl Allocate for Allocator {
     type Arena = Arena;
     type Error = AllocError;
@@ -65,7 +47,7 @@ impl Allocate for Allocator {
             let space = self.head.alloc(alloc_layout)?;
             let object_space = space.add(header_size + padding);
 
-            //header.mark_new(); might need to add this back bc of miri
+            //header.mark_new(); might need to add this back bc of miri error?
             write(space as *mut Header, header);
             Ok(NonNull::new(object_space as *mut u8).unwrap())
         }
@@ -85,5 +67,23 @@ impl Allocate for Allocator {
 
     fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
         Self::get_mark(ptr) == self.get_current_mark()
+    }
+}
+
+impl Allocator {
+    pub fn get_header<'a, T>(object: NonNull<T>) -> &'a Header {
+        let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
+        let header_size = size_of::<Header>();
+        let padding = (align - (header_size % align)) % align;
+        let ptr: *mut u8 = object.as_ptr().cast::<u8>();
+
+        debug_assert!((ptr as usize % align) == 0);
+        debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
+
+        unsafe { &*(ptr.sub(header_size + padding) as *const Header) }
+    }
+
+    fn get_current_mark(&self) -> Mark {
+        Mark::from(self.current_mark.load(Ordering::SeqCst))
     }
 }
