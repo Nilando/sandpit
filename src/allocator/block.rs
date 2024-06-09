@@ -10,11 +10,9 @@ pub struct Block {
 
 impl Block {
     pub fn default() -> Result<Block, BlockError> {
-        unsafe {
-            let layout = Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE);
+        let layout = Layout::from_size_align(BLOCK_SIZE, BLOCK_SIZE).unwrap();
 
-            Self::new(layout)
-        }
+        Self::new(layout)
     }
 
     pub fn new(layout: Layout) -> Result<Block, BlockError> {

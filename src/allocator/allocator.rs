@@ -18,7 +18,7 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub fn get_header<'a, T>(object: NonNull<T>) -> *const Header {
+    pub fn get_header<'a, T>(object: NonNull<T>) -> &'a Header {
         let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
         let header_size = size_of::<Header>();
         let padding = (align - (header_size % align)) % align;
@@ -27,7 +27,7 @@ impl Allocator {
         debug_assert!((ptr as usize % align) == 0);
         debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
 
-        unsafe { ptr.sub(header_size + padding) as *const Header }
+        unsafe { &*(ptr.sub(header_size + padding) as *const Header) }
     }
 
     fn get_current_mark(&self) -> Mark {
@@ -65,8 +65,8 @@ impl Allocate for Allocator {
             let space = self.head.alloc(alloc_layout)?;
             let object_space = space.add(header_size + padding);
 
+            //header.mark_new(); might need to add this back bc of miri
             write(space as *mut Header, header);
-            Header::mark_new(space as *const Header);
             Ok(NonNull::new(object_space as *mut u8).unwrap())
         }
     }
@@ -74,24 +74,16 @@ impl Allocate for Allocator {
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
         let header = Self::get_header(ptr);
 
-        debug_assert!(Header::debug::<T>(header));
-
-        Header::get_mark(header)
+        header.get_mark()
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
         let header = Self::get_header(ptr);
 
-        debug_assert!(Header::debug::<T>(header));
-
-        Header::set_mark(header, mark);
+        header.set_mark(mark);
     }
 
     fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
-        let header = Self::get_header(ptr);
-
-        debug_assert!(Header::debug::<T>(header));
-
-        Header::get_mark(header) == self.get_current_mark()
+        Self::get_mark(ptr) == self.get_current_mark()
     }
 }

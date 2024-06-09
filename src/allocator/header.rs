@@ -65,9 +65,8 @@ impl Header {
         }
     }
 
-    pub fn get_mark(ptr: *const Header) -> Mark {
-        let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
-        unsafe { (*mark_ptr).load(Ordering::SeqCst).into() }
+    pub fn get_mark(&self) -> Mark {
+        self.mark.load(Ordering::SeqCst).into()
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -78,39 +77,17 @@ impl Header {
         self.size
     }
 
-    pub fn mark_new(ptr: *const Header) {
-        let mark_ptr = ptr as *const AtomicU8; // safe b/c repr C
-        unsafe { (*mark_ptr).store(Mark::New as u8, Ordering::SeqCst) }
+    pub fn mark_new(&self) {
+        self.mark.store(Mark::New as u8, Ordering::SeqCst)
     }
 
-    pub fn set_mark(ptr: *const Header, mark: Mark) {
-        let self_ref = unsafe { &*ptr };
+    pub fn set_mark(&self, mark: Mark) {
+        self.mark.store(mark as u8, Ordering::SeqCst);
 
-        self_ref.mark.store(mark as u8, Ordering::SeqCst);
+        if mark != Mark::New && self.size_class != SizeClass::Large {
+            let meta = BlockMeta::from_header(self);
 
-        if mark != Mark::New && self_ref.size_class != SizeClass::Large {
-            let meta = BlockMeta::from_header(ptr);
-
-            meta.mark(self_ref, mark);
-        }
-    }
-
-    pub fn debug<T>(header: *const Header) -> bool {
-        unsafe {
-            let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
-            let header_size = size_of::<Header>();
-            let padding = (align - (header_size % align)) % align;
-            let alloc_size = header_size + padding + size_of::<T>();
-            let size_class = SizeClass::get_for_size(alloc_size).unwrap();
-            let header_ref = &*header;
-
-            if size_class != SizeClass::Large {
-                debug_assert_eq!(header_ref.get_size() as usize, alloc_size);
-            }
-
-            debug_assert_eq!(header_ref.get_size_class(), size_class);
-
-            true
+            meta.mark(self, mark);
         }
     }
 }
