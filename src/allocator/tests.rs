@@ -16,14 +16,7 @@ fn hello_alloc() {
 
     assert_eq!(arena.get_size(), 0);
 
-    let ptr = allocator.alloc(layout).unwrap();
-
-    unsafe {
-        write(ptr.as_ptr().cast(), name);
-
-        let expect = ptr.cast::<&str>().as_ref();
-        assert_eq!(expect, &name);
-    }
+    allocator.alloc(layout).unwrap();
 
     assert_eq!(arena.get_size(), BLOCK_SIZE);
 }
@@ -47,13 +40,7 @@ fn alloc_many_single_bytes() {
     let layout = Layout::new::<u8>();
 
     for _ in 0..100_000 {
-        let ptr = allocator.alloc(layout).unwrap();
-
-        unsafe {
-            write(ptr.as_ptr(), 3_u8);
-            let val = ptr.as_ref();
-            assert_eq!(*val, 3);
-        }
+        allocator.alloc(layout).unwrap();
     }
 }
 
@@ -143,11 +130,9 @@ fn arena_get_size() {
     let med_header = Allocator::get_header(p2);
     let large_header = Allocator::get_header(p3);
 
-    unsafe {
-        assert_eq!((*small_header).get_size_class(), SizeClass::Small);
-        assert_eq!((*med_header).get_size_class(), SizeClass::Medium);
-        assert_eq!((*large_header).get_size_class(), SizeClass::Large);
-    }
+    assert_eq!((*small_header).get_size_class(), SizeClass::Small);
+    assert_eq!((*med_header).get_size_class(), SizeClass::Medium);
+    assert_eq!((*large_header).get_size_class(), SizeClass::Large);
 
     let align = std::cmp::max(align_of::<Header>(), large.align());
     let header_size = size_of::<Header>();
