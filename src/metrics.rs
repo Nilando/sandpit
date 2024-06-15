@@ -1,6 +1,6 @@
 /// A struct holding metrics relevant to the GarbageCollectors internal
 /// triggers. Can be acquired by calling `gc.metrics()`
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GcMetrics {
     pub major_collections: usize,
     pub minor_collections: usize,
