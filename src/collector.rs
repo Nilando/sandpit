@@ -6,9 +6,17 @@ use super::trace::{Marker, Trace, TraceMarker, TracerController};
 use std::time::{Duration, Instant};
 
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicUsize, AtomicU8, Ordering},
     Arc, Mutex,
 };
+
+#[repr(u8)]
+#[derive(Clone, Debug)]
+pub enum GcState {
+    Waiting,
+    Marking,
+    Finishing,
+}
 
 pub trait Collect {
     fn major_collect(&self);
@@ -20,6 +28,7 @@ pub trait Collect {
     fn get_minor_collections(&self) -> usize;
     fn get_major_collect_avg_time(&self) -> usize;
     fn get_minor_collect_avg_time(&self) -> usize;
+    fn get_state(&self) -> GcState;
 }
 
 pub struct Collector<A: Allocate, T: Trace> {
@@ -39,7 +48,6 @@ pub struct Collector<A: Allocate, T: Trace> {
     max_headroom_ratio: f32,
     timeslice_size: f32,
     slice_min: f32,
-
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
@@ -47,8 +55,8 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
-        self.major_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
+        self.major_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -58,8 +66,8 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
-        self.minor_collections.fetch_add(1, Ordering::SeqCst);
         self.collect(TraceMarker::new(self.arena.current_mark()).into());
+        self.minor_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -88,6 +96,16 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 
     fn get_minor_collect_avg_time(&self) -> usize {
         self.minor_collect_avg_time.load(Ordering::SeqCst)
+    }
+
+    fn get_state(&self) -> GcState {
+        if self.lock.try_lock().is_ok() { 
+            GcState::Waiting
+        } else if self.tracer.yield_flag() {
+            GcState::Finishing
+        } else {
+            GcState::Marking
+        }
     }
 }
 
@@ -167,7 +185,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
     }
 
     fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
-        // Algorithm taken from webkit riptide collector:
+        // Algorithm inspired from webkit riptide collector:
         let one_mili_in_nanos = 1_000_000.0;
         let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
         let headroom_ratio = available_headroom as f32 / max_headroom as f32;

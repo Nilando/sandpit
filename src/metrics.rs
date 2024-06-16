@@ -1,3 +1,4 @@
+use super::collector::GcState;
 /// A struct holding metrics relevant to the GarbageCollectors internal
 /// triggers. Can be acquired by calling `gc.metrics()`
 #[derive(Clone, Debug)]
@@ -10,4 +11,5 @@ pub struct GcMetrics {
     pub old_objects_count: usize,
     pub arena_size: usize,
     pub prev_arena_size: usize,
+    pub state: GcState,
 }

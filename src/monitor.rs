@@ -101,7 +101,7 @@ impl<T: Collect + 'static> Monitor<T> {
         let arena_size = self.collector.get_arena_size();
         let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
 
-        arena_size as f32 >= (prev_arena_size as f32 * self.arena_size_ratio_trigger)
+        arena_size as f32 > (prev_arena_size as f32 * self.arena_size_ratio_trigger)
     }
 
     fn update_old_max(&self) {
@@ -125,6 +125,7 @@ impl<T: Collect + 'static> Monitor<T> {
 
     pub fn metrics(&self) -> GcMetrics {
         GcMetrics {
+            state: self.collector.get_state(),
             // Collector Metrics:
 
             // Running count of how many times major/minor collections have happend.
@@ -148,8 +149,6 @@ impl<T: Collect + 'static> Monitor<T> {
             max_old_objects: self.get_max_old_objects(),
             // The size of the arena at the end of the last collection.
             prev_arena_size: self.get_prev_arena_size(),
-
-
         }
     }
 }
