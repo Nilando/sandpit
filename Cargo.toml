@@ -24,7 +24,7 @@ readme.workspace = true
 repository.workspace = true
 
 [dependencies]
-derive = { path = "./derive" }
+derive = { path = "./derive", version = "0.2.5" }
 crossbeam-channel = "0.5.13"
 
 [dev-dependencies]
