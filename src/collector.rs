@@ -6,7 +6,7 @@ use super::trace::{Marker, Trace, TraceMarker, TracerController};
 use std::time::{Duration, Instant};
 
 use std::sync::{
-    atomic::{AtomicUsize, AtomicU8, Ordering},
+    atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
 

@@ -1,7 +1,12 @@
 [package]
 name = "derive"
-version = "0.1.0"
-edition = "2021"
+description = "Derive support for the sandpit GC"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
 
 [lib]
 proc-macro = true

@@ -1,7 +1,6 @@
 use super::allocate::Marker;
 use super::block_meta::BlockMeta;
 use super::size_class::SizeClass;
-use std::mem::{align_of, size_of};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]

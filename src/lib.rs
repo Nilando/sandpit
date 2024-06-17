@@ -72,8 +72,8 @@ pub use gc::Gc;
 pub use gc_ptr::GcPtr;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
-pub use derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
+pub use derive::{Trace, TraceLeaf};
 
 #[doc(hidden)]
 pub use trace::Tracer;
