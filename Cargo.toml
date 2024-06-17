@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "derive",
+    "trace_derive",
 ]
 
 [workspace.package]
@@ -24,7 +24,7 @@ readme.workspace = true
 repository.workspace = true
 
 [dependencies]
-derive = { path = "./derive", version = "0.2.5" }
+trace_derive = { path = "./trace_derive", version = "0.2.5" }
 crossbeam-channel = "0.5.13"
 
 [dev-dependencies]
