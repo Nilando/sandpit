@@ -75,6 +75,8 @@ pub use mutator::Mutator;
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 
 pub extern crate derive;
+
+#[macro_use]
 pub use derive::{Trace, TraceLeaf};
 
 #[doc(hidden)]
