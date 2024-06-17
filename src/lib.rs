@@ -74,9 +74,10 @@ pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 
-pub extern crate derive;
 #[macro_use]
-pub use derive::*;
+pub extern crate derive;
+
+pub use derive::{Trace, TraceLeaf};
 
 #[doc(hidden)]
 pub use trace::Tracer;
