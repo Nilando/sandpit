@@ -7,15 +7,6 @@ VERSION 0.3.0
     - switch to major during minor collection
     - grow, shrink, and layout alloc options
 
-VERSION 0.2.0
-    - #[derive(TraceLeaf)]
-    - Mutation Input and Output
-    - tracer channels
-    - add GcConfig
-    - free large objects
-    - Trigger yield from space/time limits
-    - using derives inside of /src
-
 ISSUES
     - Better Config
         - add allocator config?
@@ -27,3 +18,4 @@ ISSUES
     - Mutator Context?
         - the presence of a GcPtr, GcArray, or Mutator all indicate we are in a mutator context
     - add non blocking versions of the gc mutate functions?
+    - Review of Atomic Operations
