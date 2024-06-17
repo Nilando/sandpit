@@ -1,5 +1,5 @@
 [package]
-name = "trace_derive"
+name = "sandpit_derive"
 description = "Derive support for the sandpit GC"
 version.workspace = true
 authors.workspace = true
