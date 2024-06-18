@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 pub trait Tracer {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
+    fn mark<T: Trace>(&mut self, ptr: NonNull<T>);
 }
 
 pub struct TraceWorker<M: Marker> {
@@ -16,6 +17,10 @@ pub struct TraceWorker<M: Marker> {
 }
 
 impl<M: Marker> Tracer for TraceWorker<M> {
+    fn mark<T: Trace>(&mut self, ptr: NonNull<T>) {
+        self.marker.set_mark(ptr);
+    }
+
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
         if !self.marker.set_mark(ptr) {
             return;

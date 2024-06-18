@@ -3,6 +3,7 @@ use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
+use std::mem::{align_of, size_of};
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::write;
@@ -12,15 +13,17 @@ use std::sync::RwLockReadGuard;
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
+    fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError>;
     fn write_barrier<A: Trace, B: Trace>(
         &self,
         update: GcPtr<A>,
         new: GcPtr<B>,
         callback: fn(&A) -> &GcPtr<B>,
     );
-    fn rescan<T: Trace>(&self, ptr: GcPtr<T>);
+    fn retrace<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
     fn new_null<T: Trace>(&self) -> GcPtr<T>;
+    fn is_marked<T: Trace>(&self, ptr: GcPtr<T>) -> bool;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
@@ -60,6 +63,10 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
+        if self.tracer_controller.is_write_barrier_locked() {
+            drop(self.tracer_controller.get_write_barrier_lock());
+        }
+
         const {
             assert!(
                 !std::mem::needs_drop::<T>(),
@@ -74,6 +81,33 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
                 Ok(GcPtr::new(ptr.cast()))
             }
+            Err(_) => todo!(),
+        }
+    }
+
+    fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError> {
+        if self.tracer_controller.is_write_barrier_locked() {
+            drop(self.tracer_controller.get_write_barrier_lock());
+        }
+
+        const {
+            assert!(
+                !std::mem::needs_drop::<T>(),
+                "A type must not need dropping to be allocated in a GcArena"
+            )
+        };
+
+        let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
+        match self.allocator.alloc(layout) {
+            Ok(ptr) => {
+                let byte_ptr = ptr.as_ptr() as *mut u8;
+
+                for i in 0..layout.size() {
+                    unsafe { *byte_ptr.add(i) = 0; }
+                }
+
+                Ok(GcPtr::new(ptr.cast()))
+            },
             Err(_) => todo!(),
         }
     }
@@ -95,17 +129,19 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let old_ptr = callback(&update_ptr);
 
         // this is safe b/c we will rescan this pointer
-        unsafe { old_ptr.swap(new_ptr); }
+        unsafe { old_ptr.swap(new_ptr.clone()); }
 
-        self.rescan(update_ptr);
+        if self.is_marked(update_ptr) && !self.is_marked(new_ptr.clone()) {
+            self.retrace(new_ptr);
+        }
     }
 
-    fn rescan<T: Trace>(&self, gc_ptr: GcPtr<T>) {
-        let ptr = gc_ptr.as_nonnull();
-
-        if !self.allocator.is_old(ptr) {
-            return;
+    fn retrace<T: Trace>(&self, gc_ptr: GcPtr<T>) {
+        if gc_ptr.is_null() {
+            return
         }
+
+        let ptr = gc_ptr.as_nonnull();
 
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new);
@@ -116,5 +152,9 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
             let work = self.rescan.take();
             self.tracer_controller.send_work(work);
         }
+    }
+
+    fn is_marked<T: Trace>(&self, ptr: GcPtr<T>) -> bool {
+        !ptr.is_null() && self.allocator.is_old(ptr.as_nonnull())
     }
 }

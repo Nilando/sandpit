@@ -54,15 +54,15 @@ impl Allocate for Allocator {
     }
 
     fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        let header = Self::get_header(ptr);
+        let header_ptr = Self::get_header(ptr);
 
-        header.get_mark()
+        Header::get_mark(header_ptr)
     }
 
     fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        let header = Self::get_header(ptr);
+        let header_ptr = Self::get_header(ptr);
 
-        header.set_mark(mark);
+        Header::set_mark(header_ptr, mark)
     }
 
     fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
@@ -71,7 +71,7 @@ impl Allocate for Allocator {
 }
 
 impl Allocator {
-    pub fn get_header<'a, T>(object: NonNull<T>) -> &'a Header {
+    pub fn get_header<T>(object: NonNull<T>) -> *const Header {
         let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
         let header_size = size_of::<Header>();
         let padding = (align - (header_size % align)) % align;
@@ -80,7 +80,7 @@ impl Allocator {
         debug_assert!((ptr as usize % align) == 0);
         debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
 
-        unsafe { &*(ptr.sub(header_size + padding) as *const Header) }
+        unsafe { ptr.sub(header_size + padding) as *const Header }
     }
 
     fn get_current_mark(&self) -> Mark {

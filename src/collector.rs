@@ -18,9 +18,11 @@ pub enum GcState {
     Finishing,
 }
 
+
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
+    fn wait_for_collection(&self);
 
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
@@ -51,6 +53,10 @@ pub struct Collector<A: Allocate, T: Trace> {
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
+    fn wait_for_collection(&self) {
+        let _lock = self.lock.lock().unwrap();
+    }
+
     fn major_collect(&self) {
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
@@ -224,6 +230,8 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
                 break;
             }
 
+            // TODO: rename this from write_barrier_lock, to like space_time_lock ormaybe
+            // maybe mutator lock
             let _lock = self.tracer.get_write_barrier_lock();
             std::thread::sleep(collector_duration);
 

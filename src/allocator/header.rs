@@ -64,8 +64,8 @@ impl Header {
         }
     }
 
-    pub fn get_mark(&self) -> Mark {
-        self.mark.load(Ordering::SeqCst).into()
+    pub fn get_mark(this: *const Header) -> Mark {
+        unsafe { (&*this).mark.load(Ordering::Acquire).into() }
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -76,17 +76,21 @@ impl Header {
         self.size
     }
 
+    /*
     pub fn mark_new(&self) {
         self.mark.store(Mark::New as u8, Ordering::SeqCst)
     }
+    */
 
-    pub fn set_mark(&self, mark: Mark) {
-        self.mark.store(mark as u8, Ordering::SeqCst);
+    pub fn set_mark(this: *const Header, mark: Mark) {
+        unsafe {
+            (&*this).mark.store(mark as u8, Ordering::Release);
 
-        if mark != Mark::New && self.size_class != SizeClass::Large {
-            let meta = BlockMeta::from_header(self);
+            if mark != Mark::New && (&*this).size_class != SizeClass::Large {
+                let meta = BlockMeta::from_header(this);
 
-            meta.mark(self, mark);
+                meta.mark(this, mark);
+            }
         }
     }
 }

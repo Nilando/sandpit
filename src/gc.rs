@@ -21,7 +21,8 @@ unsafe impl<T: Sync + Trace> Sync for Gc<T> {}
 
 impl<T: Trace> Drop for Gc<T> {
     fn drop(&mut self) {
-        self.stop_monitor()
+        self.stop_monitor();
+        self.collector.wait_for_collection()
     }
 }
 

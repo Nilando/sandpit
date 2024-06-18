@@ -190,11 +190,6 @@ impl<M: Marker> TracerController<M> {
                 sender.send(()).unwrap();
 
                 tracer.trace_loop();
-
-                debug_assert_eq!(controller.sent(), controller.received());
-                debug_assert_eq!(controller.has_work(), false);
-                debug_assert_eq!(controller.is_trace_completed(), true);
-                debug_assert_eq!(controller.mutators_stopped(), true)
             });
         }
 

@@ -130,9 +130,11 @@ fn arena_get_size() {
     let med_header = Allocator::get_header(p2);
     let large_header = Allocator::get_header(p3);
 
-    assert_eq!((*small_header).get_size_class(), SizeClass::Small);
-    assert_eq!((*med_header).get_size_class(), SizeClass::Medium);
-    assert_eq!((*large_header).get_size_class(), SizeClass::Large);
+    unsafe {
+        assert_eq!((&*small_header).get_size_class(), SizeClass::Small);
+        assert_eq!((&*med_header).get_size_class(), SizeClass::Medium);
+        assert_eq!((&*large_header).get_size_class(), SizeClass::Large);
+    }
 
     let align = std::cmp::max(align_of::<Header>(), large.align());
     let header_size = size_of::<Header>();
