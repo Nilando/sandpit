@@ -244,7 +244,7 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
 
             // TODO: rename this from write_barrier_lock, to like space_time_lock ormaybe
             // maybe mutator lock
-            let _lock = self.tracer.get_write_barrier_lock();
+            let _lock = self.tracer.get_alloc_lock();
             std::thread::sleep(collector_duration);
 
             if !self.tracer.is_tracing() {

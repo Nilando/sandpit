@@ -14,12 +14,6 @@ use std::sync::RwLockReadGuard;
 pub trait Mutator {
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError>;
-    fn write_barrier<A: Trace, B: Trace>(
-        &self,
-        update: GcPtr<A>,
-        new: GcPtr<B>,
-        callback: fn(&A) -> &GcPtr<B>,
-    );
     fn retrace<T: Trace>(&self, ptr: GcPtr<T>);
     fn yield_requested(&self) -> bool;
     fn new_null<T: Trace>(&self) -> GcPtr<T>;
@@ -63,8 +57,8 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
-        if self.tracer_controller.is_write_barrier_locked() {
-            drop(self.tracer_controller.get_write_barrier_lock());
+        if self.tracer_controller.is_alloc_lock() {
+            drop(self.tracer_controller.get_alloc_lock());
         }
 
         const {
@@ -86,8 +80,8 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError> {
-        if self.tracer_controller.is_write_barrier_locked() {
-            drop(self.tracer_controller.get_write_barrier_lock());
+        if self.tracer_controller.is_alloc_lock() {
+            drop(self.tracer_controller.get_alloc_lock());
         }
 
         const {
@@ -116,28 +110,6 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
     fn new_null<T: Trace>(&self) -> GcPtr<T> {
         GcPtr::null()
-    }
-
-    fn write_barrier<X: Trace, Y: Trace>(
-        &self,
-        update_ptr: GcPtr<X>,
-        new_ptr: GcPtr<Y>,
-        callback: fn(&X) -> &GcPtr<Y>,
-    ) {
-        if self.tracer_controller.is_write_barrier_locked() {
-            drop(self.tracer_controller.get_write_barrier_lock());
-        }
-
-        let old_ptr = callback(&update_ptr);
-
-        // this is safe b/c we will rescan this pointer
-        unsafe {
-            old_ptr.swap(new_ptr.clone());
-        }
-
-        if self.is_marked(update_ptr) && !self.is_marked(new_ptr.clone()) {
-            self.retrace(new_ptr);
-        }
     }
 
     fn retrace<T: Trace>(&self, gc_ptr: GcPtr<T>) {

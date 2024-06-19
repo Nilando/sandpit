@@ -25,7 +25,7 @@ pub struct TracerController<M: Marker> {
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
-    write_barrier_lock: Mutex<()>,
+    alloc_lock: Mutex<()>,
 
     // config vars
     pub num_tracers: usize,
@@ -51,7 +51,7 @@ impl<M: Marker> TracerController<M> {
             tracers_waiting: AtomicUsize::new(0),
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
-            write_barrier_lock: Mutex::new(()),
+            alloc_lock: Mutex::new(()),
 
             num_tracers: config.tracer_threads,
             trace_share_min: config.trace_share_min,
@@ -74,12 +74,12 @@ impl<M: Marker> TracerController<M> {
         self.yield_lock.read().unwrap()
     }
 
-    pub fn get_write_barrier_lock(&self) -> MutexGuard<()> {
-        self.write_barrier_lock.lock().unwrap()
+    pub fn get_alloc_lock(&self) -> MutexGuard<()> {
+        self.alloc_lock.lock().unwrap()
     }
 
-    pub fn is_write_barrier_locked(&self) -> bool {
-        self.write_barrier_lock.try_lock().is_ok()
+    pub fn is_alloc_lock(&self) -> bool {
+        self.alloc_lock.try_lock().is_ok()
     }
 
     pub fn has_work(&self) -> bool {

@@ -23,7 +23,7 @@ fn cell_root() {
 }
 
 #[test]
-fn gc_cell_write_barrier() {
+fn gc_ptr_swap() {
     let gc: Gc<GcPtr<GcPtr<usize>>> =
         Gc::build(|mutator| mutator.alloc(mutator.alloc(69).unwrap()).unwrap());
 
@@ -32,7 +32,7 @@ fn gc_cell_write_barrier() {
         let val: usize = ***root;
         assert_eq!(val, 69);
 
-        mutator.write_barrier(root.clone(), new_val, |root_ref| root_ref);
+        unsafe { (**root).swap(new_val); }
 
         let val: usize = ***root;
         assert_eq!(val, 420);
