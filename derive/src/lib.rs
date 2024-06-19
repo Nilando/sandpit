@@ -57,8 +57,24 @@ pub fn trace(input: TokenStream) -> TokenStream {
                             #name::#variant_ident(#(#args)*) => { #(#body)* }
                         }
                     }
-                    Fields::Named(_) => {
-                        quote! {}
+                    Fields::Named(fields) => {
+                        let body = fields.named.iter().map(|field| {
+                            let ident = field.ident.clone().unwrap();
+
+                            quote! {
+                                sandpit::Trace::trace( #ident , tracer);
+                            }
+                        });
+
+                        let args = fields.named.iter().map(|field| {
+                            let ident = field.ident.clone().unwrap();
+
+                            quote! { #ident }
+                        });
+
+                        quote! {
+                            #name::#variant_ident(#(#args)*) => { #(#body)* }
+                        }
                     }
                     Fields::Unit => {
                         quote! {
