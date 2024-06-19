@@ -29,11 +29,19 @@ pub fn trace(input: TokenStream) -> TokenStream {
             })
             .collect::<Vec<_>>(),
         Data::Struct(DataStruct {
+            fields: Fields::Unnamed(ref fields),
+            ..
+        }) => 
+            fields.unnamed.iter().enumerate().map(|(idx, _)| {
+                quote! {
+                    sandpit::Trace::trace(&self.#idx, tracer);
+                }
+            })
+            .collect::<Vec<_>>(),
+        Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
-        }) => vec![quote! {
-            sandpit::Trace::trace(&self.0, tracer);
-        }],
+        }) => vec![quote! {}],
         Data::Enum(DataEnum { variants, .. }) => {
             let arms = variants.iter().map(|variant| {
                 let variant_ident = &variant.ident;
