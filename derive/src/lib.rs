@@ -92,7 +92,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }]
             }
         }
-        _ => todo!("implement Derive(Trace) for union types"),
+        _ => unimplemented!("derive(Trace) is not implemented for union types"),
     };
 
     // This assert still applies to types with generics, b/c
