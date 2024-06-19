@@ -53,8 +53,12 @@ pub fn trace(input: TokenStream) -> TokenStream {
                             quote! { #ident }
                         });
 
-                        quote! {
-                            #name::#variant_ident(#(#args)*) => { #(#body)* }
+                        if fields.unnamed.len() == 0 {
+                            quote! {}
+                        } else {
+                            quote! {
+                                #name::#variant_ident(#(#args)*) => { #(#body)* }
+                            }
                         }
                     }
                     Fields::Named(_) => {
