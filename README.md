@@ -1,3 +1,6 @@
+
+[![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)
+
 ## A Concurrent GC Arena
 Sandpit is a concurrent, generational, trace and sweep garbage collected arena meant for use in a VM. Access is given into the arena via a mutation callback which allows allocating of objects that impl the Trace trait. Allocating into the arena will eventually trigger a concurrent collection, in which tracing begins from the root of the arena and goes until all reachable objects have been marked. All unreachable objects will be freed after the mutators have been signaled to yield and all mutation contexts have exited.
 
