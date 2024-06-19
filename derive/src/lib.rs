@@ -53,12 +53,8 @@ pub fn trace(input: TokenStream) -> TokenStream {
                             quote! { #ident }
                         });
 
-                        if fields.unnamed.len() == 0 {
-                            quote! {}
-                        } else {
-                            quote! {
-                                #name::#variant_ident(#(#args)*) => { #(#body)* }
-                            }
+                        quote! {
+                            #name::#variant_ident(#(#args)*) => { #(#body)* }
                         }
                     }
                     Fields::Named(_) => {
@@ -72,9 +68,13 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }
             });
 
-            vec![quote! {
-                match self { #(#arms)* }
-            }]
+            if variants.is_empty() {
+                vec![quote! {}]
+            } else {
+                vec![quote! {
+                    match self { #(#arms)* }
+                }]
+            }
         }
         _ => todo!("implement Derive(Trace) for union types"),
     };
