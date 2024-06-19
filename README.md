@@ -1,4 +1,3 @@
-
 [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)
 
 ## A Concurrent GC Arena
