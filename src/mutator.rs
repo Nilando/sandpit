@@ -3,9 +3,9 @@ use super::error::GcError;
 use super::gc_ptr::GcPtr;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
-use std::mem::{align_of, size_of};
 use std::alloc::Layout;
 use std::cell::RefCell;
+use std::mem::{align_of, size_of};
 use std::ptr::write;
 use std::sync::RwLockReadGuard;
 
@@ -103,11 +103,13 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                 let byte_ptr = ptr.as_ptr() as *mut u8;
 
                 for i in 0..layout.size() {
-                    unsafe { *byte_ptr.add(i) = 0; }
+                    unsafe {
+                        *byte_ptr.add(i) = 0;
+                    }
                 }
 
                 Ok(GcPtr::new(ptr.cast()))
-            },
+            }
             Err(_) => todo!(),
         }
     }
@@ -129,7 +131,9 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let old_ptr = callback(&update_ptr);
 
         // this is safe b/c we will rescan this pointer
-        unsafe { old_ptr.swap(new_ptr.clone()); }
+        unsafe {
+            old_ptr.swap(new_ptr.clone());
+        }
 
         if self.is_marked(update_ptr) && !self.is_marked(new_ptr.clone()) {
             self.retrace(new_ptr);
@@ -138,7 +142,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
     fn retrace<T: Trace>(&self, gc_ptr: GcPtr<T>) {
         if gc_ptr.is_null() {
-            return
+            return;
         }
 
         let ptr = gc_ptr.as_nonnull();

@@ -1,6 +1,6 @@
 use super::gc_ptr::GcPtr;
-use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
+use super::trace::{Trace, Tracer};
 use std::cell::Cell;
 
 const DEFAULT_CAP: usize = 8;
@@ -47,13 +47,13 @@ impl<T: Trace> GcVec<T> {
     pub fn alloc<M: Mutator>(mutator: &M) -> GcPtr<Self> {
         let data: GcPtr<GcVecData<T>> = mutator.alloc_array::<GcVecData<T>>(DEFAULT_CAP).unwrap();
 
-        mutator.alloc(
-            Self {
+        mutator
+            .alloc(Self {
                 len: Cell::new(0),
                 cap: Cell::new(DEFAULT_CAP),
-                data
-            }
-        ).unwrap()
+                data,
+            })
+            .unwrap()
     }
 
     pub fn push<M: Mutator>(this: GcPtr<Self>, mutator: &M, val: GcPtr<T>) {
@@ -64,7 +64,8 @@ impl<T: Trace> GcVec<T> {
 
         if len == cap {
             let new_cap: usize = cap + (cap as f64 * VEC_GROW_RATIO).ceil() as usize;
-            let new_data: GcPtr<GcVecData<T>> = mutator.alloc_array::<GcVecData<T>>(new_cap).unwrap();
+            let new_data: GcPtr<GcVecData<T>> =
+                mutator.alloc_array::<GcVecData<T>>(new_cap).unwrap();
 
             for i in 0..len {
                 unsafe {
@@ -75,7 +76,9 @@ impl<T: Trace> GcVec<T> {
             }
 
             // safe b/c we retrace right after
-            unsafe { this.data.swap(new_data); }
+            unsafe {
+                this.data.swap(new_data);
+            }
 
             if mutator.is_marked(this.clone()) {
                 // this will only mark the new data array
@@ -93,10 +96,15 @@ impl<T: Trace> GcVec<T> {
         let len = this.len.get();
 
         if index >= len {
-            panic!("Out of Bounds GcVec access: index {}, on {} sized GcVec", index, len);
+            panic!(
+                "Out of Bounds GcVec access: index {}, on {} sized GcVec",
+                index, len
+            );
         }
 
-        unsafe { GcVecData::set(this.cast_data(), index, val.clone()); }
+        unsafe {
+            GcVecData::set(this.cast_data(), index, val.clone());
+        }
 
         if mutator.is_marked(this) {
             mutator.retrace(val);
@@ -119,7 +127,10 @@ impl<T: Trace> GcVec<T> {
         let len = self.len.get();
 
         if index >= len {
-            panic!("Out of Bounds GcVec access: index {}, on {} sized GcVec", index, len);
+            panic!(
+                "Out of Bounds GcVec access: index {}, on {} sized GcVec",
+                index, len
+            );
         }
 
         unsafe { GcVecData::at(self.cast_data(), len - 1) }
@@ -143,11 +154,12 @@ unsafe impl<T: Trace> Trace for GcVec<T> {
         self.data.trace(tracer);
 
         for i in 0..self.len.get() {
-            unsafe { 
+            unsafe {
                 let val: &T = &*GcVecData::at(self.cast_data(), i);
                 // don't mark the val's they don't have headers, but still trace
                 // their pointers.
-                val.trace(tracer); }
+                val.trace(tracer);
+            }
         }
     }
 }
@@ -189,9 +201,7 @@ mod tests {
 
         gc.major_collect();
 
-        gc.mutate(|root, _| {
-            assert!(root.pop().is_none())
-        });
+        gc.mutate(|root, _| assert!(root.pop().is_none()));
     }
 
     #[test]

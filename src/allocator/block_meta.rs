@@ -20,7 +20,10 @@ impl BlockMeta {
         debug_assert!((block_ptr as usize % constants::BLOCK_SIZE) == 0);
 
         Self {
-            lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *const [AtomicU8; constants::LINE_COUNT] },
+            lines: unsafe {
+                block_ptr.add(constants::LINE_MARK_START)
+                    as *const [AtomicU8; constants::LINE_COUNT]
+            },
         }
     }
 

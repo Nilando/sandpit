@@ -12,6 +12,7 @@ edition = "2021"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/nilandasd/sandpit"
+rust-version = "1.79.0"
 
 [package]
 name = "sandpit"
@@ -22,6 +23,7 @@ edition.workspace = true
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 sandpit_derive = { path = "./derive", version = "0.2.5" }

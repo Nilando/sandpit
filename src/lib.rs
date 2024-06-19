@@ -55,13 +55,13 @@
 // ```
 extern crate self as sandpit;
 
-mod gc_vec;
 mod allocator;
 mod collector;
 mod config;
 mod error;
 mod gc;
 mod gc_ptr;
+mod gc_vec;
 mod metrics;
 mod monitor;
 mod mutator;
@@ -74,8 +74,8 @@ pub use gc_ptr::GcPtr;
 pub use gc_vec::GcVec;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
-pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 pub use sandpit_derive::{Trace, TraceLeaf};
+pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 
 #[doc(hidden)]
 pub use trace::Tracer;
