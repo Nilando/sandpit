@@ -9,7 +9,13 @@ Due to being a concurrent & generational collector, a write barrier must be impl
 
 
 
-VERSION 0.3.0
+## Roadmap Stuff
+
+- BUGS
+    - write barrier can be misused
+    - Miri hangs on node tests
+
+- VERSION 0.3.0
     - Alloc Blocks into Regions
     - Add more bench tests
     - Add A Fuzzing Test suite
@@ -17,16 +23,16 @@ VERSION 0.3.0
     - Defragmentation
     - switch to major during minor collection
     - grow, shrink, and layout alloc options?
+    - Complete trace and traceleaf derives
+    - add a lot more trace impls
 
-ISSUES
+- OPEN ISSUES
     - Better Config
         - add allocator config?
         - easy swap allocator?
         - editing config while gc is running?
-    - review the trace and traceleaf derives
-        - they dont work for a lot of types, things like unit/unamed structs
-        - add a lot more trace impls
     - Mutator Context?
         - the presence of a GcPtr, GcArray, or Mutator all indicate we are in a mutator context
     - add non blocking versions of the gc mutate functions?
+    - allow swapping out of root type?
     - Review of Atomic Operations
