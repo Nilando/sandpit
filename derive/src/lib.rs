@@ -49,16 +49,16 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 match &variant.fields {
                     Fields::Unnamed(fields) => {
                         let body = fields.unnamed.iter().enumerate().map(|(idx, _)| {
-                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                            let ident = Ident::new(&format!("t{}", idx), Span::mixed_site());
                             quote! {
                                 sandpit::Trace::trace( #ident , tracer);
                             }
                         });
 
                         let args = fields.unnamed.iter().enumerate().map(|(idx, _)| {
-                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                            let ident = Ident::new(&format!("t{}", idx), Span::mixed_site());
 
-                            quote! { #ident }
+                            quote! { #ident, }
                         });
 
                         quote! {
@@ -77,7 +77,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
                         let args = fields.named.iter().map(|field| {
                             let ident = field.ident.clone().unwrap();
 
-                            quote! { #ident }
+                            quote! { #ident, }
                         });
 
                         quote! {
