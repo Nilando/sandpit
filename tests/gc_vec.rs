@@ -1,7 +1,5 @@
-use super::gc_ptr::GcPtr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use super::mutator::Mutator;
-use super::trace::{Trace, Tracer};
+use sandpit::{Trace, Tracer, Mutator, GcPtr};
 
 const DEFAULT_CAP: usize = 8;
 const VEC_GROW_RATIO: f64 = 0.5;
@@ -169,7 +167,7 @@ unsafe impl<T: Trace> Trace for GcVec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Gc;
+    use sandpit::Gc;
 
     #[test]
     fn alloc_vec() {
