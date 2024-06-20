@@ -19,14 +19,12 @@ Due to being a concurrent & generational collector, a write barrier must be impl
 
 - VERSION 0.3.0
     - Alloc Blocks into Regions
+    - Defragmentation
+    - grow, shrink, and layout alloc options
+    - switch to major during minor collection
+    - fix GcError todos! find way to convert AllocError to GcError
     - Add more bench tests
     - Add A Fuzzing Test suite
-    - fix GcError todos!
-    - Defragmentation
-    - switch to major during minor collection
-    - grow, shrink, and layout alloc options?
-    - Complete trace and traceleaf derives
-    - add a lot more trace impls
 
 - OPEN ISSUES
     - Better Config

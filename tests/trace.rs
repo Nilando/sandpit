@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use sandpit::{Gc, GcPtr, Mutator};
+    use sandpit::{Gc, Mutator};
 
     #[test]
     fn trace_option() {
@@ -12,11 +12,10 @@ mod tests {
 
         gc.major_collect();
 
-        gc.mutate(|root, mutator| {
+        gc.mutate(|root, _| {
             assert!(root.as_ref().unwrap().unwrap() == 420);
-            let new_null = mutator.new_null();
-            mutator.write_barrier(root.clone(), new_null, |this| this.as_ref().unwrap());
-            assert!(root.as_ref().unwrap().is_null());
+            root.set_null();
+            assert!(root.is_null());
         })
     }
 }

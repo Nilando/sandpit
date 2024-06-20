@@ -29,11 +29,19 @@ pub fn trace(input: TokenStream) -> TokenStream {
             })
             .collect::<Vec<_>>(),
         Data::Struct(DataStruct {
+            fields: Fields::Unnamed(ref fields),
+            ..
+        }) => 
+            fields.unnamed.iter().enumerate().map(|(idx, _)| {
+                quote! {
+                    sandpit::Trace::trace(&self.#idx, tracer);
+                }
+            })
+            .collect::<Vec<_>>(),
+        Data::Struct(DataStruct {
             fields: Fields::Unit,
             ..
-        }) => vec![quote! {
-            sandpit::Trace::trace(&self.0, tracer);
-        }],
+        }) => vec![quote! {}],
         Data::Enum(DataEnum { variants, .. }) => {
             let arms = variants.iter().map(|variant| {
                 let variant_ident = &variant.ident;
@@ -41,24 +49,40 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 match &variant.fields {
                     Fields::Unnamed(fields) => {
                         let body = fields.unnamed.iter().enumerate().map(|(idx, _)| {
-                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                            let ident = Ident::new(&format!("t{}", idx), Span::mixed_site());
                             quote! {
                                 sandpit::Trace::trace( #ident , tracer);
                             }
                         });
 
                         let args = fields.unnamed.iter().enumerate().map(|(idx, _)| {
-                            let ident = Ident::new(&format!("t{}", idx), Span::call_site());
+                            let ident = Ident::new(&format!("t{}", idx), Span::mixed_site());
 
-                            quote! { #ident }
+                            quote! { #ident, }
                         });
 
                         quote! {
                             #name::#variant_ident(#(#args)*) => { #(#body)* }
                         }
                     }
-                    Fields::Named(_) => {
-                        quote! {}
+                    Fields::Named(fields) => {
+                        let body = fields.named.iter().map(|field| {
+                            let ident = field.ident.clone().unwrap();
+
+                            quote! {
+                                sandpit::Trace::trace( #ident , tracer);
+                            }
+                        });
+
+                        let args = fields.named.iter().map(|field| {
+                            let ident = field.ident.clone().unwrap();
+
+                            quote! { #ident, }
+                        });
+
+                        quote! {
+                            #name::#variant_ident{#(#args)*} => { #(#body)* }
+                        }
                     }
                     Fields::Unit => {
                         quote! {
@@ -68,11 +92,15 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }
             });
 
-            vec![quote! {
-                match self { #(#arms)* }
-            }]
+            if variants.is_empty() {
+                vec![quote! {}]
+            } else {
+                vec![quote! {
+                    match self { #(#arms)* }
+                }]
+            }
         }
-        _ => todo!("implement Derive(Trace) for union types"),
+        _ => unimplemented!("Trace must be implemented by hand for union types"),
     };
 
     // This assert still applies to types with generics, b/c

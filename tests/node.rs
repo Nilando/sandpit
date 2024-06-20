@@ -26,8 +26,20 @@ impl Node {
         this.right.set_null();
     }
 
-    pub fn set_left<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_left: GcPtr<Node>) {
-        mutator.write_barrier(this.clone(), new_left, |this: &Node| &this.left);
+    pub fn set_left<M: Mutator>(this: GcPtr<Node>, mu: &M, new_left: GcPtr<Node>) {
+        unsafe { this.left.swap(new_left.clone()); }
+
+        if mu.is_marked(this) && !mu.is_marked(new_left.clone()) {
+            mu.retrace(new_left);
+        }
+    }
+
+    pub fn set_right<M: Mutator>(this: GcPtr<Node>, mu: &M, new_right: GcPtr<Node>) {
+        unsafe { this.right.swap(new_right.clone()); }
+
+        if mu.is_marked(this) && !mu.is_marked(new_right.clone()) {
+            mu.retrace(new_right);
+        }
     }
 
     pub fn right_val(this: &GcPtr<Node>) -> usize {
@@ -38,23 +50,20 @@ impl Node {
         this.left.val.get()
     }
 
-    pub fn set_right<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_right: GcPtr<Node>) {
-        mutator.write_barrier(this.clone(), new_right, |this: &Node| &this.right);
-    }
 
     pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) -> GcPtr<Node> {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
                 let node_ptr = Node::alloc(mutator, new_val).unwrap();
-                Node::set_left(this, mutator, node_ptr.clone());
+                Node::set_left(this.clone(), mutator, node_ptr.clone());
                 node_ptr
             } else {
                 Node::insert(&this.left, mutator, new_val)
             }
         } else if this.right.is_null() {
             let node_ptr = Node::alloc(mutator, new_val).unwrap();
-            Node::set_right(this, mutator, node_ptr.clone());
+            Node::set_right(this.clone(), mutator, node_ptr.clone());
             node_ptr
         } else {
             Node::insert(&this.right, mutator, new_val)
@@ -109,14 +118,14 @@ impl Node {
         if this.val.get() > low {
             let right_val = low + ((this.val.get() - low) / 2);
             let right = Node::alloc(mutator, right_val).unwrap();
-            Node::set_right(this, mutator, right.clone());
+            Node::set_right(this.clone(), mutator, right.clone());
             Node::inner_create_balanced_tree(&right, mutator, low, this.val.get());
         }
 
         if (this.val.get() + 1) < high {
             let left_val = this.val.get() + ((high - this.val.get()) / 2);
             let left = Node::alloc(mutator, left_val).unwrap();
-            Node::set_left(this, mutator, left.clone());
+            Node::set_left(this.clone(), mutator, left.clone());
             Node::inner_create_balanced_tree(&left, mutator, this.val.get() + 1, high);
         }
     }
@@ -255,8 +264,8 @@ fn cyclic_graph() {
     let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
 
     gc.mutate(|root, mutator| {
-        Node::set_right(root, mutator, root.clone());
-        Node::set_left(root, mutator, root.clone());
+        Node::set_right(root.clone(), mutator, root.clone());
+        Node::set_left(root.clone(), mutator, root.clone());
 
         assert!(Node::right_val(root) == 0);
         assert!(Node::left_val(root) == 0);

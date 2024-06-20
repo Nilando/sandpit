@@ -123,8 +123,8 @@ impl BlockStore {
         loop {
             match large.pop() {
                 Some(block) => {
-                    let header = unsafe {&*(block.as_ptr() as *const Header) };
-                    if header.get_mark() == mark {
+                    let header = block.as_ptr() as *const Header;
+                    if Header::get_mark(header) == mark {
                         new_large.push(block);
                     }
                 }

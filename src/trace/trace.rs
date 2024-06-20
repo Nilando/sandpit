@@ -3,8 +3,8 @@ use std::cell::Cell;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 
-/// TraceLeaf is a sub-trait of Trace which ensures its implementor does not contain
-/// any GcPtr's.
+/// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
+/// contain any GcPtr's.
 pub unsafe trait TraceLeaf: Trace {}
 
 /// Types allocated in a Gc are required to implement this trait.
@@ -21,6 +21,10 @@ pub unsafe trait Trace: 'static {
     fn needs_trace(&self) -> bool {
         true
     }
+
+    fn is_leaf() -> bool {
+        false
+    }
 }
 
 // ****************************************************************************
@@ -30,25 +34,23 @@ pub unsafe trait Trace: 'static {
 unsafe impl<L: AssertTraceLeaf> TraceLeaf for L {}
 
 pub unsafe trait AssertTraceLeaf: TraceLeaf {
-    // this function should go through every field type and assert that each type
-    // is a leaf
+    // This function should go through every field type and assert that each
+    // type implements TraceLeaf.
     fn assert_leaf_fields(&self);
     fn assert_leaf<T: TraceLeaf>() {}
 }
 
 unsafe impl<L: TraceLeaf> Trace for L {
-    fn trace<T: Tracer>(&self, _: &mut T) {
-        // TODO: This ensure the function is never compiled
-        // it may be worth it to make traceleaf NOT a sub trait
-        // and then make a union type to use internally?...
-    }
+    fn trace<T: Tracer>(&self, _: &mut T) {}
 
-    fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {
-        unimplemented!()
-    }
+    fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {}
 
     fn needs_trace(&self) -> bool {
         false
+    }
+
+    fn is_leaf() -> bool {
+        true
     }
 }
 
@@ -61,8 +63,18 @@ macro_rules! impl_trace_leaf {
 impl_trace_leaf!(
     (),
     bool,
-    u8, u16, u32, u64, u128, usize,
-    i8, i16, i32, i64, i128, isize,
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
     AtomicUsize
 );
 

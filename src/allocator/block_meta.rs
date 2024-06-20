@@ -6,7 +6,7 @@ use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 pub struct BlockMeta {
-    lines: *const AtomicU8,
+    lines: *const [AtomicU8; constants::LINE_COUNT],
 }
 
 impl BlockMeta {
@@ -20,7 +20,10 @@ impl BlockMeta {
         debug_assert!((block_ptr as usize % constants::BLOCK_SIZE) == 0);
 
         Self {
-            lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *const AtomicU8 },
+            lines: unsafe {
+                block_ptr.add(constants::LINE_MARK_START)
+                    as *const [AtomicU8; constants::LINE_COUNT]
+            },
         }
     }
 
@@ -31,18 +34,21 @@ impl BlockMeta {
         Self::from_block(block_ptr)
     }
 
-    pub fn mark(&self, header: &Header, mark: Mark) {
+    pub fn mark(&self, header: *const Header, mark: Mark) {
         let addr = header as *const Header as usize;
         let relative_ptr = addr % constants::BLOCK_SIZE;
         let line = relative_ptr / constants::LINE_SIZE;
 
-        debug_assert!(header.get_size_class() != SizeClass::Large);
+        let size_class = unsafe { (&*header).get_size_class() };
+        let size = unsafe { (&*header).get_size() };
+
+        debug_assert!(size_class != SizeClass::Large);
         debug_assert!(Self::from_header(header as *const Header).lines == self.lines);
 
-        if header.get_size_class() == SizeClass::Small {
+        if size_class == SizeClass::Small {
             self.set_line(line, mark);
         } else {
-            let num_lines = header.get_size() / constants::LINE_SIZE as u16;
+            let num_lines = size / constants::LINE_SIZE as u16;
 
             for i in 0..num_lines {
                 self.set_line(line + i as usize, mark);
@@ -65,17 +71,17 @@ impl BlockMeta {
     }
 
     fn get_line(&self, index: usize) -> Mark {
-        self.mark_at(index).load(Ordering::SeqCst).into()
+        self.mark_at(index).load(Ordering::Relaxed).into()
     }
 
     pub fn set_line(&self, index: usize, mark: Mark) {
-        self.mark_at(index).store(mark as u8, Ordering::SeqCst)
+        self.mark_at(index).store(mark as u8, Ordering::Relaxed)
     }
 
     fn mark_at(&self, line: usize) -> &AtomicU8 {
         debug_assert!(line < constants::LINE_COUNT);
 
-        unsafe { &*self.lines.add(line) }
+        unsafe { &(&*self.lines)[line] }
     }
 
     pub fn set_block(&self, mark: Mark) {

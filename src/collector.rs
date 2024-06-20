@@ -21,6 +21,7 @@ pub enum GcState {
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
+    fn wait_for_collection(&self);
 
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
@@ -51,6 +52,10 @@ pub struct Collector<A: Allocate, T: Trace> {
 }
 
 impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
+    fn wait_for_collection(&self) {
+        let _lock = self.lock.lock().unwrap();
+    }
+
     fn major_collect(&self) {
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
@@ -60,7 +65,11 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
-        self.update_collection_time(&self.major_collect_avg_time, elapsed_time, self.get_major_collections());
+        self.update_collection_time(
+            &self.major_collect_avg_time,
+            elapsed_time,
+            self.get_major_collections(),
+        );
     }
 
     fn minor_collect(&self) {
@@ -71,7 +80,11 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
-        self.update_collection_time(&self.minor_collect_avg_time, elapsed_time, self.get_minor_collections());
+        self.update_collection_time(
+            &self.minor_collect_avg_time,
+            elapsed_time,
+            self.get_minor_collections(),
+        );
     }
 
     fn get_major_collections(&self) -> usize {
@@ -99,7 +112,7 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     }
 
     fn get_state(&self) -> GcState {
-        if self.lock.try_lock().is_ok() { 
+        if self.lock.try_lock().is_ok() {
             GcState::Waiting
         } else if self.tracer.yield_flag() {
             GcState::Finishing
@@ -173,9 +186,14 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
-    fn update_collection_time(&self, average: &AtomicUsize, elapsed_time: usize, num_collections: usize) { 
+    fn update_collection_time(
+        &self,
+        average: &AtomicUsize,
+        elapsed_time: usize,
+        num_collections: usize,
+    ) {
         let avg = average.load(Ordering::SeqCst);
-        let update = elapsed_time.abs_diff(avg)/ num_collections;
+        let update = elapsed_time.abs_diff(avg) / num_collections;
 
         if avg > elapsed_time {
             average.fetch_sub(update, Ordering::SeqCst);
@@ -224,7 +242,9 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
                 break;
             }
 
-            let _lock = self.tracer.get_write_barrier_lock();
+            // TODO: rename this from write_barrier_lock, to like space_time_lock ormaybe
+            // maybe mutator lock
+            let _lock = self.tracer.get_alloc_lock();
             std::thread::sleep(collector_duration);
 
             if !self.tracer.is_tracing() {

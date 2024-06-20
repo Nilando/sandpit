@@ -5,9 +5,9 @@ use std::sync::{
 use std::thread;
 use std::time;
 
-use super::metrics::GcMetrics;
 use super::collector::Collect;
 use super::config::GcConfig;
+use super::metrics::GcMetrics;
 
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
