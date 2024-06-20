@@ -81,7 +81,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
                         });
 
                         quote! {
-                            #name::#variant_ident(#(#args)*) => { #(#body)* }
+                            #name::#variant_ident { #(#args)* } => { #(#body)* }
                         }
                     }
                     Fields::Unit => {
