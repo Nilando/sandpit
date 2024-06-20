@@ -1,7 +1,7 @@
 use super::gc_ptr::GcPtr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use super::mutator::Mutator;
 use super::trace::{Trace, Tracer};
-use std::cell::Cell;
 
 const DEFAULT_CAP: usize = 8;
 const VEC_GROW_RATIO: f64 = 0.5;
@@ -11,10 +11,6 @@ struct GcVecData<T: Trace> {
 }
 
 impl<T: Trace> GcVecData<T> {
-    fn cast_data(&self) -> *mut GcPtr<T> {
-        self as *const Self as *mut GcPtr<T>
-    }
-
     unsafe fn set(data: *mut GcPtr<T>, idx: usize, new: GcPtr<T>) {
         let ptr = data.add(idx);
         let old = &*ptr;
@@ -34,8 +30,8 @@ unsafe impl<A: Trace> Trace for GcVecData<A> {
 }
 
 pub struct GcVec<T: Trace> {
-    cap: Cell<usize>,
-    len: Cell<usize>,
+    cap: AtomicUsize,
+    len: AtomicUsize,
     data: GcPtr<GcVecData<T>>,
 }
 
@@ -46,24 +42,27 @@ impl<T: Trace> GcVec<T> {
 
     pub fn alloc<M: Mutator>(mutator: &M) -> GcPtr<Self> {
         let data: GcPtr<GcVecData<T>> = mutator.alloc_array::<GcVecData<T>>(DEFAULT_CAP).unwrap();
+        let new = Self {
+            len: AtomicUsize::new(0),
+            cap: AtomicUsize::new(DEFAULT_CAP),
+            data,
+        };
 
-        mutator
-            .alloc(Self {
-                len: Cell::new(0),
-                cap: Cell::new(DEFAULT_CAP),
-                data,
-            })
-            .unwrap()
+        mutator.alloc(new).unwrap()
     }
 
     pub fn push<M: Mutator>(this: GcPtr<Self>, mutator: &M, val: GcPtr<T>) {
-        let len = this.len.get();
-        let cap = this.cap.get();
-
-        this.len.set(len + 1);
+        let len = this.len();
+        let cap = this.cap();
 
         if len == cap {
-            let new_cap: usize = cap + (cap as f64 * VEC_GROW_RATIO).ceil() as usize;
+            let new_cap = 
+                if cap == 0 {
+                    DEFAULT_CAP
+                } else {
+                    cap + (cap as f64 * VEC_GROW_RATIO).ceil() as usize
+                };
+
             let new_data: GcPtr<GcVecData<T>> =
                 mutator.alloc_array::<GcVecData<T>>(new_cap).unwrap();
 
@@ -86,14 +85,22 @@ impl<T: Trace> GcVec<T> {
                 mutator.retrace(this.data.clone());
             }
 
-            this.cap.set(new_cap);
+            this.cap.store(new_cap, Ordering::SeqCst);
         }
 
-        Self::set(this, mutator, len, val);
+        unsafe {
+            GcVecData::set(this.cast_data(), len, val.clone());
+        }
+
+        if mutator.is_marked(this.clone()) {
+            mutator.retrace(val);
+        }
+
+        this.len.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn set<M: Mutator>(this: GcPtr<Self>, mutator: &M, index: usize, val: GcPtr<T>) {
-        let len = this.len.get();
+        let len = this.len();
 
         if index >= len {
             panic!(
@@ -112,19 +119,19 @@ impl<T: Trace> GcVec<T> {
     }
 
     pub fn pop(&self) -> Option<GcPtr<T>> {
-        let len = self.len.get();
+        let len = self.len();
 
         if len == 0 {
             return None;
         }
 
-        self.len.set(len - 1);
+        self.len.fetch_sub(1, Ordering::SeqCst);
 
         unsafe { Some(GcVecData::at(self.cast_data(), len - 1)) }
     }
 
     pub fn at(&self, index: usize) -> GcPtr<T> {
-        let len = self.len.get();
+        let len = self.len();
 
         if index >= len {
             panic!(
@@ -133,19 +140,19 @@ impl<T: Trace> GcVec<T> {
             );
         }
 
-        unsafe { GcVecData::at(self.cast_data(), len - 1) }
+        unsafe { GcVecData::at(self.cast_data(), index) }
     }
 
     pub fn clear(&self) {
-        self.len.set(0);
+        self.len.store(0, Ordering::SeqCst);
     }
 
     pub fn len(&self) -> usize {
-        self.len.get()
+        self.len.load(Ordering::SeqCst)
     }
 
     pub fn cap(&self) -> usize {
-        self.cap.get()
+        self.cap.load(Ordering::SeqCst)
     }
 }
 
@@ -153,13 +160,8 @@ unsafe impl<T: Trace> Trace for GcVec<T> {
     fn trace<R: Tracer>(&self, tracer: &mut R) {
         self.data.trace(tracer);
 
-        for i in 0..self.len.get() {
-            unsafe {
-                let val: &T = &*GcVecData::at(self.cast_data(), i);
-                // don't mark the val's they don't have headers, but still trace
-                // their pointers.
-                val.trace(tracer);
-            }
+        for i in 0..self.len() {
+            self.at(i).trace(tracer);
         }
     }
 }
@@ -184,16 +186,20 @@ mod tests {
         let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build(|mu| GcVec::<usize>::alloc(mu));
 
         gc.mutate(|root, mu| {
-            for i in 0..1000 {
+            for i in 0..10_000 {
                 let v = mu.alloc(i).unwrap();
                 GcVec::push(root.clone(), mu, v);
+
+                //for k in 0..i {
+                    //assert_eq!(*root.at(k), k);
+                //}
             }
         });
 
         gc.major_collect();
 
         gc.mutate(|root, _| {
-            for i in (0..1000).rev() {
+            for i in (0..10_000).rev() {
                 assert_eq!(*root.pop().unwrap(), i);
             }
             root.clear();

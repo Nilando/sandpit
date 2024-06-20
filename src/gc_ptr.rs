@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use super::mutator::Mutator;
 use super::trace::Trace;
 
 /// A pointer to a object stored in a Gc arena.
@@ -68,23 +67,11 @@ impl<T: Trace> GcPtr<T> {
     // Either the swapped pointer must be guaranteed to not exist before the end
     // of this mutation scope, or the object containing this ptr must be rescanned
     //
-    // To use this function safely, implement a write barrier by ensuring 
-    // anything needing rescanning is rescanned. Or use the naive swap_retrace function,
-    // which ensures the new pointer will be traced. (This may be inefficient)
+    // To use this function safely, implement a write barrier that ensures
+    // the new_ptr will(or has) been traced.
     pub unsafe fn swap(&self, new_ptr: GcPtr<T>) {
         self.ptr
             .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
-    }
-
-    // inefficient! Better to check the parent object 
-    pub fn swap_retrace<M: Mutator>(&self, new_ptr: GcPtr<T>, mu: &M) {
-        unsafe {
-            self.swap(new_ptr.clone())
-        }
-
-        if mu.is_marked(new_ptr.clone()) {
-            mu.retrace(new_ptr);
-        }
     }
 }
 

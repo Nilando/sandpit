@@ -43,11 +43,10 @@ impl Allocate for Allocator {
         let header = Header::new(size_class, alloc_size as u16);
 
         unsafe {
-            let alloc_layout = Layout::from_size_align_unchecked(alloc_size, align);
+            let alloc_layout = Layout::from_size_align(alloc_size, align).unwrap();
             let space = self.head.alloc(alloc_layout)?;
             let object_space = space.add(header_size + padding);
 
-            //header.mark_new(); might need to add this back bc of miri error?
             write(space as *mut Header, header);
             Ok(NonNull::new(object_space as *mut u8).unwrap())
         }

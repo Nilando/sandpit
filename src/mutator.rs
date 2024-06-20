@@ -12,11 +12,17 @@ use std::sync::RwLockReadGuard;
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator {
+    // several ways to obtain GcPtrs
     fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
     fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError>;
-    fn retrace<T: Trace>(&self, ptr: GcPtr<T>);
-    fn yield_requested(&self) -> bool;
     fn new_null<T: Trace>(&self) -> GcPtr<T>;
+
+    // Signal that GC is ready to free memory and the current mutation
+    // callback should be exited.
+    fn yield_requested(&self) -> bool;
+
+    // Useful for implementing write barriers.
+    fn retrace<T: Trace>(&self, ptr: GcPtr<T>);
     fn is_marked<T: Trace>(&self, ptr: GcPtr<T>) -> bool;
 }
 
@@ -122,7 +128,9 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new);
 
-        self.rescan.borrow_mut().push(TraceJob::new(ptr));
+        if !T::is_leaf() {
+            self.rescan.borrow_mut().push(TraceJob::new(ptr));
+        }
 
         if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
             let work = self.rescan.take();
