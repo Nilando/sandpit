@@ -9,7 +9,7 @@ pub const LINE_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
 pub const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINE_COUNT;
 pub const LINE_MARK_START: usize = BLOCK_CAPACITY;
 
-pub const MAX_ALLOC_SIZE: usize = std::u32::MAX as usize;
+pub const MAX_ALLOC_SIZE: usize = u32::MAX as usize;
 pub const SMALL_OBJECT_MIN: usize = 1;
 pub const SMALL_OBJECT_MAX: usize = LINE_SIZE;
 pub const MEDIUM_OBJECT_MIN: usize = SMALL_OBJECT_MAX + 1;

@@ -1,5 +1,4 @@
 use super::constants::BLOCK_SIZE;
-use super::errors::BlockError;
 use std::alloc::{alloc, dealloc, Layout};
 use std::ptr::NonNull;
 
@@ -9,13 +8,13 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn default() -> Result<Block, BlockError> {
+    pub fn default() -> Result<Block, ()> {
         let layout = Layout::from_size_align(BLOCK_SIZE, BLOCK_SIZE).unwrap();
 
         Self::new(layout)
     }
 
-    pub fn new(layout: Layout) -> Result<Block, BlockError> {
+    pub fn new(layout: Layout) -> Result<Block, ()> {
         Ok(Block {
             ptr: Self::alloc_block(layout)?,
             layout,
@@ -36,12 +35,12 @@ impl Block {
         self.layout.size()
     }
 
-    fn alloc_block(layout: Layout) -> Result<NonNull<u8>, BlockError> {
+    fn alloc_block(layout: Layout) -> Result<NonNull<u8>, ()> {
         unsafe {
             let ptr = alloc(layout);
 
             if ptr.is_null() {
-                Err(BlockError::OOM)
+                Err(())
             } else {
                 Ok(NonNull::new_unchecked(ptr))
             }

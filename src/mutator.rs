@@ -81,7 +81,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
                 Ok(GcPtr::new(ptr.cast()))
             }
-            Err(_) => todo!(),
+            Err(()) => Err(GcError::Oom),
         }
     }
 
@@ -100,7 +100,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
-                let byte_ptr = ptr.as_ptr() as *mut u8;
+                let byte_ptr = ptr.as_ptr();
 
                 for i in 0..layout.size() {
                     unsafe {
@@ -110,7 +110,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
 
                 Ok(GcPtr::new(ptr.cast()))
             }
-            Err(_) => todo!(),
+            Err(()) => Err(GcError::Oom),
         }
     }
 

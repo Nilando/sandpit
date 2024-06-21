@@ -1,7 +1,6 @@
 use super::alloc_head::AllocHead;
 use super::allocate::Allocate;
 use super::arena::Arena;
-use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
 use super::size_class::SizeClass;
@@ -19,7 +18,6 @@ pub struct Allocator {
 
 impl Allocate for Allocator {
     type Arena = Arena;
-    type Error = AllocError;
 
     fn new(arena: &Self::Arena) -> Self {
         let current_mark = arena.get_current_mark_ref();
@@ -30,7 +28,7 @@ impl Allocate for Allocator {
         }
     }
 
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
         let align = std::cmp::max(align_of::<Header>(), layout.align());
         let header_size = size_of::<Header>();
         let padding = (align - (header_size % align)) % align;

@@ -1,6 +1,5 @@
 use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
-use super::errors::AllocError;
 use super::size_class::SizeClass;
 use std::alloc::Layout;
 use std::cell::Cell;
@@ -33,12 +32,12 @@ impl AllocHead {
         }
     }
 
-    pub fn alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
+    pub fn alloc(&self, layout: Layout) -> Result<*const u8, ()> {
         if let Some(space) = self.head_alloc(layout) {
             return Ok(space);
         }
 
-        let size_class = SizeClass::get_for_size(layout.size()).expect("Exceeded Max Alloc Size");
+        let size_class = SizeClass::get_for_size(layout.size())?;
         match size_class {
             SizeClass::Small => self.small_alloc(layout),
             SizeClass::Medium => self.medium_alloc(layout),
@@ -46,20 +45,19 @@ impl AllocHead {
         }
     }
 
-    fn small_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
+    fn small_alloc(&self, layout: Layout) -> Result<*const u8, ()> {
         // this is okay be we already tried to alloc in head and didn't have space
         // and any block returned by get new head should have space for a small object
         loop {
             self.get_new_head()?;
 
-            match self.head_alloc(layout) {
-                Some(ptr) => return Ok(ptr),
-                None => {}
-            };
+            if let Some(ptr) = self.head_alloc(layout) {
+                return Ok(ptr);
+            }
         }
     }
 
-    fn medium_alloc(&self, layout: Layout) -> Result<*const u8, AllocError> {
+    fn medium_alloc(&self, layout: Layout) -> Result<*const u8, ()> {
         loop {
             if let Some(space) = self.overflow_alloc(layout) {
                 return Ok(space);
@@ -69,7 +67,7 @@ impl AllocHead {
         }
     }
 
-    fn get_new_head(&self) -> Result<(), AllocError> {
+    fn get_new_head(&self) -> Result<(), ()> {
         let new_head = match self.overflow.take() {
             Some(block) => block,
             None => self.block_store.get_head()?,
@@ -78,20 +76,20 @@ impl AllocHead {
         let rest_block = self.head.take();
         self.head.set(Some(new_head));
 
-        if rest_block.is_some() {
-            self.block_store.push_rest(rest_block.unwrap());
+        if let Some(block) = rest_block {
+            self.block_store.push_rest(block);
         }
 
         Ok(())
     }
 
-    fn get_new_overflow(&self) -> Result<(), AllocError> {
+    fn get_new_overflow(&self) -> Result<(), ()> {
         let new_overflow = self.block_store.get_overflow()?;
         let recycle_block = self.overflow.take();
         self.overflow.set(Some(new_overflow));
 
-        if recycle_block.is_some() {
-            self.block_store.push_recycle(recycle_block.unwrap());
+        if let Some(block) = recycle_block {
+            self.block_store.push_recycle(block);
         }
 
         Ok(())

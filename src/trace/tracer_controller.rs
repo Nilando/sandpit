@@ -136,7 +136,7 @@ impl<M: Marker> TracerController<M> {
             }
         }
 
-        return false;
+        false
     }
 
     pub fn wait_for_trace_completion(&self) {
@@ -145,8 +145,8 @@ impl<M: Marker> TracerController<M> {
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);
         debug_assert_eq!(self.tracers_waiting(), 0);
-        debug_assert_eq!(self.is_trace_completed(), true);
-        debug_assert_eq!(self.mutators_stopped(), true);
+        debug_assert!(self.is_trace_completed());
+        debug_assert!(self.mutators_stopped());
 
         self.clean_up();
     }

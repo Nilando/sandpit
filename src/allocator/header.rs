@@ -65,7 +65,7 @@ impl Header {
     }
 
     pub fn get_mark(this: *const Header) -> Mark {
-        unsafe { (&*this).mark.load(Ordering::Acquire).into() }
+        unsafe { (*this).mark.load(Ordering::Acquire).into() }
     }
 
     pub fn get_size_class(&self) -> SizeClass {
@@ -84,9 +84,9 @@ impl Header {
 
     pub fn set_mark(this: *const Header, mark: Mark) {
         unsafe {
-            (&*this).mark.store(mark as u8, Ordering::Release);
+            (*this).mark.store(mark as u8, Ordering::Release);
 
-            if mark != Mark::New && (&*this).size_class != SizeClass::Large {
+            if mark != Mark::New && (*this).size_class != SizeClass::Large {
                 let meta = BlockMeta::from_header(this);
 
                 meta.mark(this, mark);

@@ -35,15 +35,15 @@ impl BlockMeta {
     }
 
     pub fn mark(&self, header: *const Header, mark: Mark) {
-        let addr = header as *const Header as usize;
+        let addr = header as usize;
         let relative_ptr = addr % constants::BLOCK_SIZE;
         let line = relative_ptr / constants::LINE_SIZE;
 
-        let size_class = unsafe { (&*header).get_size_class() };
-        let size = unsafe { (&*header).get_size() };
+        let size_class = unsafe { (*header).get_size_class() };
+        let size = unsafe { (*header).get_size() };
 
         debug_assert!(size_class != SizeClass::Large);
-        debug_assert!(Self::from_header(header as *const Header).lines == self.lines);
+        debug_assert!(Self::from_header(header).lines == self.lines);
 
         if size_class == SizeClass::Small {
             self.set_line(line, mark);

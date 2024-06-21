@@ -4,10 +4,9 @@ use std::ptr::NonNull;
 
 pub trait Allocate: 'static {
     type Arena: GenerationalArena;
-    type Error;
 
     fn new(arena: &Self::Arena) -> Self;
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Self::Error>;
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, ()>;
     fn get_mark<T>(ptr: NonNull<T>) -> <<Self as Allocate>::Arena as GenerationalArena>::Mark;
     fn set_mark<T>(ptr: NonNull<T>, mark: <<Self as Allocate>::Arena as GenerationalArena>::Mark);
 

@@ -1,7 +1,6 @@
 use super::block::Block;
 use super::block_meta::BlockMeta;
 use super::constants::{BLOCK_CAPACITY, SMALL_OBJECT_MIN};
-use super::errors::AllocError;
 use super::header::Mark;
 use std::alloc::Layout;
 
@@ -13,7 +12,7 @@ pub struct BumpBlock {
 }
 
 impl BumpBlock {
-    pub fn new() -> Result<BumpBlock, AllocError> {
+    pub fn new() -> Result<BumpBlock, ()> {
         let inner_block = Block::default()?;
         let block_ptr = inner_block.as_ptr();
         let block = BumpBlock {
@@ -51,7 +50,7 @@ impl BumpBlock {
         loop {
             let next_ptr = self.cursor.checked_sub(layout.size())? & !(layout.align() - 1);
 
-            if self.limit as usize <= next_ptr {
+            if self.limit <= next_ptr {
                 self.cursor = next_ptr;
 
                 return Some(self.block.at_offset(self.cursor));
@@ -70,7 +69,7 @@ impl BumpBlock {
     }
 
     pub fn current_hole_size(&self) -> usize {
-        self.cursor as usize - self.limit as usize
+        self.cursor - self.limit
     }
 
     pub fn is_marked(&self, mark: Mark) -> bool {

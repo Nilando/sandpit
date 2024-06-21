@@ -1,6 +1,5 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::errors::AllocError;
 use super::header::Header;
 use super::header::Mark;
 use std::alloc::Layout;
@@ -34,7 +33,7 @@ impl BlockStore {
         self.recycle.lock().unwrap().push(block);
     }
 
-    pub fn get_head(&self) -> Result<BumpBlock, AllocError> {
+    pub fn get_head(&self) -> Result<BumpBlock, ()> {
         if let Some(recycle_block) = self.recycle.lock().unwrap().pop() {
             Ok(recycle_block)
         } else if let Some(free_block) = self.free.lock().unwrap().pop() {
@@ -44,7 +43,7 @@ impl BlockStore {
         }
     }
 
-    pub fn get_overflow(&self) -> Result<BumpBlock, AllocError> {
+    pub fn get_overflow(&self) -> Result<BumpBlock, ()> {
         if let Some(free_block) = self.free.lock().unwrap().pop() {
             Ok(free_block)
         } else {
@@ -52,7 +51,7 @@ impl BlockStore {
         }
     }
 
-    fn new_block(&self) -> Result<BumpBlock, AllocError> {
+    fn new_block(&self) -> Result<BumpBlock, ()> {
         self.block_count.fetch_add(1, Ordering::SeqCst);
         BumpBlock::new()
     }
@@ -69,7 +68,7 @@ impl BlockStore {
             .fold(0, |sum, block| sum + block.get_size())
     }
 
-    pub fn create_large(&self, layout: Layout) -> Result<*const u8, AllocError> {
+    pub fn create_large(&self, layout: Layout) -> Result<*const u8, ()> {
         let block = Block::new(layout)?;
         let ptr = block.as_ptr();
 
@@ -86,49 +85,34 @@ impl BlockStore {
         let mut new_recycle = vec![];
         let mut new_large = vec![];
 
-        loop {
-            match recycle.pop() {
-                Some(mut block) => {
-                    block.reset_hole(mark);
+        while let Some(mut block) = recycle.pop() {
+            block.reset_hole(mark);
 
-                    if block.is_marked(mark) {
-                        new_recycle.push(block);
-                    } else {
-                        free.push(block);
-                    }
-                }
-                None => break,
+            if block.is_marked(mark) {
+                new_recycle.push(block);
+            } else {
+                free.push(block);
             }
         }
 
-        loop {
-            match rest.pop() {
-                Some(mut block) => {
-                    block.reset_hole(mark);
+        while let Some(mut block) = rest.pop() {
+            block.reset_hole(mark);
 
-                    if block.is_marked(mark) {
-                        if block.current_hole_size() != 0 {
-                            new_recycle.push(block);
-                        } else {
-                            new_rest.push(block);
-                        }
-                    } else {
-                        free.push(block);
-                    }
+            if block.is_marked(mark) {
+                if block.current_hole_size() != 0 {
+                    new_recycle.push(block);
+                } else {
+                    new_rest.push(block);
                 }
-                None => break,
+            } else {
+                free.push(block);
             }
         }
 
-        loop {
-            match large.pop() {
-                Some(block) => {
-                    let header = block.as_ptr() as *const Header;
-                    if Header::get_mark(header) == mark {
-                        new_large.push(block);
-                    }
-                }
-                None => break,
+        while let Some(block) = large.pop() {
+            let header = block.as_ptr() as *const Header;
+            if Header::get_mark(header) == mark {
+                new_large.push(block);
             }
         }
 
