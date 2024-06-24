@@ -1,9 +1,9 @@
+use crate::config::GcConfig;
+use crossbeam_channel::{Receiver, Sender};
 use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
-use crate::config::GcConfig;
-use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
@@ -95,7 +95,7 @@ impl<M: Marker> TracerController<M> {
         self.sender.send(work).unwrap();
     }
 
-    pub fn recv_work(&self) -> Vec<TraceJob<M>> {
+    pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
         self.start_waiting();
 
         let duration = std::time::Duration::from_millis(self.trace_wait_time);
@@ -106,12 +106,12 @@ impl<M: Marker> TracerController<M> {
                 Ok(work) => {
                     self.stop_waiting();
                     self.incr_recv();
-                    return work;
+                    return Some(work);
                 }
                 Err(_) => {
                     if self.is_trace_completed() {
                         self.stop_waiting();
-                        return vec![];
+                        return None;
                     }
                 }
             }

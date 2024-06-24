@@ -47,10 +47,11 @@ impl<M: Marker> TraceWorker<M> {
 
     pub fn trace_loop(&mut self) {
         loop {
-            if self.controller.is_trace_completed() {
-                break;
-            } else if self.work.is_empty() {
-                self.work = self.controller.recv_work();
+            if self.work.is_empty() {
+                match self.controller.recv_work() {
+                    Some(work) => self.work = work,
+                    None => break,
+                }
             }
 
             self.do_work();

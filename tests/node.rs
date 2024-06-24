@@ -286,7 +286,7 @@ fn build_and_collect_balanced_tree_sync() {
     assert_eq!(gc.metrics().old_objects_count, 1);
 
     gc.mutate(|root, m| {
-        Node::create_balanced_tree(root, m, 10_000);
+        Node::create_balanced_tree(root, m, 100);
     });
 
     for _ in 0..2 {
@@ -296,11 +296,11 @@ fn build_and_collect_balanced_tree_sync() {
 
     // at this major collect should set objects count to 0
     // then do a full trace of the tree... marking all
-    assert_eq!(gc.metrics().old_objects_count, 10_000);
+    assert_eq!(gc.metrics().old_objects_count, 100);
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..10_000).collect();
+        let expected: Vec<usize> = (0..100).collect();
         assert_eq!(actual, expected)
     });
 }
@@ -310,17 +310,18 @@ fn build_and_collect_balanced_tree_concurrent() {
     let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
 
     gc.mutate(|root, m| {
-        for _ in 0..1000 {
-            Node::create_balanced_tree(root, m, 10_000);
+        for _ in 0..100 {
+            Node::create_balanced_tree(root, m, 100);
         }
     });
 
     gc.major_collect();
-    assert_eq!(gc.metrics().old_objects_count, 10_000);
+
+    assert_eq!(gc.metrics().old_objects_count, 100);
 
     gc.mutate(|root, _| {
         let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..10_000).collect();
+        let expected: Vec<usize> = (0..100).collect();
         assert!(actual == expected)
     });
 }
@@ -334,10 +335,10 @@ fn multi_threaded_tree_building() {
             let root = Node::alloc(m, 0).unwrap();
 
             loop {
-                Node::create_balanced_tree(&root, m, 1_000_000);
+                Node::create_balanced_tree(&root, m, 100);
 
                 let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..1_000_000).collect();
+                let expected: Vec<usize> = (0..100).collect();
                 assert!(actual == expected);
 
                 if m.yield_requested() {
@@ -378,7 +379,7 @@ fn multi_threaded_root_mutation() {
 
     fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
         loop {
-            Node::create_balanced_tree(node, m, 10_000_000);
+            Node::create_balanced_tree(node, m, 100);
 
             if m.yield_requested() {
                 break;

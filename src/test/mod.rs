@@ -1,4 +1,4 @@
-use crate::{Gc, GcPtr, Mutator};
+use crate::{Gc, GcPtr, Mutator, Trace};
 use std::cell::Cell;
 use std::mem::{align_of, size_of};
 
@@ -193,3 +193,25 @@ fn extract_and_insert() {
 
     assert!(val == 69);
 }
+
+/*
+#[derive(Trace)]
+struct MyDroppable;
+
+impl Drop for MyDroppable {
+    fn drop(&mut self) { 
+        println!("DROPPING");
+    }
+}
+#[test]
+fn disable_alloc_drop_types() {
+
+    let arena = Gc::build(|_| ());
+
+    arena.mutate(|_, mu| {
+        let drop_obj = MyDroppable;
+
+        mu.alloc(drop_obj).unwrap();
+    });
+}
+*/
