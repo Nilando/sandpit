@@ -1,15 +1,15 @@
-use sandpit::{Gc, GcError, GcPtr, Mutator, Trace};
+use sandpit::{Gc, GcError, GcArena, Mutator, Trace};
 use std::cell::Cell;
 
 #[derive(Trace)]
 pub struct Node {
-    left: GcPtr<Node>,
-    right: GcPtr<Node>,
+    left: Gc<Node>,
+    right: Gc<Node>,
     val: Cell<usize>,
 }
 
 impl Node {
-    pub fn alloc<M: Mutator>(mu: &M, val: usize) -> Result<GcPtr<Self>, GcError> {
+    pub fn alloc<M: Mutator>(mu: &M, val: usize) -> Result<Gc<Self>, GcError> {
         mu.alloc(Node::new(val, mu))
     }
 
@@ -21,12 +21,12 @@ impl Node {
         }
     }
 
-    pub fn kill_children(this: &GcPtr<Node>) {
+    pub fn kill_children(this: &Gc<Node>) {
         this.left.set_null();
         this.right.set_null();
     }
 
-    pub fn set_left<M: Mutator>(this: GcPtr<Node>, mu: &M, new_left: GcPtr<Node>) {
+    pub fn set_left<M: Mutator>(this: Gc<Node>, mu: &M, new_left: Gc<Node>) {
         unsafe { this.left.swap(new_left.clone()); }
 
         if mu.is_marked(this) && !mu.is_marked(new_left.clone()) {
@@ -34,7 +34,7 @@ impl Node {
         }
     }
 
-    pub fn set_right<M: Mutator>(this: GcPtr<Node>, mu: &M, new_right: GcPtr<Node>) {
+    pub fn set_right<M: Mutator>(this: Gc<Node>, mu: &M, new_right: Gc<Node>) {
         unsafe { this.right.swap(new_right.clone()); }
 
         if mu.is_marked(this) && !mu.is_marked(new_right.clone()) {
@@ -42,16 +42,16 @@ impl Node {
         }
     }
 
-    pub fn right_val(this: &GcPtr<Node>) -> usize {
+    pub fn right_val(this: &Gc<Node>) -> usize {
         this.right.val.get()
     }
 
-    pub fn left_val(this: &GcPtr<Node>) -> usize {
+    pub fn left_val(this: &Gc<Node>) -> usize {
         this.left.val.get()
     }
 
 
-    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mu: &M, new_val: usize) -> GcPtr<Node> {
+    pub fn insert<M: Mutator>(this: &Gc<Node>, mu: &M, new_val: usize) -> Gc<Node> {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
@@ -70,7 +70,7 @@ impl Node {
         }
     }
 
-    pub fn collect(this: &GcPtr<Node>) -> Vec<usize> {
+    pub fn collect(this: &Gc<Node>) -> Vec<usize> {
         let mut result = vec![];
         Self::traverse(this, &mut result);
 
@@ -78,7 +78,7 @@ impl Node {
     }
 
     // don't call this on a cyclic graph
-    pub fn traverse(this: &GcPtr<Node>, vals: &mut Vec<usize>) {
+    pub fn traverse(this: &Gc<Node>, vals: &mut Vec<usize>) {
         if !this.right.is_null() {
             Self::traverse(&this.right, vals)
         }
@@ -89,7 +89,7 @@ impl Node {
         }
     }
 
-    pub fn find(this: &GcPtr<Node>, val: usize) -> Option<GcPtr<Node>> {
+    pub fn find(this: &Gc<Node>, val: usize) -> Option<Gc<Node>> {
         let current_val = this.val.get();
 
         if current_val > val && !this.right.is_null() {
@@ -103,14 +103,14 @@ impl Node {
         }
     }
 
-    pub fn create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mu: &M, size: usize) {
+    pub fn create_balanced_tree<M: Mutator>(this: &Gc<Node>, mu: &M, size: usize) {
         Node::kill_children(this);
         this.val.set(size / 2);
         Node::inner_create_balanced_tree(this, mu, 0, size)
     }
 
     fn inner_create_balanced_tree<M: Mutator>(
-        this: &GcPtr<Node>,
+        this: &Gc<Node>,
         mu: &M,
         low: usize,
         high: usize,
@@ -135,7 +135,7 @@ impl Node {
 
 #[test]
 fn root_node() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 69).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 69).unwrap());
 
     gc.mutate((), |root, _, _| {
         root.val.set(69);
@@ -148,7 +148,7 @@ fn root_node() {
 
 #[test]
 fn insert() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| {
         for i in 1..1_000 {
@@ -166,7 +166,7 @@ fn insert() {
 
 #[test]
 fn find() {
-    let gc = Gc::build((), |mu, _| {
+    let gc = GcArena::build((), |mu, _| {
         let root = Node::alloc(mu, 0).unwrap();
         for _ in 0..1_000 {
             Node::insert(&root, mu, 123);
@@ -194,7 +194,7 @@ fn find() {
 
 #[test]
 fn multiple_collects() {
-    let gc: Gc<GcPtr<Node>> = Gc::build((), |mu, _| {
+    let gc: GcArena<Gc<Node>> = GcArena::build((), |mu, _| {
         let root = Node::alloc(mu, 0).unwrap();
         for _ in 0..1_000 {
             Node::insert(&root, mu, 123);
@@ -218,7 +218,7 @@ fn multiple_collects() {
 
 #[test]
 fn monitor_requests_yield() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| loop {
         Node::insert(root, mu, 0);
@@ -232,7 +232,7 @@ fn monitor_requests_yield() {
 
 #[test]
 fn objects_marked_metric() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| {
         for i in 0..99 {
@@ -261,7 +261,7 @@ fn objects_marked_metric() {
 
 #[test]
 fn cyclic_graph() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| {
         Node::set_right(root.clone(), mu, root.clone());
@@ -276,7 +276,7 @@ fn cyclic_graph() {
 
 #[test]
 fn build_and_collect_balanced_tree_sync() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     for _ in 0..2 {
         gc.major_collect();
@@ -307,7 +307,7 @@ fn build_and_collect_balanced_tree_sync() {
 
 #[test]
 fn build_and_collect_balanced_tree_concurrent() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| {
         for _ in 0..100 {
@@ -328,9 +328,9 @@ fn build_and_collect_balanced_tree_concurrent() {
 
 #[test]
 fn multi_threaded_tree_building() {
-    let gc: Gc<()> = Gc::build((), |_, _| ());
+    let gc: GcArena<()> = GcArena::build((), |_, _| ());
 
-    fn tree_builder(gc: &Gc<()>) {
+    fn tree_builder(gc: &GcArena<()>) {
         gc.mutate((), |_, mu, _| {
             let root = Node::alloc(mu, 0).unwrap();
 
@@ -360,15 +360,15 @@ unsafe impl Sync for Root {}
 
 #[derive(Trace)]
 struct Root {
-    n1: GcPtr<Node>,
-    n2: GcPtr<Node>,
-    n3: GcPtr<Node>,
-    n4: GcPtr<Node>,
+    n1: Gc<Node>,
+    n2: Gc<Node>,
+    n3: Gc<Node>,
+    n4: Gc<Node>,
 }
 
 #[test]
 fn multi_threaded_root_mutation() {
-    let gc = Gc::build((), |mu, _| {
+    let gc = GcArena::build((), |mu, _| {
         let n1 = Node::alloc(mu, 0).unwrap();
         let n2 = Node::alloc(mu, 0).unwrap();
         let n3 = Node::alloc(mu, 0).unwrap();
@@ -377,7 +377,7 @@ fn multi_threaded_root_mutation() {
         Root { n1, n2, n3, n4 }
     });
 
-    fn grow_forest<M: Mutator>(node: &GcPtr<Node>, mu: &M) {
+    fn grow_forest<M: Mutator>(node: &Gc<Node>, mu: &M) {
         loop {
             Node::create_balanced_tree(node, mu, 100);
 

@@ -1,77 +1,85 @@
-use super::collector::{Collect, Collector};
-use super::config::GcConfig;
-use super::metrics::GcMetrics;
-use super::monitor::Monitor;
-use super::mutator::MutatorScope;
+use std::marker::PhantomData;
+use std::ops::Deref;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicPtr, Ordering};
+
 use super::trace::Trace;
-use super::trace::TraceLeaf;
-use std::sync::Arc;
 
-use super::allocator::Allocator;
-
-/// A garbage collected arena where objects can be allocated into.
+/// A pointer to a object stored in a Gc arena.
 pub struct Gc<T: Trace> {
-    collector: Arc<Collector<Allocator, T>>,
-    monitor: Arc<Monitor<Collector<Allocator, T>>>,
-    config: GcConfig,
+    ptr: AtomicPtr<T>,
+    _mark: PhantomData<*const ()>,
 }
 
-unsafe impl<T: Send + Trace> Send for Gc<T> {}
-unsafe impl<T: Sync + Trace> Sync for Gc<T> {}
+impl<T: Trace> Deref for Gc<T> {
+    type Target = T;
 
-impl<T: Trace> Drop for Gc<T> {
-    fn drop(&mut self) {
-        self.stop_monitor();
-        self.collector.wait_for_collection();
+    // this is safe b/c we can only have a gcptr within a mutation context,
+    // and gcptrs are guaranteed not to be swept during that context
+    fn deref(&self) -> &Self::Target {
+        let ptr = self.as_ptr();
+
+        if ptr.is_null() {
+            panic!("Attempt to deref a null GC ptr")
+        }
+
+        unsafe { &*ptr }
     }
 }
 
 impl<T: Trace> Gc<T> {
-    // The build callback must return a root of type T, which will permanently be the
-    // Gc's root type.
-    pub fn build<I: TraceLeaf>(input: I, callback: fn(&mut MutatorScope<Allocator>, I) -> T) -> Self {
-        let config = GcConfig::default();
-        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(input, callback, &config));
-        let monitor = Arc::new(Monitor::new(collector.clone(), &config));
-
-        if config.monitor_on {
-            monitor.clone().start();
-        }
-
+    pub(crate) fn new(ptr: NonNull<T>) -> Self {
         Self {
-            collector,
-            monitor,
-            config,
+            ptr: AtomicPtr::from(ptr.as_ptr()),
+            _mark: PhantomData::<*const ()>,
         }
     }
 
-    // MutatorScope is a sealed type but the user utilize it through the public
-    // Mutator trait which in implements. Here &T is the root.
-    pub fn mutate<I: TraceLeaf, O: TraceLeaf>(&self, input: I, callback: fn(&T, &mut MutatorScope<Allocator>, I) -> O) -> O {
-        self.collector.mutate(input, callback)
+    pub(crate) fn null() -> Self {
+        Self {
+            ptr: AtomicPtr::new(std::ptr::null_mut()),
+            _mark: PhantomData::<*const ()>,
+        }
     }
 
-    pub fn major_collect(&self) {
-        self.collector.major_collect();
+    pub fn set_null(&self) {
+        self.ptr.store(std::ptr::null_mut(), Ordering::SeqCst)
     }
 
-    pub fn minor_collect(&self) {
-        self.collector.minor_collect();
+    pub fn as_ptr(&self) -> *mut T {
+        self.ptr.load(Ordering::SeqCst)
     }
 
-    pub fn start_monitor(&self) {
-        self.monitor.clone().start();
+    pub fn as_nonnull(&self) -> NonNull<T> {
+        let ptr = self.ptr.load(Ordering::SeqCst);
+
+        NonNull::new(ptr).unwrap()
     }
 
-    pub fn stop_monitor(&self) {
-        self.monitor.stop();
+    pub fn is_null(&self) -> bool {
+        self.as_ptr().is_null()
     }
 
-    pub fn get_config(&self) -> GcConfig {
-        self.config
+    // This is unsafe b/c if the object holding this ptr has already been scanned,
+    // then if the collector finishes collection with out rescanning that object,
+    // this will become dangling.
+    //
+    // Either the swapped pointer must be guaranteed to not exist before the end
+    // of this mutation scope, or the object containing this ptr must be rescanned
+    //
+    // To use this function safely, implement a write barrier that ensures
+    // the new_ptr will(or has) been traced.
+    pub unsafe fn swap(&self, new_ptr: Gc<T>) {
+        self.ptr
+            .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
     }
+}
 
-    pub fn metrics(&self) -> GcMetrics {
-        self.monitor.metrics()
+impl<T: Trace> Clone for Gc<T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
+            _mark: PhantomData::<*const ()>,
+        }
     }
 }

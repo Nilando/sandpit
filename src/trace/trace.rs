@@ -102,7 +102,7 @@ unsafe impl<T: Trace> Trace for Option<T> {
     }
 }
 
-unsafe impl<T: Trace> Trace for crate::gc_ptr::GcPtr<T> {
+unsafe impl<T: Trace> Trace for crate::gc::Gc<T> {
     fn trace<R: Tracer>(&self, tracer: &mut R) {
         unsafe {
             let ptr = self.as_ptr();

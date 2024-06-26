@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use sandpit::{Gc, Mutator};
+    use sandpit::{GcArena, Mutator};
 
     #[test]
     fn trace_option() {
-        let gc = Gc::build((), |mutator, _| {
+        let gc = GcArena::build((), |mutator, _| {
             let inner: Option<usize> = Some(420);
             let outer = Some(mutator.alloc(inner).unwrap());
             mutator.alloc(outer).unwrap()

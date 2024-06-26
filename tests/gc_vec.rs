@@ -1,45 +1,45 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use sandpit::{Trace, Tracer, Mutator, GcPtr};
+use sandpit::{Trace, Tracer, Mutator, Gc};
 
 const DEFAULT_CAP: usize = 8;
 const VEC_GROW_RATIO: f64 = 0.5;
 
 struct GcVecData<T: Trace> {
-    data: GcPtr<T>, // WARNING! really GcPtr<[GcPtr<[T]]>>
+    data: Gc<T>, // WARNING! really Gc<[Gc<[T]]>>
 }
 
 impl<T: Trace> GcVecData<T> {
-    unsafe fn set(data: *mut GcPtr<T>, idx: usize, new: GcPtr<T>) {
+    unsafe fn set(data: *mut Gc<T>, idx: usize, new: Gc<T>) {
         let ptr = data.add(idx);
         let old = &*ptr;
 
         old.swap(new);
     }
 
-    unsafe fn at(data: *mut GcPtr<T>, idx: usize) -> GcPtr<T> {
+    unsafe fn at(data: *mut Gc<T>, idx: usize) -> Gc<T> {
         (*data.add(idx)).clone()
     }
 }
 
 unsafe impl<A: Trace> Trace for GcVecData<A> {
     // the tracing of individual items is handled in the trace of GcVec,
-    // having empty impl here prevents an attempted trace of self.at[0]
+    // having empty impl here prevents an atGcted trace of self.at[0]
     fn trace<T: Tracer>(&self, _tracer: &mut T) {}
 }
 
 pub struct GcVec<T: Trace> {
     cap: AtomicUsize,
     len: AtomicUsize,
-    data: GcPtr<GcVecData<T>>,
+    data: Gc<GcVecData<T>>,
 }
 
 impl<T: Trace> GcVec<T> {
-    pub fn cast_data(&self) -> *mut GcPtr<T> {
-        self.data.as_ptr() as *mut GcPtr<T>
+    pub fn cast_data(&self) -> *mut Gc<T> {
+        self.data.as_ptr() as *mut Gc<T>
     }
 
-    pub fn alloc<M: Mutator>(mutator: &M) -> GcPtr<Self> {
-        let data: GcPtr<GcVecData<T>> = mutator.alloc_array::<GcVecData<T>>(DEFAULT_CAP).unwrap();
+    pub fn alloc<M: Mutator>(mutator: &M) -> Gc<Self> {
+        let data: Gc<GcVecData<T>> = mutator.alloc_array::<GcVecData<T>>(DEFAULT_CAP).unwrap();
         let new = Self {
             len: AtomicUsize::new(0),
             cap: AtomicUsize::new(DEFAULT_CAP),
@@ -49,7 +49,7 @@ impl<T: Trace> GcVec<T> {
         mutator.alloc(new).unwrap()
     }
 
-    pub fn push<M: Mutator>(this: GcPtr<Self>, mutator: &M, val: GcPtr<T>) {
+    pub fn push<M: Mutator>(this: Gc<Self>, mutator: &M, val: Gc<T>) {
         let len = this.len();
         let cap = this.cap();
 
@@ -61,14 +61,14 @@ impl<T: Trace> GcVec<T> {
                     cap + (cap as f64 * VEC_GROW_RATIO).ceil() as usize
                 };
 
-            let new_data: GcPtr<GcVecData<T>> =
+            let new_data: Gc<GcVecData<T>> =
                 mutator.alloc_array::<GcVecData<T>>(new_cap).unwrap();
 
             for i in 0..len {
                 unsafe {
                     let copy = GcVecData::at(this.cast_data(), i);
 
-                    GcVecData::set(new_data.as_ptr() as *mut GcPtr<T>, i, copy);
+                    GcVecData::set(new_data.as_ptr() as *mut Gc<T>, i, copy);
                 }
             }
 
@@ -97,7 +97,7 @@ impl<T: Trace> GcVec<T> {
         this.len.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn set<M: Mutator>(this: GcPtr<Self>, mutator: &M, index: usize, val: GcPtr<T>) {
+    pub fn set<M: Mutator>(this: Gc<Self>, mutator: &M, index: usize, val: Gc<T>) {
         let len = this.len();
 
         if index >= len {
@@ -116,7 +116,7 @@ impl<T: Trace> GcVec<T> {
         }
     }
 
-    pub fn pop(&self) -> Option<GcPtr<T>> {
+    pub fn pop(&self) -> Option<Gc<T>> {
         let len = self.len();
 
         if len == 0 {
@@ -128,7 +128,7 @@ impl<T: Trace> GcVec<T> {
         unsafe { Some(GcVecData::at(self.cast_data(), len - 1)) }
     }
 
-    pub fn at(&self, index: usize) -> GcPtr<T> {
+    pub fn at(&self, index: usize) -> Gc<T> {
         let len = self.len();
 
         if index >= len {
@@ -167,11 +167,11 @@ unsafe impl<T: Trace> Trace for GcVec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sandpit::Gc;
+    use sandpit::GcArena;
 
     #[test]
     fn alloc_vec() {
-        Gc::build((), |mu, _| {
+        GcArena::build((), |mu, _| {
             let vec = GcVec::<u8>::alloc(mu);
 
             assert!(vec.cap() == DEFAULT_CAP);
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn vec_push_pop() {
-        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build((), |mu, _| GcVec::<usize>::alloc(mu));
+        let gc: GcArena<Gc<GcVec<usize>>> = GcArena::build((), |mu, _| GcVec::<usize>::alloc(mu));
 
         gc.mutate((), |root, mu, _| {
             for i in 0..10_000 {
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn vec_set() {
-        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build((), |mu, _| GcVec::<usize>::alloc(mu));
+        let gc: GcArena<Gc<GcVec<usize>>> = GcArena::build((), |mu, _| GcVec::<usize>::alloc(mu));
 
         gc.mutate((), |root, mu, _| {
             let v = mu.alloc(69).unwrap();

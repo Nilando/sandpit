@@ -1,6 +1,6 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
 use super::error::GcError;
-use super::gc_ptr::GcPtr;
+use super::gc::Gc;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
 use std::alloc::Layout;
@@ -12,18 +12,18 @@ use std::sync::RwLockReadGuard;
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator {
-    // several ways to obtain GcPtrs
-    fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError>;
-    fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError>;
-    fn new_null<T: Trace>(&self) -> GcPtr<T>;
+    // several ways to obtain Gcs
+    fn alloc<T: Trace>(&self, obj: T) -> Result<Gc<T>, GcError>;
+    fn alloc_array<T: Trace>(&self, size: usize) -> Result<Gc<T>, GcError>;
+    fn new_null<T: Trace>(&self) -> Gc<T>;
 
     // Signal that GC is ready to free memory and the current mutation
     // callback should be exited.
     fn yield_requested(&self) -> bool;
 
     // Useful for implementing write barriers.
-    fn retrace<T: Trace>(&self, ptr: GcPtr<T>);
-    fn is_marked<T: Trace>(&self, ptr: GcPtr<T>) -> bool;
+    fn retrace<T: Trace>(&self, ptr: Gc<T>);
+    fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
@@ -62,7 +62,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         self.tracer_controller.yield_flag()
     }
 
-    fn alloc<T: Trace>(&self, obj: T) -> Result<GcPtr<T>, GcError> {
+    fn alloc<T: Trace>(&self, obj: T) -> Result<Gc<T>, GcError> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
@@ -79,13 +79,13 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
             Ok(ptr) => {
                 unsafe { write(ptr.as_ptr().cast(), obj) }
 
-                Ok(GcPtr::new(ptr.cast()))
+                Ok(Gc::new(ptr.cast()))
             }
             Err(()) => Err(GcError::Oom),
         }
     }
 
-    fn alloc_array<T: Trace>(&self, size: usize) -> Result<GcPtr<T>, GcError> {
+    fn alloc_array<T: Trace>(&self, size: usize) -> Result<Gc<T>, GcError> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
@@ -108,17 +108,17 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                     }
                 }
 
-                Ok(GcPtr::new(ptr.cast()))
+                Ok(Gc::new(ptr.cast()))
             }
             Err(()) => Err(GcError::Oom),
         }
     }
 
-    fn new_null<T: Trace>(&self) -> GcPtr<T> {
-        GcPtr::null()
+    fn new_null<T: Trace>(&self) -> Gc<T> {
+        Gc::null()
     }
 
-    fn retrace<T: Trace>(&self, gc_ptr: GcPtr<T>) {
+    fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
         if gc_ptr.is_null() {
             return;
         }
@@ -138,7 +138,7 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
         }
     }
 
-    fn is_marked<T: Trace>(&self, ptr: GcPtr<T>) -> bool {
+    fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool {
         !ptr.is_null() && self.allocator.is_old(ptr.as_nonnull())
     }
 }
