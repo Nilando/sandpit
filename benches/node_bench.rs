@@ -9,11 +9,11 @@ use sandpit::Gc;
 const TREE_SIZE: usize = 10_000;
 
 fn major_collection() {
-    let gc = Gc::build(|m| {
-        let root = Node::alloc(m, 0).unwrap();
+    let gc = Gc::build((), |mu, _| {
+        let root = Node::alloc(mu, 0).unwrap();
 
         for _ in 0..10 {
-            Node::create_balanced_tree(&root, m, TREE_SIZE);
+            Node::create_balanced_tree(&root, mu, TREE_SIZE);
         }
 
         root
@@ -21,7 +21,7 @@ fn major_collection() {
 
     gc.major_collect();
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..TREE_SIZE).collect();
         assert_eq!(actual, expected)
@@ -29,11 +29,11 @@ fn major_collection() {
 }
 
 fn minor_collection() {
-    let gc = Gc::build(|m| {
-        let root = Node::alloc(m, 0).unwrap();
+    let gc = Gc::build((), |mu, _| {
+        let root = Node::alloc(mu, 0).unwrap();
 
         for _ in 0..10 {
-            Node::create_balanced_tree(&root, m, TREE_SIZE);
+            Node::create_balanced_tree(&root, mu, TREE_SIZE);
         }
 
         root
@@ -41,7 +41,7 @@ fn minor_collection() {
 
     gc.minor_collect();
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..TREE_SIZE).collect();
         assert_eq!(actual, expected)
@@ -49,17 +49,17 @@ fn minor_collection() {
 }
 
 fn sync_collection() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, m| {
+    gc.mutate((), |root, mu, _| {
         for _ in 0..100 {
-            Node::create_balanced_tree(root, m, TREE_SIZE);
+            Node::create_balanced_tree(root, mu, TREE_SIZE);
         }
     });
 
     gc.minor_collect();
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..TREE_SIZE).collect();
         assert_eq!(actual, expected)
@@ -67,17 +67,17 @@ fn sync_collection() {
 }
 
 fn concurrent_collection() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, m| {
+    gc.mutate((), |root, mu, _| {
         for _ in 0..100 {
-            Node::create_balanced_tree(root, m, TREE_SIZE);
+            Node::create_balanced_tree(root, mu, TREE_SIZE);
         }
     });
 
     gc.minor_collect();
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..TREE_SIZE).collect();
         assert_eq!(actual, expected)

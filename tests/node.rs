@@ -1,4 +1,4 @@
-use sandpit::{Gc, GcError, GcPtr, Mutator, Trace, TraceLeaf};
+use sandpit::{Gc, GcError, GcPtr, Mutator, Trace};
 use std::cell::Cell;
 
 #[derive(Trace)]
