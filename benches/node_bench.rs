@@ -8,15 +8,15 @@ use sandpit::Gc;
 
 const TREE_SIZE: usize = 10_000;
 
-fn major_collection() {
-    let gc = Gc::build((), |mu, _| {
-        let root = Node::alloc(mu, 0).unwrap();
+fn sync_trees() {
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-        for _ in 0..10 {
-            Node::create_balanced_tree(&root, mu, TREE_SIZE);
+    gc.stop_monitor();
+
+    gc.mutate((), |root, mu, _| {
+        for _ in 0..100 {
+            Node::create_balanced_tree(root, mu, TREE_SIZE);
         }
-
-        root
     });
 
     gc.major_collect();
@@ -28,27 +28,7 @@ fn major_collection() {
     });
 }
 
-fn minor_collection() {
-    let gc = Gc::build((), |mu, _| {
-        let root = Node::alloc(mu, 0).unwrap();
-
-        for _ in 0..10 {
-            Node::create_balanced_tree(&root, mu, TREE_SIZE);
-        }
-
-        root
-    });
-
-    gc.minor_collect();
-
-    gc.mutate((), |root, _, _| {
-        let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..TREE_SIZE).collect();
-        assert_eq!(actual, expected)
-    });
-}
-
-fn sync_collection() {
+fn concurrent_trees() {
     let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     gc.mutate((), |root, mu, _| {
@@ -56,26 +36,6 @@ fn sync_collection() {
             Node::create_balanced_tree(root, mu, TREE_SIZE);
         }
     });
-
-    gc.minor_collect();
-
-    gc.mutate((), |root, _, _| {
-        let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..TREE_SIZE).collect();
-        assert_eq!(actual, expected)
-    });
-}
-
-fn concurrent_collection() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    gc.mutate((), |root, mu, _| {
-        for _ in 0..100 {
-            Node::create_balanced_tree(root, mu, TREE_SIZE);
-        }
-    });
-
-    gc.minor_collect();
 
     gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
@@ -85,10 +45,8 @@ fn concurrent_collection() {
 }
 
 fn node_benchmark(c: &mut Criterion) {
-    c.bench_function("major collection", |b| b.iter(major_collection));
-    c.bench_function("minor collection", |b| b.iter(minor_collection));
-    c.bench_function("sync collection", |b| b.iter(sync_collection));
-    c.bench_function("concurrent collection", |b| b.iter(concurrent_collection));
+    c.bench_function("sync_trees", |b| b.iter(sync_trees));
+    c.bench_function("concurrent_trees", |b| b.iter(concurrent_trees));
 }
 
 criterion_group!(benches, node_benchmark);
