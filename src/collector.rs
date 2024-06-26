@@ -123,12 +123,12 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
 }
 
 impl<A: Allocate, T: Trace> Collector<A, T> {
-    pub fn build(callback: fn(&mut MutatorScope<A>) -> T, config: &GcConfig) -> Self {
+    pub fn build<I: TraceLeaf>(input: I, callback: fn(&mut MutatorScope<A>, I) -> T, config: &GcConfig) -> Self {
         let arena = A::Arena::new();
         let tracer = Arc::new(TracerController::new(config));
         let lock = tracer.yield_lock();
         let mut mutator = MutatorScope::new(&arena, &tracer, lock);
-        let root = callback(&mut mutator);
+        let root = callback(&mut mutator, input);
 
         drop(mutator);
 
@@ -149,30 +149,10 @@ impl<A: Allocate, T: Trace> Collector<A, T> {
         }
     }
 
-    pub fn insert<L: TraceLeaf>(&self, callback: fn(&T, L), value: L) {
-        drop(self.lock.lock().unwrap());
-        let _lock = self.tracer.yield_lock();
-
-        callback(&self.root, value);
-    }
-
-    pub fn extract<L: TraceLeaf>(&self, callback: fn(&T) -> L) -> L {
-        drop(self.lock.lock().unwrap());
-        let _lock = self.tracer.yield_lock();
-
-        callback(&self.root)
-    }
-
-    pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<A>)) {
-        let mut mutator = self.new_mutator();
-
-        callback(&self.root, &mut mutator);
-    }
-
-    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(
+    pub fn mutate<I: TraceLeaf, O: TraceLeaf>(
         &self,
-        callback: fn(&T, &mut MutatorScope<A>, input: I) -> O,
         input: I,
+        callback: fn(&T, &mut MutatorScope<A>, I) -> O,
     ) -> O {
         let mut mutator = self.new_mutator();
 

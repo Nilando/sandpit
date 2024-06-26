@@ -9,14 +9,14 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn alloc<M: Mutator>(mutator: &M, val: usize) -> Result<GcPtr<Self>, GcError> {
-        mutator.alloc(Node::new(val, mutator))
+    pub fn alloc<M: Mutator>(mu: &M, val: usize) -> Result<GcPtr<Self>, GcError> {
+        mu.alloc(Node::new(val, mu))
     }
 
-    pub fn new<M: Mutator>(val: usize, mutator: &M) -> Self {
+    pub fn new<M: Mutator>(val: usize, mu: &M) -> Self {
         Self {
-            left: mutator.new_null(),
-            right: mutator.new_null(),
+            left: mu.new_null(),
+            right: mu.new_null(),
             val: Cell::new(val),
         }
     }
@@ -51,22 +51,22 @@ impl Node {
     }
 
 
-    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mutator: &M, new_val: usize) -> GcPtr<Node> {
+    pub fn insert<M: Mutator>(this: &GcPtr<Node>, mu: &M, new_val: usize) -> GcPtr<Node> {
         if new_val > this.val.get() {
             if this.left.is_null() {
                 // create a new node and set it as left
-                let node_ptr = Node::alloc(mutator, new_val).unwrap();
-                Node::set_left(this.clone(), mutator, node_ptr.clone());
+                let node_ptr = Node::alloc(mu, new_val).unwrap();
+                Node::set_left(this.clone(), mu, node_ptr.clone());
                 node_ptr
             } else {
-                Node::insert(&this.left, mutator, new_val)
+                Node::insert(&this.left, mu, new_val)
             }
         } else if this.right.is_null() {
-            let node_ptr = Node::alloc(mutator, new_val).unwrap();
-            Node::set_right(this.clone(), mutator, node_ptr.clone());
+            let node_ptr = Node::alloc(mu, new_val).unwrap();
+            Node::set_right(this.clone(), mu, node_ptr.clone());
             node_ptr
         } else {
-            Node::insert(&this.right, mutator, new_val)
+            Node::insert(&this.right, mu, new_val)
         }
     }
 
@@ -103,30 +103,30 @@ impl Node {
         }
     }
 
-    pub fn create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mutator: &M, size: usize) {
+    pub fn create_balanced_tree<M: Mutator>(this: &GcPtr<Node>, mu: &M, size: usize) {
         Node::kill_children(this);
         this.val.set(size / 2);
-        Node::inner_create_balanced_tree(this, mutator, 0, size)
+        Node::inner_create_balanced_tree(this, mu, 0, size)
     }
 
     fn inner_create_balanced_tree<M: Mutator>(
         this: &GcPtr<Node>,
-        mutator: &M,
+        mu: &M,
         low: usize,
         high: usize,
     ) {
         if this.val.get() > low {
             let right_val = low + ((this.val.get() - low) / 2);
-            let right = Node::alloc(mutator, right_val).unwrap();
-            Node::set_right(this.clone(), mutator, right.clone());
-            Node::inner_create_balanced_tree(&right, mutator, low, this.val.get());
+            let right = Node::alloc(mu, right_val).unwrap();
+            Node::set_right(this.clone(), mu, right.clone());
+            Node::inner_create_balanced_tree(&right, mu, low, this.val.get());
         }
 
         if (this.val.get() + 1) < high {
             let left_val = this.val.get() + ((high - this.val.get()) / 2);
-            let left = Node::alloc(mutator, left_val).unwrap();
-            Node::set_left(this.clone(), mutator, left.clone());
-            Node::inner_create_balanced_tree(&left, mutator, this.val.get() + 1, high);
+            let left = Node::alloc(mu, left_val).unwrap();
+            Node::set_left(this.clone(), mu, left.clone());
+            Node::inner_create_balanced_tree(&left, mu, this.val.get() + 1, high);
         }
     }
 }
@@ -135,9 +135,9 @@ impl Node {
 
 #[test]
 fn root_node() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 69).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 69).unwrap());
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         root.val.set(69);
         assert_eq!(root.val.get(), 69);
 
@@ -148,15 +148,15 @@ fn root_node() {
 
 #[test]
 fn insert() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, mutator| {
+    gc.mutate((), |root, mu, _| {
         for i in 1..1_000 {
-            Node::insert(root, mutator, i);
+            Node::insert(root, mu, i);
         }
     });
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let vals = Node::collect(root);
         let result: Vec<usize> = (0..1_000).collect();
 
@@ -166,20 +166,20 @@ fn insert() {
 
 #[test]
 fn find() {
-    let gc = Gc::build(|mutator| {
-        let root = Node::alloc(mutator, 0).unwrap();
+    let gc = Gc::build((), |mu, _| {
+        let root = Node::alloc(mu, 0).unwrap();
         for _ in 0..1_000 {
-            Node::insert(&root, mutator, 123);
+            Node::insert(&root, mu, 123);
         }
 
-        Node::insert(&root, mutator, 420);
+        Node::insert(&root, mu, 420);
 
         root
     });
 
     gc.major_collect();
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let node = Node::find(root, 420).unwrap();
 
         assert_eq!(node.val.get(), 420);
@@ -194,12 +194,12 @@ fn find() {
 
 #[test]
 fn multiple_collects() {
-    let gc: Gc<GcPtr<Node>> = Gc::build(|mutator| {
-        let root = Node::alloc(mutator, 0).unwrap();
+    let gc: Gc<GcPtr<Node>> = Gc::build((), |mu, _| {
+        let root = Node::alloc(mu, 0).unwrap();
         for _ in 0..1_000 {
-            Node::insert(&root, mutator, 123);
+            Node::insert(&root, mu, 123);
         }
-        Node::insert(&root, mutator, 69);
+        Node::insert(&root, mu, 69);
         root
     });
 
@@ -211,19 +211,19 @@ fn multiple_collects() {
         }
     }
 
-    gc.mutate(|root, _mutator| {
+    gc.mutate((), |root, _, _| {
         assert!(Node::find(root, 69).is_some());
     });
 }
 
 #[test]
 fn monitor_requests_yield() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, mutator| loop {
-        Node::insert(root, mutator, 0);
+    gc.mutate((), |root, mu, _| loop {
+        Node::insert(root, mu, 0);
 
-        if mutator.yield_requested() {
+        if mu.yield_requested() {
             Node::kill_children(root);
             break;
         }
@@ -232,11 +232,11 @@ fn monitor_requests_yield() {
 
 #[test]
 fn objects_marked_metric() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, mutator| {
+    gc.mutate((), |root, mu, _| {
         for i in 0..99 {
-            Node::insert(root, mutator, i);
+            Node::insert(root, mu, i);
         }
 
         assert_eq!(Node::collect(root).len(), 100);
@@ -245,7 +245,7 @@ fn objects_marked_metric() {
     gc.major_collect();
     assert_eq!(gc.metrics().old_objects_count, 100);
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let node = Node::find(root, 48).unwrap();
         Node::kill_children(&node);
 
@@ -261,11 +261,11 @@ fn objects_marked_metric() {
 
 #[test]
 fn cyclic_graph() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, mutator| {
-        Node::set_right(root.clone(), mutator, root.clone());
-        Node::set_left(root.clone(), mutator, root.clone());
+    gc.mutate((), |root, mu, _| {
+        Node::set_right(root.clone(), mu, root.clone());
+        Node::set_left(root.clone(), mu, root.clone());
 
         assert!(Node::right_val(root) == 0);
         assert!(Node::left_val(root) == 0);
@@ -276,7 +276,7 @@ fn cyclic_graph() {
 
 #[test]
 fn build_and_collect_balanced_tree_sync() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
     for _ in 0..2 {
         gc.major_collect();
@@ -285,8 +285,8 @@ fn build_and_collect_balanced_tree_sync() {
 
     assert_eq!(gc.metrics().old_objects_count, 1);
 
-    gc.mutate(|root, m| {
-        Node::create_balanced_tree(root, m, 100);
+    gc.mutate((), |root, mu, _| {
+        Node::create_balanced_tree(root, mu, 100);
     });
 
     for _ in 0..2 {
@@ -298,7 +298,7 @@ fn build_and_collect_balanced_tree_sync() {
     // then do a full trace of the tree... marking all
     assert_eq!(gc.metrics().old_objects_count, 100);
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..100).collect();
         assert_eq!(actual, expected)
@@ -307,11 +307,11 @@ fn build_and_collect_balanced_tree_sync() {
 
 #[test]
 fn build_and_collect_balanced_tree_concurrent() {
-    let gc = Gc::build(|m| Node::alloc(m, 0).unwrap());
+    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate(|root, m| {
+    gc.mutate((), |root, mu, _| {
         for _ in 0..100 {
-            Node::create_balanced_tree(root, m, 100);
+            Node::create_balanced_tree(root, mu, 100);
         }
     });
 
@@ -319,7 +319,7 @@ fn build_and_collect_balanced_tree_concurrent() {
 
     assert_eq!(gc.metrics().old_objects_count, 100);
 
-    gc.mutate(|root, _| {
+    gc.mutate((), |root, _, _| {
         let actual: Vec<usize> = Node::collect(root);
         let expected: Vec<usize> = (0..100).collect();
         assert!(actual == expected)
@@ -328,20 +328,20 @@ fn build_and_collect_balanced_tree_concurrent() {
 
 #[test]
 fn multi_threaded_tree_building() {
-    let gc: Gc<()> = Gc::build(|_| ());
+    let gc: Gc<()> = Gc::build((), |_, _| ());
 
     fn tree_builder(gc: &Gc<()>) {
-        gc.mutate(|_, m| {
-            let root = Node::alloc(m, 0).unwrap();
+        gc.mutate((), |_, mu, _| {
+            let root = Node::alloc(mu, 0).unwrap();
 
             loop {
-                Node::create_balanced_tree(&root, m, 100);
+                Node::create_balanced_tree(&root, mu, 100);
 
                 let actual: Vec<usize> = Node::collect(&root);
                 let expected: Vec<usize> = (0..100).collect();
                 assert!(actual == expected);
 
-                if m.yield_requested() {
+                if mu.yield_requested() {
                     break;
                 }
             }
@@ -368,20 +368,20 @@ struct Root {
 
 #[test]
 fn multi_threaded_root_mutation() {
-    let gc = Gc::build(|m| {
-        let n1 = Node::alloc(m, 0).unwrap();
-        let n2 = Node::alloc(m, 0).unwrap();
-        let n3 = Node::alloc(m, 0).unwrap();
-        let n4 = Node::alloc(m, 0).unwrap();
+    let gc = Gc::build((), |mu, _| {
+        let n1 = Node::alloc(mu, 0).unwrap();
+        let n2 = Node::alloc(mu, 0).unwrap();
+        let n3 = Node::alloc(mu, 0).unwrap();
+        let n4 = Node::alloc(mu, 0).unwrap();
 
         Root { n1, n2, n3, n4 }
     });
 
-    fn grow_forest<M: Mutator>(node: &GcPtr<Node>, m: &M) {
+    fn grow_forest<M: Mutator>(node: &GcPtr<Node>, mu: &M) {
         loop {
-            Node::create_balanced_tree(node, m, 100);
+            Node::create_balanced_tree(node, mu, 100);
 
-            if m.yield_requested() {
+            if mu.yield_requested() {
                 break;
             }
         }
@@ -389,40 +389,19 @@ fn multi_threaded_root_mutation() {
 
     std::thread::scope(|scope| {
         scope.spawn(|| {
-            gc.mutate(|root, m| grow_forest(&root.n1, m));
+            gc.mutate((), |root, mu, _| grow_forest(&root.n1, mu));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| grow_forest(&root.n2, m));
+            gc.mutate((), |root, mu, _| grow_forest(&root.n2, mu));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| grow_forest(&root.n3, m));
+            gc.mutate((), |root, mu, _| grow_forest(&root.n3, mu));
         });
 
         scope.spawn(|| {
-            gc.mutate(|root, m| grow_forest(&root.n4, m));
+            gc.mutate((), |root, mu, _| grow_forest(&root.n4, mu));
         });
     });
-}
-
-#[test]
-fn insert_and_extract_node_val() {
-    let gc = Gc::build(|mutator| Node::alloc(mutator, 0).unwrap());
-
-    gc.mutate(|root, mutator| {
-        Node::insert(root, mutator, 333);
-    });
-
-    let val = gc.extract(|root| Node::find(root, 333).unwrap().val.get());
-
-    assert!(val == 333);
-
-    gc.insert(420, |root, new_val| {
-        Node::find(root, 333).unwrap().val.set(new_val)
-    });
-
-    let val = gc.extract(|root| Node::find(root, 420).unwrap().val.get());
-
-    assert!(val == 420);
 }

@@ -22,16 +22,16 @@ unsafe impl<T: Sync + Trace> Sync for Gc<T> {}
 impl<T: Trace> Drop for Gc<T> {
     fn drop(&mut self) {
         self.stop_monitor();
-        self.collector.wait_for_collection()
+        self.collector.wait_for_collection();
     }
 }
 
 impl<T: Trace> Gc<T> {
     // The build callback must return a root of type T, which will permanently be the
     // Gc's root type.
-    pub fn build(callback: fn(&mut MutatorScope<Allocator>) -> T) -> Self {
+    pub fn build<I: TraceLeaf>(input: I, callback: fn(&mut MutatorScope<Allocator>, I) -> T) -> Self {
         let config = GcConfig::default();
-        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(callback, &config));
+        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(input, callback, &config));
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
         if config.monitor_on {
@@ -47,24 +47,8 @@ impl<T: Trace> Gc<T> {
 
     // MutatorScope is a sealed type but the user utilize it through the public
     // Mutator trait which in implements. Here &T is the root.
-    pub fn mutate(&self, callback: fn(&T, &mut MutatorScope<Allocator>)) {
-        self.collector.mutate(callback);
-    }
-
-    pub fn mutate_io<I: TraceLeaf, O: TraceLeaf>(
-        &self,
-        callback: fn(&T, &mut MutatorScope<Allocator>, input: I) -> O,
-        input: I,
-    ) -> O {
-        self.collector.mutate_io(callback, input)
-    }
-
-    pub fn insert<L: TraceLeaf>(&self, value: L, callback: fn(&T, L)) {
-        self.collector.insert(callback, value);
-    }
-
-    pub fn extract<L: TraceLeaf>(&self, callback: fn(&T) -> L) -> L {
-        self.collector.extract(callback)
+    pub fn mutate<I: TraceLeaf, O: TraceLeaf>(&self, input: I, callback: fn(&T, &mut MutatorScope<Allocator>, I) -> O) -> O {
+        self.collector.mutate(input, callback)
     }
 
     pub fn major_collect(&self) {

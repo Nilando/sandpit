@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn alloc_vec() {
-        Gc::build(|mu| {
+        Gc::build((), |mu, _| {
             let vec = GcVec::<u8>::alloc(mu);
 
             assert!(vec.cap() == DEFAULT_CAP);
@@ -181,9 +181,9 @@ mod tests {
 
     #[test]
     fn vec_push_pop() {
-        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build(|mu| GcVec::<usize>::alloc(mu));
+        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build((), |mu, _| GcVec::<usize>::alloc(mu));
 
-        gc.mutate(|root, mu| {
+        gc.mutate((), |root, mu, _| {
             for i in 0..10_000 {
                 let v = mu.alloc(i).unwrap();
                 GcVec::push(root.clone(), mu, v);
@@ -196,7 +196,7 @@ mod tests {
 
         gc.major_collect();
 
-        gc.mutate(|root, _| {
+        gc.mutate((), |root, _, _| {
             for i in (0..10_000).rev() {
                 assert_eq!(*root.pop().unwrap(), i);
             }
@@ -205,14 +205,14 @@ mod tests {
 
         gc.major_collect();
 
-        gc.mutate(|root, _| assert!(root.pop().is_none()));
+        gc.mutate((), |root, _, _| assert!(root.pop().is_none()));
     }
 
     #[test]
     fn vec_set() {
-        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build(|mu| GcVec::<usize>::alloc(mu));
+        let gc: Gc<GcPtr<GcVec<usize>>> = Gc::build((), |mu, _| GcVec::<usize>::alloc(mu));
 
-        gc.mutate(|root, mu| {
+        gc.mutate((), |root, mu, _| {
             let v = mu.alloc(69).unwrap();
             GcVec::push(root.clone(), mu, v);
             assert!(*root.at(0) == 69);
