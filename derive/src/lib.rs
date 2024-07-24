@@ -100,7 +100,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 }]
             }
         }
-        _ => unimplemented!("Trace must be implemented by hand for union types"),
+        _ => unimplemented!("#[derive(Trace)] is not implemented for this type"),
     };
 
     // This assert still applies to types with generics, b/c
@@ -133,10 +133,10 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
             .named
             .iter()
             .map(|field| {
-                let field_ty = &field.ty;
+                let ty = &field.ty;
 
                 quote! {
-                    Self::assert_leaf::<#field_ty>();
+                    Self::assert_leaf::<#ty>();
                 }
             })
             .collect::<Vec<_>>(),
@@ -145,13 +145,48 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
             ..
         }) => vec![quote! {}],
         Data::Struct(DataStruct {
-            fields: Fields::Unnamed(_field),
+            fields: Fields::Unnamed(ref fields),
             ..
         }) => {
-            todo!()
+            fields.unnamed.iter().map(|field| {
+                let ty = &field.ty;
+
+                quote! {
+                    Self::assert_leaf::<#ty>();
+                }
+            })
+            .collect::<Vec<_>>()
         }
-        Data::Enum(DataEnum { .. }) => todo!(),
-        _ => todo!("implement Derive(Trace) for union types"),
+        Data::Enum(DataEnum { variants, .. }) => {
+            let arms = variants.iter().map(|variant| {
+                match &variant.fields {
+                    Fields::Unnamed(fields) => {
+                        fields.unnamed.iter().map(|field| {
+                            let ty = &field.ty;
+
+                            quote! {
+                                Self::assert_leaf::<#ty>();
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                    }
+                    Fields::Named(fields) => {
+                        fields.named.iter().map(|field| {
+                            let ty = &field.ty;
+
+                            quote! {
+                                Self::assert_leaf::<#ty>();
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                    }
+                    Fields::Unit => vec![quote! {}],
+                }
+            }).collect::<Vec<_>>();
+
+            arms.into_iter().flatten().collect()
+        }
+        _ => unimplemented!("#[derive(TraceLeaf)] is not implemented for this type"),
     };
 
     // This assert still applies to types with generics, b/c
