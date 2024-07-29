@@ -6,11 +6,10 @@
 //! will be freed.
 //! To build a GcArena, you must pass a callback to the GcArena::build method which must return the arena's root object. The GcArena::build method also provides a mutator as an argument to allow for the option of allocating the root object within the GcArena.
 //! ```rust
-//! use sandpit::{GcArena, Mutator, Gc};
-//! use higher_kinded_types::ForLt;
+//! use sandpit::{GcArena, Mutator, Gc, Root};
 //!
 //! // This creates an arena with a usize as the root.
-//! let gc: GcArena<ForLt![Gc<'_, usize>]> = GcArena::new(|mu| {
+//! let gc: GcArena<Root![Gc<'_, usize>]> = GcArena::new(|mu| {
 //!     Gc::new(mu, 123)
 //! });
 //!
@@ -23,15 +22,14 @@
 //! not impl Drop. This is because the trace and sweep collector by design only keeps track of what
 //! is still reachable from the root, and implicitly frees what is not.
 //! ```
-//! use sandpit::{GcArena, Trace, Gc};
-//! use higher_kinded_types::ForLt;
+//! use sandpit::{GcArena, Trace, Gc, Root};
 //!
 //! #[derive(Trace)]
 //! struct Foo {
 //!     foo: usize
 //! }
 //!
-//! let gc: GcArena<ForLt![Gc<'_, Foo>]> = GcArena::new(|mu| {
+//! let gc: GcArena<Root![Gc<'_, Foo>]> = GcArena::new(|mu| {
 //!     Gc::new(mu, Foo { foo: 69 })
 //! });
 //!
@@ -46,7 +44,6 @@ mod collector;
 mod config;
 mod error;
 mod gc_arena;
-mod arena;
 mod gc;
 mod metrics;
 mod monitor;
@@ -61,6 +58,7 @@ pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
+pub use higher_kinded_types::ForLt as Root;
 
 #[doc(hidden)]
 pub use trace::Tracer;
