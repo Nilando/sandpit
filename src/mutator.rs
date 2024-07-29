@@ -1,5 +1,4 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
-use super::error::GcError;
 use super::gc::Gc;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
@@ -11,10 +10,8 @@ use std::sync::RwLockReadGuard;
 
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
-pub trait Mutator<'scope> {
+pub trait Mutator<'scope>: SealedMutator<'scope> {
     // several ways to obtain Gcs
-    fn alloc<T: Trace>(&'scope self, obj: T) -> NonNull<T>;
-    fn alloc_array<T: Trace>(&'scope self, size: usize) -> NonNull<T>;
 
     // Signal that GC is ready to free memory and the current mutation
     // callback should be exited.
@@ -23,6 +20,11 @@ pub trait Mutator<'scope> {
     // Useful for implementing write barriers.
     fn retrace<T: Trace>(&'scope self, ptr: Gc<'scope, T>);
     fn is_marked<T: Trace>(&'scope self, ptr: Gc<'scope, T>) -> bool;
+}
+
+pub trait SealedMutator<'scope> {
+    fn alloc<T: Trace>(&'scope self, obj: T) -> NonNull<T>;
+    fn alloc_array<T: Trace>(&'scope self, size: usize) -> NonNull<T>;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
@@ -56,11 +58,7 @@ impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     }
 }
 
-impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
-    fn yield_requested(&self) -> bool {
-        self.tracer_controller.yield_flag()
-    }
-
+impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
     fn alloc<T: Trace>(&self, obj: T) -> NonNull<T> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
@@ -69,7 +67,7 @@ impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
         const {
             assert!(
                 !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a GcArena"
+                "A type must not need dropping to be allocated in a Arena"
             )
         };
 
@@ -92,7 +90,7 @@ impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
         const {
             assert!(
                 !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a GcArena"
+                "A type must not need dropping to be allocated in a Arena"
             )
         };
 
@@ -112,6 +110,13 @@ impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
             Err(()) => panic!("failed to allocate"),
         }
     }
+}
+
+impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
+    fn yield_requested(&self) -> bool {
+        self.tracer_controller.yield_flag()
+    }
+
 
     fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
         let ptr = unsafe { gc_ptr.as_nonnull() };
