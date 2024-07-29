@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicUsize;
 pub unsafe trait TraceLeaf: Trace {}
 
 /// Types allocated in a Gc are required to implement this trait.
-pub unsafe trait Trace: 'static {
+pub unsafe trait Trace {
     fn trace<T: Tracer>(&self, tracer: &mut T);
 
     fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
@@ -102,7 +102,7 @@ unsafe impl<T: Trace> Trace for Option<T> {
     }
 }
 
-unsafe impl<T: Trace> Trace for crate::gc::Gc<T> {
+unsafe impl<'a, T: Trace> Trace for crate::gc::Gc<'a, T> {
     fn trace<R: Tracer>(&self, tracer: &mut R) {
         unsafe {
             let ptr = self.as_ptr();

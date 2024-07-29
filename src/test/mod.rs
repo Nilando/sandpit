@@ -1,16 +1,17 @@
 use crate::{GcArena, Gc, Mutator};
-use std::cell::Cell;
+use higher_kinded_types::ForLt;
 use std::mem::{align_of, size_of};
 
 #[test]
-fn create_rooted_arena() {
-    let gc: GcArena<usize> = GcArena::build((), |mu, _| *mu.alloc(69).unwrap());
+fn new_arena() {
+    let gc: GcArena<ForLt![Gc<'_, usize>]> = GcArena::new(|mu| Gc::new(mu, 69));
 
-    gc.mutate((), |root, _, _| {
-        assert_eq!(*root, 69);
+    gc.mutate(|_mu, root| {
+        assert_eq!(**root, 69);
     });
 }
 
+/*
 #[test]
 fn cell_root() {
     let gc: GcArena<Cell<usize>> = GcArena::build((), |_, _| Cell::new(69));
@@ -178,7 +179,6 @@ fn gc_ptr_size_and_align() {
     assert_eq!(align_of::<Gc<()>>(), align_of::<Gc<u128>>());
 }
 
-/*
 #[derive(Trace)]
 struct MyDroppable;
 

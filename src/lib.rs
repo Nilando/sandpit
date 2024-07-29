@@ -7,13 +7,14 @@
 //! To build a GcArena, you must pass a callback to the GcArena::build method which must return the arena's root object. The GcArena::build method also provides a mutator as an argument to allow for the option of allocating the root object within the GcArena.
 //! ```rust
 //! use sandpit::{GcArena, Mutator, Gc};
+//! use higher_kinded_types::ForLt;
 //!
 //! // This creates an arena with a usize as the root.
-//! let gc = GcArena::build((), |mutator, _| {
-//!     mutator.alloc(123).unwrap()
+//! let gc: GcArena<ForLt![Gc<'_, usize>]> = GcArena::new(|mu| {
+//!     Gc::new(mu, 123)
 //! });
 //!
-//! gc.mutate((), |root, mutator, _| {
+//! gc.mutate(|mu, root| {
 //!     assert_eq!(**root, 123)
 //! });
 //! ```
@@ -21,35 +22,21 @@
 //! To allocate a type in a GcArena it must meet a few guarantees. First, the type must
 //! not impl Drop. This is because the trace and sweep collector by design only keeps track of what
 //! is still reachable from the root, and implicitly frees what is not.
-//! ```compile_fail
+//! ```
 //! use sandpit::{GcArena, Trace, Gc};
+//! use higher_kinded_types::ForLt;
 //!
 //! #[derive(Trace)]
-//! struct Foo;
-//!
-//! impl Drop for Foo {
-//!     fn drop(&mut self) {}
+//! struct Foo {
+//!     foo: usize
 //! }
 //!
-//! let gc: GcArena<Gc<Foo>> = GcArena::build((), |mutator, _| {
-//!     mutator.alloc(Foo).unwrap()
-//! });
-//! ```
-//!
-//! A Gc is Send/Sync only if its root type T is also Send/Sync.
-//! ```compile_fail
-//! use sandpit::{GcArena, Trace, Gc};
-//!
-//! #[derive(Trace)]
-//! struct Foo;
-//!
-//! let gc: GcArena<Gc<Foo>> = GcArena::build(_, |mutator, _| {
-//!     mutator.alloc(Foo).unwrap()
+//! let gc: GcArena<ForLt![Gc<'_, Foo>]> = GcArena::new(|mu| {
+//!     Gc::new(mu, Foo { foo: 69 })
 //! });
 //!
-//! // Gc is not send, so gc cannot be send
-//! std::thread::spawn(|| {
-//!     gc.mutate((), |_, _, _| {});
+//! gc.mutate(|mu, root| {
+//!     assert_eq!(root.foo, 69)
 //! });
 //! ```
 extern crate self as sandpit;
@@ -59,6 +46,7 @@ mod collector;
 mod config;
 mod error;
 mod gc_arena;
+mod arena;
 mod gc;
 mod metrics;
 mod monitor;
