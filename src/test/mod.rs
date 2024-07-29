@@ -1,12 +1,12 @@
-use crate::{GcArena, Gc, Mutator};
+use crate::{Arena, Gc, Mutator, Root};
 use higher_kinded_types::ForLt;
 use std::mem::{align_of, size_of};
 
 #[test]
 fn new_arena() {
-    let gc: GcArena<ForLt![Gc<'_, usize>]> = GcArena::new(|mu| Gc::new(mu, 69));
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
-    gc.mutate(|_mu, root| {
+    arena.mutate(|_mu, root| {
         assert_eq!(**root, 69);
     });
 }

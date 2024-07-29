@@ -12,7 +12,7 @@ use higher_kinded_types::ForLt;
 use super::allocator::Allocator;
 
 /// A garbage collected arena where objects can be allocated into.
-pub struct GcArena<R: ForLt + 'static> 
+pub struct Arena<R: ForLt + 'static> 
 where 
     for<'a> <R as ForLt>::Of<'a>: Trace
 {
@@ -21,7 +21,7 @@ where
     config: GcConfig,
 }
 
-impl<R: ForLt> Drop for GcArena<R> 
+impl<R: ForLt> Drop for Arena<R> 
 where 
     for<'a> <R as ForLt>::Of<'a>: Trace
 {
@@ -31,7 +31,7 @@ where
     }
 }
 
-impl<R: ForLt + 'static> GcArena<R>
+impl<R: ForLt + 'static> Arena<R>
 where 
     for<'a> <R as ForLt>::Of<'a>: Trace
 {
