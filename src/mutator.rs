@@ -117,7 +117,6 @@ impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
         self.tracer_controller.yield_flag()
     }
 
-
     fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
         let ptr = unsafe { gc_ptr.as_nonnull() };
 

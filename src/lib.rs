@@ -40,25 +40,25 @@
 extern crate self as sandpit;
 
 mod allocator;
+mod arena;
 mod collector;
 mod config;
 mod error;
-mod arena;
 mod gc;
 mod metrics;
 mod monitor;
 mod mutator;
 mod trace;
 
+pub use arena::Arena;
 pub use config::GcConfig;
 pub use error::GcError;
-pub use arena::Arena;
 pub use gc::Gc;
+pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
-pub use higher_kinded_types::ForLt as Root;
 
 #[doc(hidden)]
 pub use trace::Tracer;

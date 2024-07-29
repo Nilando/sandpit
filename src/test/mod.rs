@@ -183,7 +183,7 @@ fn gc_ptr_size_and_align() {
 struct MyDroppable;
 
 impl Drop for MyDroppable {
-    fn drop(&mut self) { 
+    fn drop(&mut self) {
         println!("DROPPING");
     }
 }

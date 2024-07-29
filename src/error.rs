@@ -1,5 +1,4 @@
 #[derive(Debug)]
 pub enum GcError {
-    Oom
-    // invalid alloc size
+    Oom, // invalid alloc size
 }

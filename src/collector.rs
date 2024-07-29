@@ -1,8 +1,8 @@
 use super::allocator::{Allocate, GenerationalArena};
-use higher_kinded_types::ForLt;
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
 use super::trace::{Marker, Trace, TraceLeaf, TraceMarker, TracerController};
+use higher_kinded_types::ForLt;
 use std::time::{Duration, Instant};
 
 use std::sync::{
@@ -32,8 +32,8 @@ pub trait Collect {
     fn get_state(&self) -> GcState;
 }
 
-pub struct Collector<A: Allocate, R: ForLt> 
-where 
+pub struct Collector<A: Allocate, R: ForLt>
+where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     arena: A::Arena,
@@ -54,10 +54,9 @@ where
     slice_min: f32,
 }
 
-
 impl<A: Allocate, R: ForLt> Collect for Collector<A, R>
-where 
-    for<'a> <R as ForLt>::Of<'a>: Trace
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn wait_for_collection(&self) {
         let _lock = self.lock.lock().unwrap();
@@ -130,8 +129,8 @@ where
 }
 
 impl<A: Allocate, R: ForLt> Collector<A, R>
-where 
-    for<'a> <R as ForLt>::Of<'a>: Trace
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     pub fn new<F>(f: F, config: &GcConfig) -> Self
     where
@@ -140,9 +139,12 @@ where
         unsafe {
             let arena = A::Arena::new();
             let tracer = Arc::new(TracerController::new(config));
-            let tracer_ref: &'static TracerController<_> = &*(&*tracer as *const TracerController<_>);
+            let tracer_ref: &'static TracerController<_> =
+                &*(&*tracer as *const TracerController<_>);
             let lock = tracer_ref.yield_lock();
-            let mutator: &'static MutatorScope<'static, A> = &*(&MutatorScope::new(&arena, &tracer_ref, lock) as *const MutatorScope<'static, A>);
+            let mutator: &'static MutatorScope<'static, A> =
+                &*(&MutatorScope::new(&arena, &tracer_ref, lock)
+                    as *const MutatorScope<'static, A>);
             let root: R::Of<'static> = f(mutator);
 
             Self {
@@ -163,18 +165,15 @@ where
         }
     }
 
-    pub fn mutate<F, O: TraceLeaf>(
-        &self,
-        f: F,
-    ) -> O 
+    pub fn mutate<F, O: TraceLeaf>(&self, f: F) -> O
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>, &'gc R::Of<'gc>) -> O
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>, &'gc R::Of<'gc>) -> O,
     {
         unsafe {
             let mutator = self.new_mutator();
             let root = self.scoped_root();
 
-            f(&mutator, root) 
+            f(&mutator, root)
         }
     }
 

@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-#[path = "../tests/node.rs"]
+#[path = "../tests_old/node.rs"]
 mod node;
 
 use node::Node;

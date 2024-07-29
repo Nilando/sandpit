@@ -6,24 +6,24 @@ use super::mutator::MutatorScope;
 use super::trace::Trace;
 use super::trace::TraceLeaf;
 
-use std::sync::Arc;
 use higher_kinded_types::ForLt;
+use std::sync::Arc;
 
 use super::allocator::Allocator;
 
 /// A garbage collected arena where objects can be allocated into.
-pub struct Arena<R: ForLt + 'static> 
-where 
-    for<'a> <R as ForLt>::Of<'a>: Trace
+pub struct Arena<R: ForLt + 'static>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     collector: Arc<Collector<Allocator, R>>,
     monitor: Arc<Monitor<Collector<Allocator, R>>>,
     config: GcConfig,
 }
 
-impl<R: ForLt> Drop for Arena<R> 
-where 
-    for<'a> <R as ForLt>::Of<'a>: Trace
+impl<R: ForLt> Drop for Arena<R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn drop(&mut self) {
         self.stop_monitor();
@@ -32,8 +32,8 @@ where
 }
 
 impl<R: ForLt + 'static> Arena<R>
-where 
-    for<'a> <R as ForLt>::Of<'a>: Trace
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     // The build callback must return a root of type T, which will permanently be the
     // arena's root type.
@@ -56,9 +56,9 @@ where
         }
     }
 
-    pub fn mutate<F, O: TraceLeaf>(&self, f: F) -> O 
+    pub fn mutate<F, O: TraceLeaf>(&self, f: F) -> O
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, Allocator>, &'gc R::Of<'gc>) -> O
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, Allocator>, &'gc R::Of<'gc>) -> O,
     {
         self.collector.mutate(f)
     }
