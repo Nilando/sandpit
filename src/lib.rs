@@ -43,7 +43,6 @@ mod allocator;
 mod arena;
 mod collector;
 mod config;
-mod error;
 mod gc;
 mod metrics;
 mod monitor;
@@ -52,7 +51,6 @@ mod trace;
 
 pub use arena::Arena;
 pub use config::GcConfig;
-pub use error::GcError;
 pub use gc::Gc;
 pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;

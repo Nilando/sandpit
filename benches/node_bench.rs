@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-#[path = "../tests_old/node.rs"]
+#[path = "../tests/node.rs"]
 mod node;
 
 use node::Node;
-use sandpit::Gc;
+use sandpit::Arena;
 
 const TREE_SIZE: usize = 10_000;
 
@@ -51,3 +51,4 @@ fn node_benchmark(c: &mut Criterion) {
 
 criterion_group!(benches, node_benchmark);
 criterion_main!(benches);
+*/
