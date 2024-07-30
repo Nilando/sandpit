@@ -4,9 +4,14 @@ use std::ptr::NonNull;
 
 #[test]
 fn new_arena() {
-    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+        let root = Gc::new(mu, 69);
+        let foo = Gc::new(mu, 42); // foo will automatically be freed by the GC!
 
-    arena.mutate(|_, root| {
+        root
+    });
+
+    arena.mutate(|_mu, root| {
         assert_eq!(**root, 69);
     });
 }
@@ -121,4 +126,18 @@ fn nested_gc_ptr_root() {
 fn gc_ptr_size_and_align_equals_nonnull() {
     assert_eq!(size_of::<Gc<()>>(), size_of::<NonNull<()>>());
     assert_eq!(align_of::<Gc<()>>(), align_of::<NonNull<()>>());
+}
+
+#[test]
+fn mutate_output() {
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+        let root = Gc::new(mu, 69);
+        let foo = Gc::new(mu, 42); // foo will automatically be freed by the GC!
+
+        root
+    });
+
+    let output = arena.mutate(|_mu, root| **root );
+
+    assert!(output == 69)
 }

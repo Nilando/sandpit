@@ -56,7 +56,7 @@ where
         }
     }
 
-    pub fn mutate<F, O: TraceLeaf>(&self, f: F) -> O
+    pub fn mutate<F, O>(&self, f: F) -> O
     where
         F: for<'gc> FnOnce(&'gc MutatorScope<'gc, Allocator>, &'gc R::Of<'gc>) -> O,
     {

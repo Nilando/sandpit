@@ -1,16 +1,21 @@
-use sandpit::{Gc, Arena, Mutator, Trace};
+use sandpit::{Gc, Arena, Mutator, Root, Trace};
 use std::cell::Cell;
 
 #[derive(Trace, Clone)]
 pub struct Node<'gc> {
-    left: Option<Gc<'gc, Node<'gc>>>,
+    left:  Option<Gc<'gc, Node<'gc>>>,
     right: Option<Gc<'gc, Node<'gc>>>,
-    val: Cell<usize>,
+    val:   Cell<usize>,
 }
 
-/*
 impl<'gc> Node<'gc> {
-    pub fn new<M: Mutator<'gc>>(mu: &M, val: usize, left: Option<Gc<'gc, Node<'gc>>>, right: Option<Gc<'gc, Node<'gc>>>) -> Self {
+    pub fn new<M: Mutator<'gc>>(
+        _mu: &'gc M, 
+        val: usize, 
+        left: Option<Gc<'gc, Node<'gc>>>, 
+        right: Option<Gc<'gc, Node<'gc>>>
+    ) -> Self 
+    {
         Self {
             left,
             right,
@@ -40,15 +45,16 @@ impl<'gc> Node<'gc> {
 
     // don't call this on a cyclic graph
     pub fn traverse(&self, vals: &mut Vec<usize>) {
-        if let Some(ref right) = self.right {
-            right.traverse(vals)
-        }
-
-        vals.push(self.val.get());
-
         if let Some(ref left) = self.left {
             left.traverse(vals)
         }
+
+        if let Some(ref right) = self.right {
+            right.traverse(vals);
+            return;
+        }
+
+        vals.push(self.val.get());
     }
 
     pub fn find(&self, val: usize) -> Option<&Node> {
@@ -65,37 +71,61 @@ impl<'gc> Node<'gc> {
         }
     }
 
-    pub fn create_balanced_tree<M: Mutator<'gc>>(mu: &M, layers: usize) {
+    pub fn create_balanced_tree<M: Mutator<'gc>>(mu: &'gc M, layers: usize) -> Self {
+        let mut next_nodes = vec![];
+        let mut prev_nodes = next_nodes.clone();
 
-        let prev_layer = vec![];
+        for layer in (0..layers).rev() {
+            let num_nodes = 2usize.pow(layer as u32);
+            for i in 0..num_nodes {
+                if layer == (layers - 1) {
+                    let leaf = Node::new(mu, i, None, None);
 
-        for layer in 0..layers {
-            if prev_layer.is_empty() {
+                    next_nodes.push(leaf);
+                } else {
+                    let right = Gc::new(mu, prev_nodes.pop().unwrap());
+                    let left = Gc::new(mu, prev_nodes.pop().unwrap());
+                    let node = Node::new(mu, right.get_val(), Some(left), Some(right));
 
+                    next_nodes.push(node);
+                }
             }
-        }
-        let mut i = 0;
 
-        for i < size {
-            Gc::new(mu, i);
+            if layer != (layers - 1) {
+                next_nodes = next_nodes.into_iter().rev().collect();
+            }
+
+            std::mem::swap(&mut prev_nodes, &mut next_nodes);
         }
+
+        prev_nodes.pop().unwrap()
     }
 }
 
 // TESTS BELOW
 
 #[test]
-fn root_node() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 69).unwrap());
+fn new_node_arena() {
+    let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| {
+        let node = Node::new(mu, 69, None, None);
 
-    gc.mutate((), |root, _, _| {
-        root.val.set(69);
-        assert_eq!(root.val.get(), 69);
+        node
+    });
 
-        root.val.set(420);
-        assert_eq!(root.val.get(), 420);
+    arena.mutate(|_mu, root| {
+        assert!(root.get_val() == 69);
     });
 }
+
+#[test]
+fn new_balanced_tree_arena() {
+    let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| Node::create_balanced_tree(mu, 12));
+
+    arena.mutate(|_mu, root| {
+        assert_eq!(root.collect().len(), 2048);
+    });
+}
+/*
 
 #[test]
 fn insert() {
