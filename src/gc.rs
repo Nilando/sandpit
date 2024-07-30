@@ -37,6 +37,6 @@ impl<'a, T: Trace> Gc<'a, T> {
     }
 
     pub unsafe fn as_nonnull(&self) -> NonNull<T> {
-        self.ptr.clone()
+        self.ptr
     }
 }

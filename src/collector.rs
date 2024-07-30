@@ -143,7 +143,7 @@ where
                 &*(&*tracer as *const TracerController<_>);
             let lock = tracer_ref.yield_lock();
             let mutator: &'static MutatorScope<'static, A> =
-                &*(&MutatorScope::new(&arena, &tracer_ref, lock)
+                &*(&MutatorScope::new(&arena, tracer_ref, lock)
                     as *const MutatorScope<'static, A>);
             let root: R::Of<'static> = f(mutator);
 
