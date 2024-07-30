@@ -1,4 +1,4 @@
-use crate::{Arena, Gc, Mutator, Root};
+use sandpit::{Arena, Gc, Mutator, Root};
 use std::mem::{align_of, size_of};
 use std::ptr::NonNull;
 
@@ -6,7 +6,7 @@ use std::ptr::NonNull;
 fn new_arena() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
         let root = Gc::new(mu, 69);
-        let foo = Gc::new(mu, 42); // foo will automatically be freed by the GC!
+        let _foo = Gc::new(mu, 42); // foo will automatically be freed by the GC!
 
         root
     });
@@ -130,13 +130,7 @@ fn gc_ptr_size_and_align_equals_nonnull() {
 
 #[test]
 fn mutate_output() {
-    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
-        let root = Gc::new(mu, 69);
-        let foo = Gc::new(mu, 42); // foo will automatically be freed by the GC!
-
-        root
-    });
-
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
     let output = arena.mutate(|_mu, root| **root );
 
     assert!(output == 69)
