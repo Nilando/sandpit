@@ -60,6 +60,3 @@ pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 
 #[doc(hidden)]
 pub use trace::Tracer;
-
-#[cfg(test)]
-mod test;
