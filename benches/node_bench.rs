@@ -4,50 +4,33 @@ use criterion::{criterion_group, criterion_main, Criterion};
 mod node;
 
 use node::Node;
-use sandpit::Gc;
+use sandpit::{Arena, Root};
 
-const TREE_SIZE: usize = 10_000;
+const TREE_LAYERS: usize = 20;
 
-fn sync_trees() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+fn balanced_binary_trees() {
+    let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| Node::create_balanced_tree(mu, TREE_LAYERS));
 
-    gc.stop_monitor();
+    arena.major_collect();
 
-    gc.mutate((), |root, mu, _| {
-        for _ in 0..100 {
-            Node::create_balanced_tree(root, mu, TREE_SIZE);
-        }
+    arena.mutate(|mu, _root| { 
+        Node::create_balanced_tree(mu, TREE_LAYERS); 
     });
 
-    gc.major_collect();
+    arena.major_collect();
 
-    gc.mutate((), |root, _, _| {
+    arena.mutate(|_mu, root| {
         let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..TREE_SIZE).collect();
+        let expected: Vec<usize> = (0..(2usize.pow(TREE_LAYERS as u32 - 1))).collect();
+
         assert_eq!(actual, expected)
     });
 }
 
-fn concurrent_trees() {
-    let gc = Gc::build((), |mu, _| Node::alloc(mu, 0).unwrap());
 
-    gc.mutate((), |root, mu, _| {
-        for _ in 0..100 {
-            Node::create_balanced_tree(root, mu, TREE_SIZE);
-        }
-    });
-
-    gc.mutate((), |root, _, _| {
-        let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..TREE_SIZE).collect();
-        assert_eq!(actual, expected)
-    });
+fn node_group(c: &mut Criterion) {
+    c.bench_function("sync_trees", |b| b.iter(balanced_binary_trees));
 }
 
-fn node_benchmark(c: &mut Criterion) {
-    c.bench_function("sync_trees", |b| b.iter(sync_trees));
-    c.bench_function("concurrent_trees", |b| b.iter(concurrent_trees));
-}
-
-criterion_group!(benches, node_benchmark);
+criterion_group!(benches, node_group);
 criterion_main!(benches);

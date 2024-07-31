@@ -5,7 +5,7 @@ use super::size_class::SizeClass;
 use super::Allocator;
 use std::alloc::Layout;
 use std::mem::{align_of, size_of};
-use std::ptr::{write, NonNull};
+use std::ptr::{NonNull};
 
 #[test]
 fn hello_alloc() {
@@ -131,9 +131,9 @@ fn arena_get_size() {
     let large_header = Allocator::get_header(p3);
 
     unsafe {
-        assert_eq!((&*small_header).get_size_class(), SizeClass::Small);
-        assert_eq!((&*med_header).get_size_class(), SizeClass::Medium);
-        assert_eq!((&*large_header).get_size_class(), SizeClass::Large);
+        assert_eq!((*small_header).get_size_class(), SizeClass::Small);
+        assert_eq!((*med_header).get_size_class(), SizeClass::Medium);
+        assert_eq!((*large_header).get_size_class(), SizeClass::Large);
     }
 
     let align = std::cmp::max(align_of::<Header>(), large.align());

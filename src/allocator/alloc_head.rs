@@ -203,8 +203,8 @@ mod tests {
             med_ptrs.push(med_ptr);
         }
 
-        while !small_ptrs.is_empty() {
-            let ptr = small_ptrs.pop().unwrap();
+        while let Some(ptr) = small_ptrs.pop() {
+            
 
             assert!(!med_ptrs.contains(&ptr));
             assert!(!small_ptrs.contains(&ptr));

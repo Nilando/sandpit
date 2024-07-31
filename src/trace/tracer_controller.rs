@@ -1,9 +1,9 @@
-use crate::config::GcConfig;
-use crossbeam_channel::{Receiver, Sender};
 use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::TraceWorker;
+use crate::config::GcConfig;
+use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,

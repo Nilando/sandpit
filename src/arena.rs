@@ -5,33 +5,44 @@ use super::monitor::Monitor;
 use super::mutator::MutatorScope;
 use super::trace::Trace;
 use super::trace::TraceLeaf;
+
+use higher_kinded_types::ForLt;
 use std::sync::Arc;
 
 use super::allocator::Allocator;
 
 /// A garbage collected arena where objects can be allocated into.
-pub struct GcArena<T: Trace> {
-    collector: Arc<Collector<Allocator, T>>,
-    monitor: Arc<Monitor<Collector<Allocator, T>>>,
+pub struct Arena<R: ForLt + 'static>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
+    collector: Arc<Collector<Allocator, R>>,
+    monitor: Arc<Monitor<Collector<Allocator, R>>>,
     config: GcConfig,
 }
 
-unsafe impl<T: Send + Trace> Send for GcArena<T> {}
-unsafe impl<T: Sync + Trace> Sync for GcArena<T> {}
-
-impl<T: Trace> Drop for GcArena<T> {
+impl<R: ForLt> Drop for Arena<R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
     fn drop(&mut self) {
         self.stop_monitor();
         self.collector.wait_for_collection();
     }
 }
 
-impl<T: Trace> GcArena<T> {
+impl<R: ForLt + 'static> Arena<R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
     // The build callback must return a root of type T, which will permanently be the
     // arena's root type.
-    pub fn build<I: TraceLeaf>(input: I, callback: fn(&mut MutatorScope<Allocator>, I) -> T) -> Self {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, Allocator>) -> R::Of<'gc>,
+    {
         let config = GcConfig::default();
-        let collector: Arc<Collector<Allocator, T>> = Arc::new(Collector::build(input, callback, &config));
+        let collector: Arc<Collector<Allocator, R>> = Arc::new(Collector::new(f, &config));
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
         if config.monitor_on {
@@ -45,10 +56,11 @@ impl<T: Trace> GcArena<T> {
         }
     }
 
-    // MutatorScope is a sealed type but the user utilize it through the public
-    // Mutator trait which in implements. Here &T is the root.
-    pub fn mutate<I: TraceLeaf, O: TraceLeaf>(&self, input: I, callback: fn(&T, &mut MutatorScope<Allocator>, I) -> O) -> O {
-        self.collector.mutate(input, callback)
+    pub fn mutate<F, O>(&self, f: F) -> O
+    where
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, Allocator>, &'gc R::Of<'gc>) -> O,
+    {
+        self.collector.mutate(f)
     }
 
     pub fn major_collect(&self) {

@@ -198,6 +198,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "higher-kinded-types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "561985554c8b8d4808605c90a5f1979cc6c31a5d20b78465cd59501233c6678e"
+dependencies = [
+ "never-say-never",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -249,6 +258,12 @@ name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
+
+[[package]]
+name = "never-say-never"
+version = "6.6.666"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
 
 [[package]]
 name = "num-traits"
@@ -387,6 +402,7 @@ version = "0.2.5"
 dependencies = [
  "criterion",
  "crossbeam-channel",
+ "higher-kinded-types",
  "sandpit_derive",
 ]
 
