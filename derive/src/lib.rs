@@ -111,6 +111,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of
     let expanded = quote! {
+        #[automatically_derived]
         unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
             fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
                 #(#trace_body)*
@@ -201,6 +202,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of
     let expanded = quote! {
+        #[automatically_derived]
         unsafe impl #impl_generics sandpit::AssertTraceLeaf for #name #ty_generics #where_clause {
             fn assert_leaf_fields(&self) {
                 #(#trace_body)*
