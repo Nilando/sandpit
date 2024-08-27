@@ -48,6 +48,7 @@ mod metrics;
 mod monitor;
 mod mutator;
 mod trace;
+mod barrier;
 
 pub use arena::Arena;
 pub use config::GcConfig;
@@ -57,6 +58,7 @@ pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
+pub use barrier::WriteBarrier;
 
 #[doc(hidden)]
 pub use trace::Tracer;
