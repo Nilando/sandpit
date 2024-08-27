@@ -11,8 +11,6 @@ use std::sync::RwLockReadGuard;
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator<'scope>: SealedMutator<'scope> {
-    // several ways to obtain Gcs
-
     // Signal that GC is ready to free memory and the current mutation
     // callback should be exited.
     fn yield_requested(&self) -> bool;
@@ -64,13 +62,6 @@ impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
             drop(self.tracer_controller.get_alloc_lock());
         }
 
-        const {
-            assert!(
-                !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a Arena"
-            )
-        };
-
         let layout = Layout::new::<T>();
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
@@ -86,13 +77,6 @@ impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
-
-        const {
-            assert!(
-                !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a Arena"
-            )
-        };
 
         let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
         match self.allocator.alloc(layout) {
@@ -113,6 +97,8 @@ impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
 }
 
 impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
+    /// This flag will be set to true when a trace is near completion.
+    /// The mutation callback should be exited if yield_requested returns true.
     fn yield_requested(&self) -> bool {
         self.tracer_controller.yield_flag()
     }
@@ -123,7 +109,7 @@ impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new);
 
-        if !T::is_leaf() {
+        if !T::IS_LEAF {
             self.rescan.borrow_mut().push(TraceJob::new(ptr));
         }
 
