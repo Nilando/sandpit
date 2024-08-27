@@ -1,7 +1,7 @@
 use super::tracer::Tracer;
-use std::cell::Cell;
+use std::cell::*;
 use std::ptr::NonNull;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::*;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
 /// contain any GcPtr's.
@@ -9,6 +9,8 @@ pub unsafe trait TraceLeaf: Trace {}
 
 /// Types allocated in a Gc are required to implement this trait.
 pub unsafe trait Trace {
+    const IS_LEAF: bool = false;
+
     fn trace<T: Tracer>(&self, tracer: &mut T);
 
     fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
@@ -20,10 +22,6 @@ pub unsafe trait Trace {
 
     fn needs_trace(&self) -> bool {
         true
-    }
-
-    fn is_leaf() -> bool {
-        false
     }
 }
 
@@ -41,16 +39,14 @@ pub unsafe trait AssertTraceLeaf: TraceLeaf {
 }
 
 unsafe impl<L: TraceLeaf> Trace for L {
+    const IS_LEAF: bool = true;
+
     fn trace<T: Tracer>(&self, _: &mut T) {}
 
     fn dyn_trace<T: Tracer>(_ptr: NonNull<()>, _: &mut T) {}
 
     fn needs_trace(&self) -> bool {
         false
-    }
-
-    fn is_leaf() -> bool {
-        true
     }
 }
 
@@ -75,6 +71,16 @@ impl_trace_leaf!(
     i64,
     i128,
     isize,
+    AtomicBool,
+    AtomicI8,
+    AtomicI16,
+    AtomicI32,
+    AtomicI64,
+    AtomicIsize,
+    AtomicU8,
+    AtomicU16,
+    AtomicU32,
+    AtomicU64,
     AtomicUsize
 );
 
@@ -121,4 +127,7 @@ unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
     }
 }
 
+unsafe impl<T: TraceLeaf> TraceLeaf for UnsafeCell<T> {}
 unsafe impl<T: TraceLeaf> TraceLeaf for Cell<T> {}
+unsafe impl<T: TraceLeaf> TraceLeaf for RefCell<T> {}
+unsafe impl<T: TraceLeaf> TraceLeaf for OnceCell<T> {}
