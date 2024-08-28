@@ -17,7 +17,6 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
     }
 
     /// Implementation detail of `write_field!`; same safety requirements as `assume`.
-    #[inline(always)]
     #[doc(hidden)]
     pub unsafe fn __from_ref_and_ptr(v: &T, _: *const T) -> &Self {
         // SAFETY: `Self` is `repr(transparent)`.
