@@ -1,4 +1,4 @@
-use sandpit::{Gc, Arena, Mutator, Root, Trace};
+use sandpit::{Gc, Arena, Mutator, Root, Trace, WriteBarrier, field};
 use std::cell::Cell;
 
 #[derive(Trace, Clone)]
@@ -21,6 +21,14 @@ impl<'gc> Node<'gc> {
             right,
             val: Cell::new(val),
         }
+    }
+
+    pub fn set_right<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
+        this.write_barrier(mu, |write_barrier| {
+            let right: &WriteBarrier<'_, Option<Gc<'_, Node<'gc>>>> = field!(write_barrier, Node, left);
+
+            right.into().unwrap().set(new);
+        });
     }
 
     pub fn get_val(&self) -> usize {
@@ -57,7 +65,7 @@ impl<'gc> Node<'gc> {
         vals.push(self.val.get());
     }
 
-    pub fn find(&self, val: usize) -> Option<&Node> {
+    pub fn find(&'gc self, val: usize) -> Option<&'gc Node> {
         let current_val = self.val.get();
 
         if current_val > val && self.right.is_some() {
@@ -125,25 +133,8 @@ fn new_balanced_tree_arena() {
         assert_eq!(root.collect().len(), 2048);
     });
 }
+
 /*
-
-#[test]
-fn insert() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    gc.mutate((), |root, mu, _| {
-        for i in 1..1_000 {
-            Node::insert(root, mu, i);
-        }
-    });
-
-    gc.mutate((), |root, _, _| {
-        let vals = Node::collect(root);
-        let result: Vec<usize> = (0..1_000).collect();
-
-        assert_eq!(vals, result);
-    });
-}
 
 #[test]
 fn find() {
