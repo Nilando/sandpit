@@ -16,10 +16,6 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
         self.inner
     }
 
-    #[inline(always)]
-    #[doc(hidden)]
-    pub fn __type_check(_: &WriteBarrier<'barrier, T>) {}
-
     /// Implementation detail of `write_field!`; same safety requirements as `assume`.
     #[inline(always)]
     #[doc(hidden)]
@@ -51,7 +47,7 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
 macro_rules! field {
     ($value:expr, $type:path, $field:ident) => {
         {
-            WriteBarrier::__type_check($value);
+            let _: &$crate::WriteBarrier<_> = $value;
 
             match $value.inner() {
                 $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_ref_and_ptr($field, $field as *const _) },
