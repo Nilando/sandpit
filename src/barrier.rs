@@ -1,8 +1,8 @@
-use crate::{Gc, Trace, Mutator};
+use crate::{Gc, Trace};
 
 #[repr(transparent)]
 pub struct WriteBarrier<'gc, T: Trace> {
-    pub inner: &'gc T,
+    inner: &'gc T,
 }
 
 impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
@@ -11,6 +11,15 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
             inner: &gc
         }
     }
+
+    pub fn inner(&self) -> &'barrier T {
+        self.inner
+    }
+
+    #[inline(always)]
+    #[doc(hidden)]
+    pub fn __type_check(_: &WriteBarrier<'barrier, T>) {}
+
     /// Implementation detail of `write_field!`; same safety requirements as `assume`.
     #[inline(always)]
     #[doc(hidden)]
@@ -41,11 +50,12 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
 #[doc(hidden)]
 macro_rules! field {
     ($value:expr, $type:path, $field:ident) => {
-        match $value {
-            $crate::WriteBarrier {
-                inner: $type { ref $field, .. },
-                ..
-            } => unsafe { $crate::WriteBarrier::__from_ref_and_ptr($field, $field as *const _) },
+        {
+            WriteBarrier::__type_check($value);
+
+            match $value.inner() {
+                $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_ref_and_ptr($field, $field as *const _) },
+            }
         }
     };
 }
