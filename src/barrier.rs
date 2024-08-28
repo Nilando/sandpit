@@ -1,6 +1,4 @@
-use crate::{Arena, Root, Gc, Trace, Mutator};
-use super::mutator::MutatorScope;
-use super::allocator::Allocator;
+use crate::{Gc, Trace, Mutator};
 
 #[repr(transparent)]
 pub struct WriteBarrier<'gc, T: Trace> {
@@ -8,7 +6,7 @@ pub struct WriteBarrier<'gc, T: Trace> {
 }
 
 impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
-    pub fn new(gc: &'barrier T) -> Self {
+    pub(crate) fn new(gc: &'barrier T) -> Self {
         WriteBarrier {
             inner: &gc
         }
