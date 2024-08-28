@@ -33,7 +33,9 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Option<T>> {
 
 impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
     pub fn set(&mut self, new_ptr: Gc<'barrier, T>) {
-        // self.inner.set(new_ptr);
+        unsafe {
+            self.inner.set(new_ptr);
+        }
     }
 }
 
