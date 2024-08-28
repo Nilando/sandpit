@@ -1,8 +1,8 @@
 use super::allocator::{Allocate, GenerationalArena};
 use super::config::GcConfig;
 use super::mutator::MutatorScope;
-use super::trace::TraceLeaf;
-use super::trace::{Marker, Trace, TraceMarker, TracerController};
+use super::trace::{Marker, Trace, TraceLeaf, TraceMarker, TracerController};
+use higher_kinded_types::ForLt;
 use std::time::{Duration, Instant};
 
 use std::sync::{
@@ -32,11 +32,14 @@ pub trait Collect {
     fn get_state(&self) -> GcState;
 }
 
-pub struct Collector<A: Allocate, T: Trace> {
+pub struct Collector<A: Allocate, R: ForLt>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
     arena: A::Arena,
     tracer: Arc<TracerController<TraceMarker<A>>>,
     lock: Mutex<()>,
-    root: T,
+    root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
     old_objects: AtomicUsize,
@@ -51,7 +54,10 @@ pub struct Collector<A: Allocate, T: Trace> {
     slice_min: f32,
 }
 
-impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
+impl<A: Allocate, R: ForLt> Collect for Collector<A, R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
     fn wait_for_collection(&self) {
         let _lock = self.lock.lock().unwrap();
     }
@@ -122,41 +128,57 @@ impl<A: Allocate, T: Trace> Collect for Collector<A, T> {
     }
 }
 
-impl<A: Allocate, T: Trace> Collector<A, T> {
-    pub fn build<I: TraceLeaf>(input: I, callback: fn(&mut MutatorScope<A>, I) -> T, config: &GcConfig) -> Self {
-        let arena = A::Arena::new();
-        let tracer = Arc::new(TracerController::new(config));
-        let lock = tracer.yield_lock();
-        let mut mutator = MutatorScope::new(&arena, &tracer, lock);
-        let root = callback(&mut mutator, input);
+impl<A: Allocate, R: ForLt> Collector<A, R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
+    pub fn new<F>(f: F, config: &GcConfig) -> Self
+    where
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>) -> R::Of<'gc>,
+    {
+        unsafe {
+            let arena = A::Arena::new();
+            let tracer = Arc::new(TracerController::new(config));
+            let tracer_ref: &'static TracerController<_> =
+                &*(&*tracer as *const TracerController<_>);
+            let lock = tracer_ref.yield_lock();
+            let mutator: &'static MutatorScope<'static, A> =
+                &*(&MutatorScope::new(&arena, tracer_ref, lock)
+                    as *const MutatorScope<'static, A>);
+            let root: R::Of<'static> = f(mutator);
 
-        drop(mutator);
-
-        Self {
-            arena,
-            tracer,
-            root,
-            lock: Mutex::new(()),
-            major_collections: AtomicUsize::new(0),
-            minor_collections: AtomicUsize::new(0),
-            major_collect_avg_time: AtomicUsize::new(0),
-            minor_collect_avg_time: AtomicUsize::new(0),
-            old_objects: AtomicUsize::new(0),
-            arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
-            max_headroom_ratio: config.collector_max_headroom_ratio,
-            timeslice_size: config.collector_timeslize,
-            slice_min: config.collector_slice_min,
+            Self {
+                arena,
+                tracer,
+                root,
+                lock: Mutex::new(()),
+                major_collections: AtomicUsize::new(0),
+                minor_collections: AtomicUsize::new(0),
+                major_collect_avg_time: AtomicUsize::new(0),
+                minor_collect_avg_time: AtomicUsize::new(0),
+                old_objects: AtomicUsize::new(0),
+                arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
+                max_headroom_ratio: config.collector_max_headroom_ratio,
+                timeslice_size: config.collector_timeslize,
+                slice_min: config.collector_slice_min,
+            }
         }
     }
 
-    pub fn mutate<I: TraceLeaf, O: TraceLeaf>(
-        &self,
-        input: I,
-        callback: fn(&T, &mut MutatorScope<A>, I) -> O,
-    ) -> O {
-        let mut mutator = self.new_mutator();
+    pub fn mutate<F, O>(&self, f: F) -> O
+    where
+        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>, &'gc R::Of<'gc>) -> O,
+    {
+        unsafe {
+            let mutator = self.new_mutator();
+            let root = self.scoped_root();
 
-        callback(&self.root, &mut mutator, input)
+            f(&mutator, root)
+        }
+    }
+
+    unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
+        std::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
     }
 
     fn new_mutator(&self) -> MutatorScope<A> {

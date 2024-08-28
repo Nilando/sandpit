@@ -1,3 +1,5 @@
+use super::mutator::Mutator;
+use crate::barrier::WriteBarrier;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -6,80 +8,65 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use super::trace::Trace;
 
 /// A pointer to a object stored in a Gc arena.
-pub struct Gc<T: Trace> {
+pub struct Gc<'a, T: Trace> {
     ptr: AtomicPtr<T>,
-    _mark: PhantomData<*const ()>,
+    _scope: PhantomData<&'a ()>,
 }
 
-impl<T: Trace> Deref for Gc<T> {
+impl<'a, T: Trace + 'a> Deref for Gc<'a, T> {
     type Target = T;
 
     // this is safe b/c we can only have a gcptr within a mutation context,
     // and gcptrs are guaranteed not to be swept during that context
-    fn deref(&self) -> &Self::Target {
-        let ptr = self.as_ptr();
-
-        if ptr.is_null() {
-            panic!("Attempt to deref a null GC ptr")
-        }
-
-        unsafe { &*ptr }
+    fn deref(&self) -> &'a Self::Target {
+        unsafe { &*self.as_ptr() }
     }
 }
 
-impl<T: Trace> Gc<T> {
-    pub(crate) fn new(ptr: NonNull<T>) -> Self {
+impl<'a, T: Trace> Gc<'a, T> {
+    pub fn new<M: Mutator<'a>>(mu: &'a M, obj: T) -> Self {
+        const {
+            assert!(!std::mem::needs_drop::<T>(), "Types that need drop cannot be GC")
+        };
+
+        let ptr = mu.alloc(obj);
+
         Self {
-            ptr: AtomicPtr::from(ptr.as_ptr()),
-            _mark: PhantomData::<*const ()>,
+            ptr: AtomicPtr::new(ptr.as_ptr()),
+            _scope: PhantomData::<&'a ()>,
         }
     }
 
-    pub(crate) fn null() -> Self {
-        Self {
-            ptr: AtomicPtr::new(std::ptr::null_mut()),
-            _mark: PhantomData::<*const ()>,
-        }
-    }
-
-    pub fn set_null(&self) {
-        self.ptr.store(std::ptr::null_mut(), Ordering::SeqCst)
-    }
-
-    pub fn as_ptr(&self) -> *mut T {
+    pub unsafe fn as_ptr(&self) -> *mut T {
         self.ptr.load(Ordering::SeqCst)
     }
 
-    pub fn as_nonnull(&self) -> NonNull<T> {
-        let ptr = self.ptr.load(Ordering::SeqCst);
-
-        NonNull::new(ptr).unwrap()
+    pub unsafe fn as_nonnull(&self) -> NonNull<T> {
+        NonNull::new(self.ptr.load(Ordering::SeqCst)).unwrap()
     }
 
-    pub fn is_null(&self) -> bool {
-        self.as_ptr().is_null()
+    pub unsafe fn set(&self, new: Gc<'a, T>) {
+        self.ptr.store(new.as_ptr(), Ordering::SeqCst)
     }
 
-    // This is unsafe b/c if the object holding this ptr has already been scanned,
-    // then if the collector finishes collection with out rescanning that object,
-    // this will become dangling.
-    //
-    // Either the swapped pointer must be guaranteed to not exist before the end
-    // of this mutation scope, or the object containing this ptr must be rescanned
-    //
-    // To use this function safely, implement a write barrier that ensures
-    // the new_ptr will(or has) been traced.
-    pub unsafe fn swap(&self, new_ptr: Gc<T>) {
-        self.ptr
-            .store(new_ptr.ptr.load(Ordering::SeqCst), Ordering::SeqCst)
+    pub fn write_barrier<F, M: Mutator<'a>>(&self, mu: &'a M, f: F) 
+    where
+        F: FnOnce(&WriteBarrier<T>)
+    {
+        let barrier = WriteBarrier::new(self.deref());
+        f(&barrier);
+
+        if mu.is_marked(self.clone()) {
+            mu.retrace(self.clone());
+        }
     }
 }
 
-impl<T: Trace> Clone for Gc<T> {
+impl<'a, T: Trace> Clone for Gc<'a, T> {
     fn clone(&self) -> Self {
         Self {
             ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
-            _mark: PhantomData::<*const ()>,
+            _scope: PhantomData::<&'a ()>,
         }
     }
 }

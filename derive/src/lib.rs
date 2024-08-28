@@ -31,8 +31,11 @@ pub fn trace(input: TokenStream) -> TokenStream {
         Data::Struct(DataStruct {
             fields: Fields::Unnamed(ref fields),
             ..
-        }) => 
-            fields.unnamed.iter().enumerate().map(|(idx, _)| {
+        }) => fields
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| {
                 quote! {
                     sandpit::Trace::trace(&self.#idx, tracer);
                 }
@@ -108,6 +111,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of
     let expanded = quote! {
+        #[automatically_derived]
         unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
             fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
                 #(#trace_body)*
@@ -147,42 +151,46 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
         Data::Struct(DataStruct {
             fields: Fields::Unnamed(ref fields),
             ..
-        }) => {
-            fields.unnamed.iter().map(|field| {
+        }) => fields
+            .unnamed
+            .iter()
+            .map(|field| {
                 let ty = &field.ty;
 
                 quote! {
                     Self::assert_leaf::<#ty>();
                 }
             })
-            .collect::<Vec<_>>()
-        }
+            .collect::<Vec<_>>(),
         Data::Enum(DataEnum { variants, .. }) => {
-            let arms = variants.iter().map(|variant| {
-                match &variant.fields {
-                    Fields::Unnamed(fields) => {
-                        fields.unnamed.iter().map(|field| {
+            let arms = variants
+                .iter()
+                .map(|variant| match &variant.fields {
+                    Fields::Unnamed(fields) => fields
+                        .unnamed
+                        .iter()
+                        .map(|field| {
                             let ty = &field.ty;
 
                             quote! {
                                 Self::assert_leaf::<#ty>();
                             }
                         })
-                        .collect::<Vec<_>>()
-                    }
-                    Fields::Named(fields) => {
-                        fields.named.iter().map(|field| {
+                        .collect::<Vec<_>>(),
+                    Fields::Named(fields) => fields
+                        .named
+                        .iter()
+                        .map(|field| {
                             let ty = &field.ty;
 
                             quote! {
                                 Self::assert_leaf::<#ty>();
                             }
                         })
-                        .collect::<Vec<_>>()
-                    }
+                        .collect::<Vec<_>>(),
                     Fields::Unit => vec![quote! {}],
-                }
-            }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
 
             arms.into_iter().flatten().collect()
         }
@@ -194,6 +202,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
     // eventually there must be some concrete Trace type being passed in with the static,
     // assert of
     let expanded = quote! {
+        #[automatically_derived]
         unsafe impl #impl_generics sandpit::AssertTraceLeaf for #name #ty_generics #where_clause {
             fn assert_leaf_fields(&self) {
                 #(#trace_body)*

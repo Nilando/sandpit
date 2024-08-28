@@ -1,29 +1,28 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
-use super::error::GcError;
 use super::gc::Gc;
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
 
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::mem::{align_of, size_of};
-use std::ptr::write;
+use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
-pub trait Mutator {
-    // several ways to obtain Gcs
-    fn alloc<T: Trace>(&self, obj: T) -> Result<Gc<T>, GcError>;
-    fn alloc_array<T: Trace>(&self, size: usize) -> Result<Gc<T>, GcError>;
-    fn new_null<T: Trace>(&self) -> Gc<T>;
-
+pub trait Mutator<'scope>: SealedMutator<'scope> {
     // Signal that GC is ready to free memory and the current mutation
     // callback should be exited.
     fn yield_requested(&self) -> bool;
 
     // Useful for implementing write barriers.
-    fn retrace<T: Trace>(&self, ptr: Gc<T>);
-    fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool;
+    fn retrace<T: Trace>(&'scope self, ptr: Gc<'scope, T>);
+    fn is_marked<T: Trace>(&'scope self, ptr: Gc<'scope, T>) -> bool;
+}
+
+pub trait SealedMutator<'scope> {
+    fn alloc<T: Trace>(&'scope self, obj: T) -> NonNull<T>;
+    fn alloc_array<T: Trace>(&'scope self, size: usize) -> NonNull<T>;
 }
 
 pub struct MutatorScope<'scope, A: Allocate> {
@@ -57,45 +56,27 @@ impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
     }
 }
 
-impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
-    fn yield_requested(&self) -> bool {
-        self.tracer_controller.yield_flag()
-    }
-
-    fn alloc<T: Trace>(&self, obj: T) -> Result<Gc<T>, GcError> {
+impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
+    fn alloc<T: Trace>(&self, obj: T) -> NonNull<T> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
-
-        const {
-            assert!(
-                !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a GcArena"
-            )
-        };
 
         let layout = Layout::new::<T>();
         match self.allocator.alloc(layout) {
             Ok(ptr) => {
                 unsafe { write(ptr.as_ptr().cast(), obj) }
 
-                Ok(Gc::new(ptr.cast()))
+                ptr.cast()
             }
-            Err(()) => Err(GcError::Oom),
+            Err(()) => panic!("failed to allocate"),
         }
     }
 
-    fn alloc_array<T: Trace>(&self, size: usize) -> Result<Gc<T>, GcError> {
+    fn alloc_array<T: Trace>(&self, size: usize) -> NonNull<T> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
-
-        const {
-            assert!(
-                !std::mem::needs_drop::<T>(),
-                "A type must not need dropping to be allocated in a GcArena"
-            )
-        };
 
         let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
         match self.allocator.alloc(layout) {
@@ -108,27 +89,27 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
                     }
                 }
 
-                Ok(Gc::new(ptr.cast()))
+                ptr.cast()
             }
-            Err(()) => Err(GcError::Oom),
+            Err(()) => panic!("failed to allocate"),
         }
     }
+}
 
-    fn new_null<T: Trace>(&self) -> Gc<T> {
-        Gc::null()
+impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
+    /// This flag will be set to true when a trace is near completion.
+    /// The mutation callback should be exited if yield_requested returns true.
+    fn yield_requested(&self) -> bool {
+        self.tracer_controller.yield_flag()
     }
 
     fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
-        if gc_ptr.is_null() {
-            return;
-        }
-
-        let ptr = gc_ptr.as_nonnull();
+        let ptr = unsafe { gc_ptr.as_nonnull() };
 
         let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
         A::set_mark(ptr, new);
 
-        if !T::is_leaf() {
+        if !T::IS_LEAF {
             self.rescan.borrow_mut().push(TraceJob::new(ptr));
         }
 
@@ -139,6 +120,6 @@ impl<'scope, A: Allocate> Mutator for MutatorScope<'scope, A> {
     }
 
     fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool {
-        !ptr.is_null() && self.allocator.is_old(ptr.as_nonnull())
+        self.allocator.is_old(unsafe { ptr.as_nonnull() })
     }
 }
