@@ -60,6 +60,7 @@ pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 pub use barrier::WriteBarrier;
+pub use trace_vec::TraceVec;
 
 // collection => TraceVec LeafVec
 // GcNull => could be null ptr
