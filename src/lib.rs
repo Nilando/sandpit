@@ -49,6 +49,7 @@ mod monitor;
 mod mutator;
 mod trace;
 mod barrier;
+mod trace_vec;
 
 pub use arena::Arena;
 pub use config::GcConfig;
@@ -59,6 +60,11 @@ pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
 pub use barrier::WriteBarrier;
+
+// collection => TraceVec LeafVec
+// GcNull => could be null ptr
+// GcWeak => same as Gc but is not traced and therefore could point to null
+// GcLock => gives &mut to inner
 
 #[doc(hidden)]
 pub use trace::Tracer;
