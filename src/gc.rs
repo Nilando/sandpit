@@ -37,6 +37,13 @@ impl<'a, T: Trace> Gc<'a, T> {
         }
     }
 
+    pub unsafe fn from_nonnull<M: Mutator<'a>>(mu: &'a M, ptr: NonNull<T>) -> Self {
+        Self {
+            ptr: AtomicPtr::new(ptr.as_ptr()),
+            _scope: PhantomData::<&'a ()>,
+        }
+    }
+
     pub unsafe fn as_ptr(&self) -> *mut T {
         self.ptr.load(Ordering::SeqCst)
     }

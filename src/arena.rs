@@ -4,7 +4,6 @@ use super::metrics::GcMetrics;
 use super::monitor::Monitor;
 use super::mutator::MutatorScope;
 use super::trace::Trace;
-use super::trace::TraceLeaf;
 
 use higher_kinded_types::ForLt;
 use std::sync::Arc;
