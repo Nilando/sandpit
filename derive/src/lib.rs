@@ -10,7 +10,7 @@ use syn::{
 pub fn trace(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let generics = add_trait_bounds(input.generics);
+    let generics = add_leaf(add_trace(input.generics));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let trace_body = match input.data {
@@ -113,6 +113,8 @@ pub fn trace(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         #[automatically_derived]
         unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
+            const IS_LEAF: bool = false;
+
             fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
                 #(#trace_body)*
             }
@@ -126,7 +128,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
 pub fn traceleaf(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let generics = add_trait_bounds(input.generics);
+    let generics = add_leaf(add_trace(input.generics));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let trace_body = match input.data {
@@ -140,7 +142,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                 let ty = &field.ty;
 
                 quote! {
-                    Self::assert_leaf::<#ty>();
+                    <#ty as TraceLeaf>::__assert_trace_leaf();
                 }
             })
             .collect::<Vec<_>>(),
@@ -158,7 +160,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                 let ty = &field.ty;
 
                 quote! {
-                    Self::assert_leaf::<#ty>();
+                    <#ty as TraceLeaf>::__assert_trace_leaf();
                 }
             })
             .collect::<Vec<_>>(),
@@ -173,7 +175,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                             let ty = &field.ty;
 
                             quote! {
-                                Self::assert_leaf::<#ty>();
+                                <#ty as TraceLeaf>::__assert_trace_leaf();
                             }
                         })
                         .collect::<Vec<_>>(),
@@ -184,7 +186,7 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                             let ty = &field.ty;
 
                             quote! {
-                                Self::assert_leaf::<#ty>();
+                                <#ty as TraceLeaf>::__assert_trace_leaf();
                             }
                         })
                         .collect::<Vec<_>>(),
@@ -203,20 +205,30 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
     // assert of
     let expanded = quote! {
         #[automatically_derived]
-        unsafe impl #impl_generics sandpit::AssertTraceLeaf for #name #ty_generics #where_clause {
-            fn assert_leaf_fields(&self) {
+        unsafe impl #impl_generics sandpit::TraceLeaf for #name #ty_generics #where_clause {
+            fn __assert_trace_leaf() {
                 #(#trace_body)*
             }
         }
+        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {}
     };
 
     TokenStream::from(expanded)
 }
 
-fn add_trait_bounds(mut generics: Generics) -> Generics {
+fn add_trace(mut generics: Generics) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(Trace));
+            type_param.bounds.push(parse_quote!(sandpit::Trace));
+        }
+    }
+    generics
+}
+
+fn add_leaf(mut generics: Generics) -> Generics {
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(sandpit::TraceLeaf));
         }
     }
     generics

@@ -22,10 +22,8 @@ impl<M: Marker> Tracer for TraceWorker<M> {
             return;
         }
 
-        unsafe {
-            if !ptr.as_ref().needs_trace() {
-                return;
-            }
+        if T::IS_LEAF {
+            return;
         }
 
         self.work.push(TraceJob::new(ptr));

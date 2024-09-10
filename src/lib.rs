@@ -58,14 +58,12 @@ pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
-pub use trace::{AssertTraceLeaf, Trace, TraceLeaf};
+pub use trace::{Trace, TraceLeaf};
 pub use barrier::WriteBarrier;
 pub use trace_vec::TraceVec;
 
-// collection => TraceVec LeafVec
-// GcNull => could be null ptr
-// GcWeak => same as Gc but is not traced and therefore could point to null
-// GcLock => gives &mut to inner
+// TODO: LeafVec
+
 
 #[doc(hidden)]
 pub use trace::Tracer;
