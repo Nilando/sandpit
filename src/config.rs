@@ -30,27 +30,40 @@ pub struct GcConfig {
     pub mutator_share_min: usize,
 
     pub collector_max_headroom_ratio: f32,
-    pub collector_timeslize: f32,
+    pub collector_timeslice_size: f32,
     pub collector_slice_min: f32,
 }
 
+pub const GC_CONFIG_DEFAULT_TRACE_THREADS: usize = 4;
+pub const GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE: usize = 500;
+pub const GC_CONFIG_DEFAULT_TRACE_SHARE_MIN: usize = 1_000;
+pub const GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO: f32 = 0.5;
+pub const GC_CONFIG_DEFAULT_TRACE_WAIT_TIME: u64 = 1;
+
+// basically all the heuristic constant values used in this crate are collected here
+// not necessarily a good idea to change any of these, but collecting them all here
+// at least makes it clear what values are "arbitrary"
+//
 // The GcConfig can be updated after the Gc is created, but the update will only take place
 // until tracing has completed.
 impl GcConfig {
     pub fn default() -> Self {
         GcConfig {
-            tracer_threads: 2,
-            trace_chunk_size: 500,
-            trace_share_min: 1000,
-            trace_share_ratio: 0.5,
-            trace_wait_time: 1,
+            tracer_threads:     GC_CONFIG_DEFAULT_TRACE_THREADS,
+            trace_chunk_size:   GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE,
+            trace_share_min:    GC_CONFIG_DEFAULT_TRACE_SHARE_MIN,
+            trace_share_ratio:  GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO,
+            trace_wait_time:    GC_CONFIG_DEFAULT_TRACE_WAIT_TIME,
+
             monitor_max_old_growth_rate: 10.0,
             monitor_arena_size_ratio_trigger: 2.0,
             monitor_wait_time: 10,
             monitor_on: true,
+
             mutator_share_min: 1000,
+
             collector_max_headroom_ratio: 2.0,
-            collector_timeslize: 2.0,
+            collector_timeslice_size: 2.0,
             collector_slice_min: 0.6,
         }
     }

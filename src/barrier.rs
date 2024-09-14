@@ -16,11 +16,14 @@ impl<'gc, T: Trace> WriteBarrier<'gc, T> {
         self.inner
     }
 
-    /// Implementation detail of `write_field!`; same safety requirements as `assume`.
     #[doc(hidden)]
-    pub unsafe fn __from_ref_and_ptr(v: &T, _: *const T) -> &Self {
-        // SAFETY: `Self` is `repr(transparent)`.
-        std::mem::transmute(v)
+
+    // SAFETY: this can only be safely called via the field! macro
+    // which ensures that the inner value is within an existing write barrier
+    pub unsafe fn __from_field(inner: &'gc T, _: *const T) -> Self {
+        Self {
+            inner
+        }
     }
 }
 
@@ -34,17 +37,25 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
 }
 
 impl<'gc, T: Trace> WriteBarrier<'gc, GcMut<'gc, T>> {
-    pub fn set(&self, new_ptr: Gc<'gc, T>) {
+    pub fn set(&self, gc: Gc<'gc, T>) {
+        println!("setting: {:?}", gc.as_nonnull());
+
+        // transmute self into a gcmut
+
+
         unsafe {
-            self.inner.set(new_ptr);
+            self.inner.set(gc);
         }
     }
 }
 
 impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, T>> {
-    pub fn set(&self, new_ptr: Gc<'gc, T>) {
+    pub fn set(&self, gc: Gc<'gc, T>) {
+        println!("setting: {:?}", gc.as_nonnull());
+        println!("inner: {:?}", self.inner as *const GcNullMut<T>);
+
         unsafe {
-            self.inner.set(new_ptr);
+            self.inner.set(gc);
         }
     }
 }
@@ -57,7 +68,7 @@ macro_rules! field {
             let _: &$crate::WriteBarrier<_> = $value;
 
             match $value.inner() {
-                $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_ref_and_ptr($field, $field as *const _) },
+                $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_field($field, $field as *const _) },
             }
         }
     };

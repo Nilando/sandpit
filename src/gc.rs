@@ -136,6 +136,10 @@ impl<'gc, T: Trace> GcMut<'gc, T> {
         let gc = new.into();
         self.ptr.store(gc.into(), Ordering::SeqCst)
     }
+
+    pub fn scoped_deref(&self) -> &'gc T {
+        unsafe { &*self.as_ptr() }
+    }
 }
 
 pub struct GcNullMut<'gc, T: Trace> {
@@ -158,12 +162,6 @@ impl<'gc, T: Trace> Clone for GcNullMut<'gc, T> {
             ptr: AtomicPtr::new(self.as_ptr()),
             scope: PhantomData::<&'gc *mut T>,
         }
-    }
-}
-
-impl<'gc, T: Trace> From<GcNullMut<'gc, T>> for Option<GcMut<'gc, T>> {
-    fn from(value: GcNullMut<'gc, T>) -> Self {
-        value.as_option()
     }
 }
 
@@ -215,12 +213,3 @@ impl<'gc, T: Trace> GcNullMut<'gc, T> {
         }
     }
 }
-
-
-
-// OR!!!
-//
-// fn alloc_array<T: Trace>(&self, size: usize) -> GcArray<T>
-//
-// and trying to get a ref into a gcarray is unsafe
-

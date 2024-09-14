@@ -2,6 +2,26 @@ use sandpit::{Gc, GcNullMut, GcMut, Arena, Mutator, Root, Trace, TraceLeaf, Writ
 use std::cell::{Cell, RefCell, RefMut, Ref};
 use std::ptr::NonNull;
 
+struct LinkedListIter<'gc, T: Trace> {
+    next: Option<&'gc Node<'gc, T>>
+}
+
+impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
+    type Item = &'gc T;
+
+    fn next(&mut self) -> Option<&'gc T> { 
+        self.next.map(|node|  {
+            self.next = node.get_next().map(|node_ptr| {
+                // we need to use scoped deref in order for T: 'gc
+                // regular deref loses that info
+                node_ptr.scoped_deref()
+            });
+
+            node.get_val()
+        })
+    }
+}
+
 #[derive(Trace, Clone)]
 struct LinkedList<'gc, T: Trace> {
     start: GcNullMut<'gc, Node<'gc, T>>,
@@ -23,6 +43,8 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
 
     fn as_gc(&self) -> Gc<'gc, Self> {
         // safe b/c the only way to construct a LinkedList is by allocating it in a Gc Arena
+        // This unsafe could be avoided by changing the func signatures 
+        // from `fn foo(&self)` into `fn foo(this: Gc<'gc, Self>)`
         unsafe { Gc::from_nonnull(NonNull::new_unchecked(self as *const Self as *mut Self)) }
     }
 
@@ -91,7 +113,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         let gc_self = self.as_gc();
 
         mu.write_barrier(gc_self, |write_barrier| {
-            field!(write_barrier, LinkedList, start).set(new)
+            field!(write_barrier, LinkedList, start).set(new);
         });
     }
 
@@ -159,35 +181,22 @@ fn empty_list_arena() {
     });
 }
 
-/*
-
 #[test]
-fn find() {
-    let gc = GcArena::build((), |mu, _| {
-        let root = Node::alloc(mu, 0).unwrap();
-        for _ in 0..1_000 {
-            Node::insert(&root, mu, 123);
-        }
-
-        Node::insert(&root, mu, 420);
-
-        root
+fn push_list() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        LinkedList::new(mu)
     });
 
-    gc.major_collect();
-
-    gc.mutate((), |root, _, _| {
-        let node = Node::find(root, 420).unwrap();
-
-        assert_eq!(node.val.get(), 420);
-
-        let node = Node::find(&node, 1_001);
-
-        assert!(node.is_none());
-
-        Node::kill_children(root);
+    arena.mutate(|mu, root| {
+        root.push_front(mu, 1);
+        //assert!(root.len() == 1);
+        //root.push_back(mu, 1);
+        //assert!(root.len() == 2);
     });
 }
+
+
+/*
 
 #[test]
 fn multiple_collects() {

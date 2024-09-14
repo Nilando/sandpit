@@ -21,9 +21,9 @@ pub trait Mutator<'gc> {
 
     fn is_marked<T: Trace + 'gc>(&self, ptr: impl Into<Gc<'gc, T>>) -> bool;
 
-    fn alloc<T: Trace>(&'gc self, obj: T) -> Gc<'gc, T>;
+    fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T>;
     // fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T>;
-    unsafe fn alloc_layout(&'gc self, layout: Layout) -> NonNull<u8>;
+    unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
 
     fn write_barrier<F, T>(&self, gc: impl Into<Gc<'gc, T>>, f: F) 
     where
@@ -63,7 +63,7 @@ impl<'gc, A: Allocate> MutatorScope<'gc, A> {
 }
 
 impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
-    fn alloc<T: Trace>(&'gc self, obj: T) -> Gc<'gc, T> {
+    fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
         let layout = Layout::new::<T>();
 
         unsafe { 

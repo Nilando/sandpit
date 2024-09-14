@@ -159,7 +159,7 @@ where
                 old_objects: AtomicUsize::new(0),
                 arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
                 max_headroom_ratio: config.collector_max_headroom_ratio,
-                timeslice_size: config.collector_timeslize,
+                timeslice_size: config.collector_timeslice_size,
                 slice_min: config.collector_slice_min,
             }
         }
