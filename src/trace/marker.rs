@@ -1,7 +1,7 @@
 use super::trace::Trace;
 use crate::allocator::{Allocate, GenerationalArena, Marker as AllocMarker};
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::ptr::NonNull;
 
 pub trait Marker: 'static + Send + Sync {
     type Mark: AllocMarker;

@@ -1,18 +1,18 @@
-use crate::{Gc, Trace};
+use crate::{Gc, GcMut, GcNullMut, Trace};
 
 #[repr(transparent)]
 pub struct WriteBarrier<'gc, T: Trace> {
     inner: &'gc T,
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
-    pub(crate) fn new(gc: &'barrier T) -> Self {
+impl<'gc, T: Trace> WriteBarrier<'gc, T> {
+    pub(crate) fn new(gc: &'gc T) -> Self {
         WriteBarrier {
             inner: &gc
         }
     }
 
-    pub fn inner(&self) -> &'barrier T {
+    pub fn inner(&self) -> &'gc T {
         self.inner
     }
 
@@ -24,7 +24,7 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
     }
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, Option<T>> {
+impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
     pub fn into(&self) -> Option<WriteBarrier<T>> {
         match self.inner {
             Some(ref inner) => Some(WriteBarrier { inner }),
@@ -33,8 +33,16 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Option<T>> {
     }
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
-    pub fn set(&mut self, new_ptr: Gc<'barrier, T>) {
+impl<'gc, T: Trace> WriteBarrier<'gc, GcMut<'gc, T>> {
+    pub fn set(&self, new_ptr: Gc<'gc, T>) {
+        unsafe {
+            self.inner.set(new_ptr);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, T>> {
+    pub fn set(&self, new_ptr: Gc<'gc, T>) {
         unsafe {
             self.inner.set(new_ptr);
         }

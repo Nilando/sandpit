@@ -1,136 +1,161 @@
-use sandpit::{Gc, Arena, Mutator, Root, Trace, WriteBarrier, field};
-use std::cell::Cell;
+use sandpit::{Gc, GcNullMut, GcMut, Arena, Mutator, Root, Trace, TraceLeaf, WriteBarrier, field};
+use std::cell::{Cell, RefCell, RefMut, Ref};
+use std::ptr::NonNull;
 
 #[derive(Trace, Clone)]
-pub struct Node<'gc> {
-    left:  Option<Gc<'gc, Node<'gc>>>,
-    right: Option<Gc<'gc, Node<'gc>>>,
-    val:   Cell<usize>,
+struct LinkedList<'gc, T: Trace> {
+    start: GcNullMut<'gc, Node<'gc, T>>,
+    end: GcNullMut<'gc, Node<'gc, T>>,
+    len: Cell<usize>,
 }
 
-impl<'gc> Node<'gc> {
-    pub fn new<M: Mutator<'gc>>(
-        _mu: &'gc M, 
-        val: usize, 
-        left: Option<Gc<'gc, Node<'gc>>>, 
-        right: Option<Gc<'gc, Node<'gc>>>
-    ) -> Self 
+impl<'gc, T: Trace> LinkedList<'gc, T> {
+    pub fn new<M: Mutator<'gc>>(mu: &'gc M) -> Gc<'gc, Self> 
     {
-        Self {
-            left,
-            right,
-            val: Cell::new(val),
-        }
+        let new = Self {
+            start: GcNullMut::new_null(mu),
+            end: GcNullMut::new_null(mu),
+            len: Cell::new(0),
+        };
+
+        Gc::new(mu, new)
     }
 
-    pub fn set_right<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
-        this.write_barrier(mu, |write_barrier| {
-            let right: &WriteBarrier<'_, Option<Gc<'_, Node<'gc>>>> = field!(write_barrier, Node, left);
-
-            right.into().unwrap().set(new);
-        });
+    fn as_gc(&self) -> Gc<'gc, Self> {
+        // safe b/c the only way to construct a LinkedList is by allocating it in a Gc Arena
+        unsafe { Gc::from_nonnull(NonNull::new_unchecked(self as *const Self as *mut Self)) }
     }
 
-    pub fn get_val(&self) -> usize {
-        self.val.get()
-    }
+    pub fn push_back<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+        let gc_node = Gc::new(mu, Node::new(mu, val));
 
-    pub fn get_right(&self) -> Option<Gc<'gc, Node<'gc>>> {
-        self.right.clone()
-    }
-    
-    pub fn get_left(&self) -> Option<Gc<'gc, Node<'gc>>> {
-        self.left.clone()
-    }
-
-    pub fn collect(&self) -> Vec<usize> {
-        let mut result = vec![];
-
-        self.traverse(&mut result);
-
-        result
-    }
-
-    // don't call this on a cyclic graph
-    pub fn traverse(&self, vals: &mut Vec<usize>) {
-        if let Some(ref left) = self.left {
-            left.traverse(vals)
-        }
-
-        if let Some(ref right) = self.right {
-            right.traverse(vals);
+        if self.len.get() == 0 {
+            self.init_push(mu, gc_node);
             return;
         }
 
-        vals.push(self.val.get());
+        Node::set_next(mu, self.end.as_option().unwrap().into(), gc_node);
+        self.set_end(mu, gc_node);
+
+        let new_len = self.len.get() + 1;
+        self.len.set(new_len);
     }
 
-    pub fn find(&'gc self, val: usize) -> Option<&'gc Node> {
-        let current_val = self.val.get();
+    pub fn push_front<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+        let gc_node = Gc::new(mu, Node::new(mu, val));
 
-        if current_val > val && self.right.is_some() {
-            self.right.as_ref().unwrap().find(val)
-        } else if current_val < val && self.left.is_some() {
-            self.left.as_ref().unwrap().find(val)
-        } else if current_val == val {
-            Some(self)
-        } else {
-            None
+        if self.len.get() == 0 {
+            self.init_push(mu, gc_node);
+            return;
+        }
+
+        Node::set_prev(mu, self.start.as_option().unwrap().into(), gc_node);
+        self.set_start(mu, gc_node);
+
+        let new_len = self.len.get() + 1;
+        self.len.set(new_len);
+    }
+
+    pub fn pop_back<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+        todo!()
+    }
+
+    pub fn pop_front<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+        todo!()
+    }
+
+    pub fn delete<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize) -> &T {
+        todo!()
+    }
+
+    pub fn set<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize) {
+        todo!()
+    }
+
+    pub fn at<M: Mutator<'gc>>(&self, index: usize) -> &T {
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        self.len.get()
+    }
+
+    fn init_push<M: Mutator<'gc>>(&self, mu: &'gc M, gc_node: Gc<'gc, Node<'gc, T>>) {
+        self.set_start(mu, gc_node);
+        self.set_end(mu, gc_node);
+        self.len.set(1);
+        return;
+    }
+
+    fn set_start<M: Mutator<'gc>>(&self, mu: &'gc M, new: Gc<'gc, Node<'gc, T>>) {
+        let gc_self = self.as_gc();
+
+        mu.write_barrier(gc_self, |write_barrier| {
+            field!(write_barrier, LinkedList, start).set(new)
+        });
+    }
+
+    fn set_end<M: Mutator<'gc>>(&self, mu: &'gc M, new: Gc<'gc, Node<'gc, T>>) {
+        let gc_self = self.as_gc();
+
+        mu.write_barrier(gc_self, |write_barrier| {
+            field!(write_barrier, LinkedList, end).set(new)
+        });
+    }
+}
+
+#[derive(Trace, Clone)]
+pub struct Node<'gc, T: Trace> {
+    prev:  GcNullMut<'gc, Node<'gc, T>>,
+    next: GcNullMut<'gc, Node<'gc, T>>,
+    val:   T,
+}
+
+impl<'gc, T: Trace> Node<'gc, T> {
+    pub fn new<M: Mutator<'gc>>(mu: &'gc M, val: T) -> Self 
+    {
+        Self {
+            prev: GcNullMut::new_null(mu),
+            next: GcNullMut::new_null(mu),
+            val,
         }
     }
 
-    pub fn create_balanced_tree<M: Mutator<'gc>>(mu: &'gc M, layers: usize) -> Self {
-        let mut next_nodes = vec![];
-        let mut prev_nodes = next_nodes.clone();
+    pub fn set_prev<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
+        mu.write_barrier(this, |write_barrier| {
+            field!(write_barrier, Node, prev).set(new)
+        });
+    }
 
-        for layer in (0..layers).rev() {
-            let num_nodes = 2usize.pow(layer as u32);
-            for i in 0..num_nodes {
-                if layer == (layers - 1) {
-                    let leaf = Node::new(mu, i, None, None);
+    pub fn set_next<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
+        mu.write_barrier(this, |write_barrier| {
+            field!(write_barrier, Node, next).set(new)
+        });
+    }
 
-                    next_nodes.push(leaf);
-                } else {
-                    let right = Gc::new(mu, prev_nodes.pop().unwrap());
-                    let left = Gc::new(mu, prev_nodes.pop().unwrap());
-                    let node = Node::new(mu, right.get_val(), Some(left), Some(right));
+    pub fn get_val(&self) -> &T {
+        &self.val
+    }
 
-                    next_nodes.push(node);
-                }
-            }
-
-            if layer != (layers - 1) {
-                next_nodes = next_nodes.into_iter().rev().collect();
-            }
-
-            std::mem::swap(&mut prev_nodes, &mut next_nodes);
-        }
-
-        prev_nodes.pop().unwrap()
+    pub fn get_next(&self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+        self.next.as_option()
+    }
+    
+    pub fn get_prev(&self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+        self.prev.as_option()
     }
 }
 
 // TESTS BELOW
 
 #[test]
-fn new_node_arena() {
-    let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| {
-        let node = Node::new(mu, 69, None, None);
-
-        node
+fn empty_list_arena() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        LinkedList::new(mu)
     });
 
     arena.mutate(|_mu, root| {
-        assert!(root.get_val() == 69);
-    });
-}
-
-#[test]
-fn new_balanced_tree_arena() {
-    let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| Node::create_balanced_tree(mu, 12));
-
-    arena.mutate(|_mu, root| {
-        assert_eq!(root.collect().len(), 2048);
+        assert!(root.len() == 0);
     });
 }
 

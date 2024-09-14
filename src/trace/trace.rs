@@ -2,6 +2,7 @@ use super::tracer::Tracer;
 use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
+use crate::gc::{Gc, GcMut, GcNullMut};
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
 /// contain any GcPtr's.
@@ -23,6 +24,33 @@ pub unsafe trait Trace {
         Self: Sized,
     {
         unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+    }
+}
+
+// Gc, GcMut, and GcNullMut are the 3 "core" non TraceLeaf types
+// That is to say, every other type that impls Trace + !TraceLeaf
+// must also contains one of these types within it.
+unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        tracer.trace(self.into())
+    }
+}
+
+unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        tracer.trace(self.into())
+    }
+}
+
+unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        tracer.trace(self.into())
     }
 }
 
@@ -112,21 +140,6 @@ unsafe impl<A: Trace, B: Trace> Trace for Result<A, B> {
         match self {
             Ok(res) => res.trace(tracer),
             Err(e) => e.trace(tracer),
-        }
-    }
-}
-
-// Gc is not TraceLeaf!
-unsafe impl<'a, T: Trace> Trace for crate::gc::Gc<'a, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
-        unsafe {
-            let ptr = self.as_ptr();
-
-            if !ptr.is_null() {
-                tracer.trace(NonNull::new_unchecked(ptr))
-            }
         }
     }
 }

@@ -9,6 +9,7 @@ use sandpit::{Arena, Root};
 const TREE_LAYERS: usize = 20;
 
 fn balanced_binary_trees() {
+    /*
     let arena: Arena<Root![Node<'_>]> = Arena::new(|mu| Node::create_balanced_tree(mu, TREE_LAYERS));
 
     arena.major_collect();
@@ -25,6 +26,7 @@ fn balanced_binary_trees() {
 
         assert_eq!(actual, expected)
     });
+    */
 }
 
 

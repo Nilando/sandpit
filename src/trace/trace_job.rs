@@ -23,12 +23,3 @@ impl<M: Marker> TraceJob<M> {
         (self.dyn_trace)(self.ptr, tracer);
     }
 }
-
-impl<M: Marker> Clone for TraceJob<M> {
-    fn clone(&self) -> Self {
-        Self {
-            ptr: self.ptr,
-            dyn_trace: self.dyn_trace,
-        }
-    }
-}

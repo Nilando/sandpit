@@ -2,8 +2,8 @@ use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
-use std::ptr::NonNull;
 use std::sync::Arc;
+use std::ptr::NonNull;
 
 pub trait Tracer {
     fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
@@ -40,7 +40,11 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     pub fn flush_work(&mut self) {
-        self.controller.send_work(self.work.clone());
+        let mut work = vec![];
+
+        std::mem::swap(&mut work, &mut self.work);
+
+        self.controller.send_work(work);
     }
 
     pub fn trace_loop(&mut self) {

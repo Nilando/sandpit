@@ -1,6 +1,7 @@
 use super::allocator::{Allocate, GenerationalArena, Marker};
-use super::gc::Gc;
+use super::gc::{Gc};
 use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
+use super::barrier::WriteBarrier;
 
 use std::alloc::Layout;
 use std::cell::RefCell;
@@ -10,33 +11,47 @@ use std::sync::RwLockReadGuard;
 
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
-pub trait Mutator<'scope>: SealedMutator<'scope> {
+pub trait Mutator<'gc> {
     // Signal that GC is ready to free memory and the current mutation
     // callback should be exited.
     fn yield_requested(&self) -> bool;
 
     // Useful for implementing write barriers.
-    fn retrace<T: Trace>(&'scope self, ptr: Gc<'scope, T>);
-    fn is_marked<T: Trace>(&'scope self, ptr: Gc<'scope, T>) -> bool;
+    fn retrace<T>(&self, obj: T) 
+    where 
+        T: Into<Gc<'gc, T>> + Trace + 'gc;
+
+    fn is_marked<T: Trace + 'gc>(&self, ptr: impl Into<Gc<'gc, T>>) -> bool;
+
+    fn alloc<T: Trace>(&'gc self, obj: T) -> Gc<'gc, T>;
+    // fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T>;
+    unsafe fn alloc_layout(&'gc self, layout: Layout) -> NonNull<u8>;
+
+    fn write_barrier<F, T>(&self, gc: impl Into<Gc<'gc, T>>, f: F) 
+    where
+        F: FnOnce(&WriteBarrier<T>),
+        T: Trace + 'gc;
 }
 
-pub trait SealedMutator<'scope> {
-    fn alloc<T: Trace>(&'scope self, obj: T) -> NonNull<T>;
-    fn alloc_array<T: Trace>(&'scope self, size: usize) -> NonNull<T>;
-}
-
-pub struct MutatorScope<'scope, A: Allocate> {
+pub struct MutatorScope<'gc, A: Allocate> {
     allocator: A,
-    tracer_controller: &'scope TracerController<TraceMarker<A>>,
+    tracer_controller: &'gc TracerController<TraceMarker<A>>,
     rescan: RefCell<Vec<TraceJob<TraceMarker<A>>>>,
-    _lock: RwLockReadGuard<'scope, ()>,
+    _lock: RwLockReadGuard<'gc, ()>,
 }
 
-impl<'scope, A: Allocate> MutatorScope<'scope, A> {
+
+impl<'gc, A: Allocate> Drop for MutatorScope<'gc, A> {
+    fn drop(&mut self) {
+        let work = self.rescan.take();
+        self.tracer_controller.send_work(work);
+    }
+}
+impl<'gc, A: Allocate> MutatorScope<'gc, A> {
     pub fn new(
         arena: &A::Arena,
-        tracer_controller: &'scope TracerController<TraceMarker<A>>,
-        _lock: RwLockReadGuard<'scope, ()>,
+        tracer_controller: &'gc TracerController<TraceMarker<A>>,
+        _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
         let allocator = A::new(arena);
 
@@ -49,77 +64,84 @@ impl<'scope, A: Allocate> MutatorScope<'scope, A> {
     }
 }
 
-impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
-    fn drop(&mut self) {
-        let work = self.rescan.take();
-        self.tracer_controller.send_work(work);
-    }
-}
-
-impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
-    fn alloc<T: Trace>(&self, obj: T) -> NonNull<T> {
-        if self.tracer_controller.is_alloc_lock() {
-            drop(self.tracer_controller.get_alloc_lock());
-        }
-
+impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
+    fn alloc<T: Trace>(&'gc self, obj: T) -> Gc<'gc, T> {
         let layout = Layout::new::<T>();
-        match self.allocator.alloc(layout) {
-            Ok(ptr) => {
-                unsafe { write(ptr.as_ptr().cast(), obj) }
 
-                ptr.cast()
-            }
-            Err(()) => panic!("failed to allocate"),
+        unsafe { 
+            let gc_raw = self.alloc_layout(layout).cast();
+
+            write(gc_raw.as_ptr(), obj);
+
+            Gc::from_nonnull(gc_raw)
         }
     }
 
-    fn alloc_array<T: Trace>(&self, size: usize) -> NonNull<T> {
+    /*
+    fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T> {
+        let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
+
+        unsafe {
+            let gc_raw = self.alloc_layout(layout);
+        }
+        todo!()
+            /*
+        let byte_ptr = ptr.as_ptr();
+
+        for i in 0..layout.size() {
+                *byte_ptr.add(i) = 0;
+        }
+        */
+    }
+*/
+
+    unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
 
-        let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
         match self.allocator.alloc(layout) {
-            Ok(ptr) => {
-                let byte_ptr = ptr.as_ptr();
-
-                for i in 0..layout.size() {
-                    unsafe {
-                        *byte_ptr.add(i) = 0;
-                    }
-                }
-
-                ptr.cast()
-            }
+            Ok(ptr) => ptr.cast(),
             Err(()) => panic!("failed to allocate"),
         }
     }
-}
 
-impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
     fn yield_requested(&self) -> bool {
         self.tracer_controller.yield_flag()
     }
 
-    fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
-        let ptr = unsafe { gc_ptr.as_nonnull() };
+    fn retrace<T: Trace>(&self, obj: T) {
+        // mark the raw
 
-        let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
-        A::set_mark(ptr, new);
-
-        if !T::IS_LEAF {
-            self.rescan.borrow_mut().push(TraceJob::new(ptr));
-        }
-
-        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
-            let work = self.rescan.take();
-            self.tracer_controller.send_work(work);
-        }
+        // first mark the gcraw as new
+        // then convert T into a tracejob
+        todo!()
     }
 
-    fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool {
-        self.allocator.is_old(unsafe { ptr.as_nonnull() })
+    fn is_marked<T: Trace + 'gc>(&self, obj: impl Into<Gc<'gc, T>>) -> bool {
+        todo!()
+    }
+
+    /*
+    fn mark<T: Trace + 'gc>(&self, obj: impl Into<GcRaw<'gc, T>>) -> bool {
+        todo!()
+    }
+    */
+
+    fn write_barrier<F, T>(&self, gc: impl Into<Gc<'gc, T>>, f: F) 
+    where
+        F: FnOnce(&WriteBarrier<T>),
+        T: Trace + 'gc,
+    {
+        let gc_ref: &T =  &gc.into();
+        let barrier = WriteBarrier::new(gc_ref);
+
+        f(&barrier);
+
+        todo!()
+        // if the gc is marked
+            // if retrace it
     }
 }

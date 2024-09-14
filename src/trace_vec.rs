@@ -1,38 +1,16 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use sandpit::{Trace, Tracer, Mutator, Gc};
+use sandpit::{Trace, Tracer, Mutator, Gc, GcMut};
 
 const DEFAULT_CAP: usize = 8;
 const VEC_GROW_RATIO: f64 = 0.5;
 
-struct TraceVecData<'gc, T: Trace> {
-    // if T is traceleaf, this will be similar to Gc<[T]>
-    // if T is not TraceLeaf this will be similar to Gc<[Gc<T>]>
-    data: Gc<'gc, T>, // WARNING! really Gc<[Gc<[T]]>>
-}
+// GcCell
 
-impl<'gc, T: Trace> TraceVecData<'gc, T> {
-    unsafe fn set(data: *mut Gc<T>, idx: usize, new: Gc<T>) {
-        let ptr = data.add(idx);
-        let old = &*ptr;
-
-        old.set(new);
-    }
-
-    unsafe fn at(data: *mut Gc<T>, idx: usize) -> Gc<T> {
-        (*data.add(idx)).clone()
-    }
-}
-
-unsafe impl<'gc, A: Trace> Trace for TraceVecData<'gc, A> {
-    // the tracing of individual items is handled in the trace of TraceVec,
-    // having empty impl here prevents an atGcted trace of self.at[0]
-    fn trace<T: Tracer>(&self, _tracer: &mut T) {}
-}
-
+/*
 pub struct TraceVec<'gc, T: Trace> {
     cap: AtomicUsize,
     len: AtomicUsize,
-    data: Gc<'gc, TraceVecData<'gc, T>>,
+    data: GcOption<GcMut<'gc, GcArray<'gc, GcMut<'gc, T>>>>
 }
 
 impl<'gc, T: Trace> TraceVec<'gc, T> {
@@ -228,3 +206,4 @@ mod tests {
         });
     }
 }
+*/

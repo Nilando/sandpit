@@ -10,7 +10,7 @@ use syn::{
 pub fn trace(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let generics = add_leaf(add_trace(input.generics));
+    let generics = add_trace(input.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let trace_body = match input.data {
