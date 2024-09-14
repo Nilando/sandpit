@@ -22,6 +22,18 @@ impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
     }
 }
 
+impl<'gc, T: Trace> LinkedListIter<'gc, T> {
+    pub fn new(list: &LinkedList<'gc, T>) -> Self {
+        let next = list.start.as_option().map(|gc_mut| {
+            gc_mut.scoped_deref()
+        });
+
+        Self {
+            next
+        }
+    }
+}
+
 #[derive(Trace, Clone)]
 struct LinkedList<'gc, T: Trace> {
     start: GcNullMut<'gc, Node<'gc, T>>,
@@ -39,6 +51,10 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         };
 
         Gc::new(mu, new)
+    }
+
+    pub fn iter(&self) -> LinkedListIter<'gc, T> {
+        LinkedListIter::new(self)
     }
 
     fn as_gc(&self) -> Gc<'gc, Self> {
@@ -182,19 +198,50 @@ fn empty_list_arena() {
 }
 
 #[test]
-fn push_list() {
+fn list_survives_major_collect() {
     let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
         LinkedList::new(mu)
     });
 
     arena.mutate(|mu, root| {
-        root.push_front(mu, 1);
-        //assert!(root.len() == 1);
-        //root.push_back(mu, 1);
-        //assert!(root.len() == 2);
+        for i in 0..100 {
+            root.push_back(mu, i);
+        }
+
+        assert!(root.len() == 100);
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        for (idx, val) in root.iter().enumerate() {
+            assert_eq!(idx, *val);
+        }
     });
 }
 
+#[test]
+fn list_survives_minor_collect() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        LinkedList::new(mu)
+    });
+
+    arena.mutate(|mu, root| {
+        for i in 0..100 {
+            root.push_back(mu, i);
+        }
+
+        assert!(root.len() == 100);
+    });
+
+    arena.minor_collect();
+
+    arena.mutate(|_mu, root| {
+        for (idx, val) in root.iter().enumerate() {
+            assert_eq!(idx, *val);
+        }
+    });
+}
 
 /*
 
