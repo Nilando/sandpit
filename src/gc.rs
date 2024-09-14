@@ -51,12 +51,6 @@ impl<'gc, T: Trace> From<Gc<'gc, T>> for *mut T {
     }
 }
 
-impl<'gc, T: Trace> From<Gc<'gc, T>> for NonNull<T> {
-    fn from(value: Gc<'gc, T>) -> Self {
-        value.ptr
-    }
-}
-
 impl<'gc, T: Trace> Deref for Gc<'gc, T> {
     type Target = T;
 
@@ -72,6 +66,10 @@ impl<'gc, T: Trace> Gc<'gc, T> {
             ptr,
             scope: PhantomData::<&'gc *mut T>,
         }
+    }
+
+    pub fn as_nonnull(&self) -> NonNull<T> {
+        self.ptr
     }
 
     pub fn new<M: Mutator<'gc>>(m: &'gc M, obj: T) -> Self {
@@ -114,12 +112,6 @@ impl<'gc, T: Trace> Clone for GcMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> From<GcMut<'gc, T>> for *mut T {
-    fn from(value: GcMut<'gc, T>) -> Self {
-        value.as_ptr()
-    }
-}
-
 impl<'gc, T: Trace> GcMut<'gc, T> {
     pub unsafe fn from_nonnull(ptr: NonNull<T>) -> Self {
         Self {
@@ -134,6 +126,10 @@ impl<'gc, T: Trace> GcMut<'gc, T> {
 
     pub fn as_ptr(&self) -> *mut T {
         self.ptr.load(Ordering::SeqCst)
+    }
+
+    pub fn as_nonnull(&self) -> NonNull<T> {
+        unsafe { NonNull::new_unchecked(self.as_ptr()) }
     }
 
     pub unsafe fn set(&self, new: impl Into<Gc<'gc, T>>) {
@@ -162,12 +158,6 @@ impl<'gc, T: Trace> Clone for GcNullMut<'gc, T> {
             ptr: AtomicPtr::new(self.as_ptr()),
             scope: PhantomData::<&'gc *mut T>,
         }
-    }
-}
-
-impl<'gc, T: Trace> From<GcNullMut<'gc, T>> for *mut T {
-    fn from(value: GcNullMut<'gc, T>) -> Self {
-        value.as_ptr()
     }
 }
 

@@ -17,9 +17,7 @@ pub trait Mutator<'gc> {
     fn yield_requested(&self) -> bool;
 
     // Useful for implementing write barriers.
-    fn retrace<T>(&self, obj: T) 
-    where 
-        T: Into<Gc<'gc, T>> + Trace + 'gc;
+    fn retrace<T: Trace>(&self, obj: T);
 
     fn is_marked<T: Trace + 'gc>(&self, ptr: impl Into<Gc<'gc, T>>) -> bool;
 
@@ -113,35 +111,35 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
     }
 
     fn retrace<T: Trace>(&self, obj: T) {
-        // mark the raw
+        let trace_job = TraceJob::<TraceMarker<A>>::new(NonNull::from(&obj));
 
-        // first mark the gcraw as new
-        // then convert T into a tracejob
-        todo!()
+        self.rescan.borrow_mut().push(trace_job);
+
+        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
+            let work = self.rescan.take();
+            self.tracer_controller.send_work(work);
+        }
     }
 
-    fn is_marked<T: Trace + 'gc>(&self, obj: impl Into<Gc<'gc, T>>) -> bool {
-        todo!()
+    fn is_marked<T: Trace + 'gc>(&self, gc_into: impl Into<Gc<'gc, T>>) -> bool {
+        let gc: Gc<'gc, T> = gc_into.into();
+
+        self.allocator.is_old(gc.as_nonnull())
     }
 
-    /*
-    fn mark<T: Trace + 'gc>(&self, obj: impl Into<GcRaw<'gc, T>>) -> bool {
-        todo!()
-    }
-    */
-
-    fn write_barrier<F, T>(&self, gc: impl Into<Gc<'gc, T>>, f: F) 
+    fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F) 
     where
         F: FnOnce(&WriteBarrier<T>),
         T: Trace + 'gc,
     {
-        let gc_ref: &T =  &gc.into();
+        let gc: Gc<'gc, T> = gc_into.into();
+        let gc_ref: &T =  &gc;
         let barrier = WriteBarrier::new(gc_ref);
 
         f(&barrier);
 
-        todo!()
-        // if the gc is marked
-            // if retrace it
+        if self.is_marked(gc) {
+            self.retrace(gc);
+        }
     }
 }

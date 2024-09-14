@@ -34,7 +34,9 @@ unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace<R: Tracer>(&self, tracer: &mut R) {
-        tracer.trace(self.into())
+        let ptr: NonNull<T> = self.as_nonnull();
+
+        tracer.trace(ptr)
     }
 }
 
@@ -42,7 +44,9 @@ unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace<R: Tracer>(&self, tracer: &mut R) {
-        tracer.trace(self.into())
+        let ptr: NonNull<T> = self.as_nonnull();
+
+        tracer.trace(ptr)
     }
 }
 
@@ -50,7 +54,9 @@ unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace<R: Tracer>(&self, tracer: &mut R) {
-        tracer.trace(self.into())
+        if let Some(gc_mut) = self.as_option() {
+            gc_mut.trace(tracer);
+        }
     }
 }
 
