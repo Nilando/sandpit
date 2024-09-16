@@ -22,8 +22,7 @@ use std::ptr::NonNull;
 // GcArray<T> 
 
 pub struct Gc<'gc, T: Trace> {
-    ptr: NonNull<T>,
-    scope: PhantomData<&'gc *mut T>,
+    ptr: &'gc T,
 }
 
 impl<'gc, T: Trace> Copy for Gc<'gc, T> {}
@@ -31,8 +30,7 @@ impl<'gc, T: Trace> Copy for Gc<'gc, T> {}
 impl<'gc, T: Trace> Clone for Gc<'gc, T> {
     fn clone(&self) -> Self {
         Self {
-            ptr: self.ptr.clone(),
-            scope: PhantomData::<&'gc *mut T>,
+            ptr: self.ptr,
         }
     }
 }
@@ -47,7 +45,7 @@ impl<'gc, T: Trace> From<GcMut<'gc, T>> for Gc<'gc, T> {
 
 impl<'gc, T: Trace> From<Gc<'gc, T>> for *mut T {
     fn from(value: Gc<'gc, T>) -> Self {
-        value.ptr.as_ptr()
+        value.ptr as *const T as *mut T
     }
 }
 
@@ -56,20 +54,21 @@ impl<'gc, T: Trace> Deref for Gc<'gc, T> {
 
     // safe b/c of 'gc lifetime!
     fn deref(&self) -> &'gc Self::Target {
-        unsafe { self.ptr.as_ref() }
+        self.ptr
     }
 }
 
 impl<'gc, T: Trace> Gc<'gc, T> {
+    // SAFETY: The NonNull must specifically be a NonNull obtained from
+    // the mutator alloc function!
     pub unsafe fn from_nonnull(ptr: NonNull<T>) -> Self {
         Self {
-            ptr,
-            scope: PhantomData::<&'gc *mut T>,
+            ptr: ptr.as_ref(),
         }
     }
 
     pub fn as_nonnull(&self) -> NonNull<T> {
-        self.ptr
+        self.ptr.into()
     }
 
     pub fn new<M: Mutator<'gc>>(m: &'gc M, obj: T) -> Self {
@@ -193,9 +192,8 @@ impl<'gc, T: Trace> GcNullMut<'gc, T> {
     // must be retraced before the end of the mutation context.
     //
     // Use a write barrier to call this method safely.
-    pub unsafe fn set(&self, new: impl Into<Gc<'gc, T>>) {
-        let gc = new.into();
-        self.ptr.store(gc.into(), Ordering::SeqCst)
+    pub unsafe fn set(&self, new: GcNullMut<'gc, T>) {
+        self.ptr.store(new.as_ptr(), Ordering::SeqCst)
     }
 
     // safe because setting to null doesn't require anything to be retraced!

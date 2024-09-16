@@ -1,4 +1,4 @@
-mod node;
-mod basic;
+mod linked_list;
+mod tests;
 
-pub use node::Node;
+pub use linked_list::LinkedList;

@@ -178,12 +178,14 @@ impl<M: Marker> TracerController<M> {
         // create a channel to be used to wait until all tracers have started
         let (sender, receiver) = crossbeam_channel::unbounded::<()>();
 
-        for _ in 0..self.num_tracers {
+        for i in 0..self.num_tracers {
             let controller = self.clone();
             let sender = sender.clone();
             let marker = marker.clone();
+            let thread_name: String = format!("GC_TRACER_{i}");
+            let thread = std::thread::Builder::new().name(thread_name);
 
-            std::thread::spawn(move || {
+            let _ = thread.spawn(move || {
                 let _lock = controller.trace_lock.read().unwrap();
                 let mut tracer = TraceWorker::new(controller.clone(), marker);
 

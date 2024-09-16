@@ -9,6 +9,9 @@ use std::mem::{align_of, size_of};
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
+// make a GcLayout type that is not trace which we return 
+// from alloc layout
+
 /// An interface for the mutator type which allows for interaction with the
 /// Gc inside a `gc.mutate(...)` context.
 pub trait Mutator<'gc> {
@@ -17,7 +20,8 @@ pub trait Mutator<'gc> {
     fn yield_requested(&self) -> bool;
 
     // Useful for implementing write barriers.
-    fn retrace<T: Trace>(&self, obj: T);
+    //fn retrace<T: Trace>(&self, obj: T);
+    fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>);
 
     fn is_marked<T: Trace + 'gc>(&self, ptr: impl Into<Gc<'gc, T>>) -> bool;
 
@@ -94,13 +98,17 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
 */
 
     unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
+        // TODO: the allocc lock needs to be reworked
+        // doesn't really take into account the need to also stop the mutators
+        // from access the write barrier... maybe copy this logic into the write barrier
+        //
         if self.tracer_controller.is_alloc_lock() {
             drop(self.tracer_controller.get_alloc_lock());
         }
 
         match self.allocator.alloc(layout) {
             Ok(ptr) => ptr.cast(),
-            Err(()) => panic!("failed to allocate"),
+            Err(()) => panic!("failed to allocate"), // TODO: should this return an error?
         }
     }
 
@@ -110,8 +118,9 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
         self.tracer_controller.yield_flag()
     }
 
-    fn retrace<T: Trace>(&self, obj: T) {
-        let trace_job = TraceJob::<TraceMarker<A>>::new(NonNull::from(&obj));
+    fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
+        let gc = gc_into.try_into().ok().unwrap(); // TODO: handle 
+        let trace_job = TraceJob::<TraceMarker<A>>::new(gc.as_nonnull());
 
         self.rescan.borrow_mut().push(trace_job);
 
@@ -133,8 +142,7 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
         T: Trace + 'gc,
     {
         let gc: Gc<'gc, T> = gc_into.into();
-        let gc_ref: &T =  &gc;
-        let barrier = WriteBarrier::new(gc_ref);
+        let barrier = WriteBarrier::new(&*gc);
 
         f(&barrier);
 

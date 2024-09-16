@@ -2,11 +2,11 @@ use sandpit::{Gc, GcNullMut, GcMut, Arena, Mutator, Root, Trace, TraceLeaf, Writ
 use std::cell::{Cell, RefCell, RefMut, Ref};
 use std::ptr::NonNull;
 
-struct LinkedListIter<'gc, T: Trace> {
+pub struct LinkedListIter<'gc, T: Trace + Debug> {
     next: Option<&'gc Node<'gc, T>>
 }
 
-impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
+impl<'gc, T: Trace + Debug> Iterator for LinkedListIter<'gc, T> {
     type Item = &'gc T;
 
     fn next(&mut self) -> Option<&'gc T> { 
@@ -22,7 +22,7 @@ impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> LinkedListIter<'gc, T> {
+impl<'gc, T: Trace + Debug> LinkedListIter<'gc, T> {
     pub fn new(list: &LinkedList<'gc, T>) -> Self {
         let next = list.start.as_option().map(|gc_mut| {
             gc_mut.scoped_deref()
@@ -34,14 +34,14 @@ impl<'gc, T: Trace> LinkedListIter<'gc, T> {
     }
 }
 
-#[derive(Trace, Clone)]
-struct LinkedList<'gc, T: Trace> {
+#[derive(Clone)]
+pub struct LinkedList<'gc, T: Trace + Debug> {
     start: GcNullMut<'gc, Node<'gc, T>>,
     end: GcNullMut<'gc, Node<'gc, T>>,
     len: Cell<usize>,
 }
 
-impl<'gc, T: Trace> LinkedList<'gc, T> {
+impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
     pub fn new<M: Mutator<'gc>>(mu: &'gc M) -> Gc<'gc, Self> 
     {
         let new = Self {
@@ -58,7 +58,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
     }
 
     fn as_gc(&self) -> Gc<'gc, Self> {
-        // safe b/c the only way to construct a LinkedList is by allocating it in a Gc Arena
+        // SAFETY: b/c the only way to construct a LinkedList is by allocating it in a Gc Arena
         // This unsafe could be avoided by changing the func signatures 
         // from `fn foo(&self)` into `fn foo(this: Gc<'gc, Self>)`
         unsafe { Gc::from_nonnull(NonNull::new_unchecked(self as *const Self as *mut Self)) }
@@ -68,14 +68,15 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         let gc_node = Gc::new(mu, Node::new(mu, val));
 
         if self.len.get() == 0 {
-            self.init_push(mu, gc_node);
+            self.init_push(mu, gc_node.into());
             return;
         }
 
-        Node::set_next(mu, self.end.as_option().unwrap().into(), gc_node);
-        self.set_end(mu, gc_node);
+        Node::set_prev(mu, gc_node, self.end.clone());
+        Node::set_next(mu, self.end.as_option().unwrap().into(), gc_node.into());
+        self.set_end(mu, gc_node.into());
 
-        let new_len = self.len.get() + 1;
+        let new_len = self.len() + 1;
         self.len.set(new_len);
     }
 
@@ -83,14 +84,15 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         let gc_node = Gc::new(mu, Node::new(mu, val));
 
         if self.len.get() == 0 {
-            self.init_push(mu, gc_node);
+            self.init_push(mu, gc_node.into());
             return;
         }
 
-        Node::set_prev(mu, self.start.as_option().unwrap().into(), gc_node);
-        self.set_start(mu, gc_node);
+        Node::set_next(mu, gc_node, self.start.clone());
+        Node::set_prev(mu, self.start.as_option().unwrap().into(), gc_node.into());
+        self.set_start(mu, gc_node.into());
 
-        let new_len = self.len.get() + 1;
+        let new_len = self.len() + 1;
         self.len.set(new_len);
     }
 
@@ -106,26 +108,87 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         todo!()
     }
 
-    pub fn set<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize) {
+    pub fn swap<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize, val: T) {
+        if index >= self.len() {
+            panic!("atempted to swap index {} on len {} list", index, self.len());
+        }
+
+        let new_node = Gc::new(mu, Node::new(mu, val));
+
+        // case 1: list has length 1
+        // case 2: index == 0
+        // case 3: index == (self.len() - 1)
+        // case 4: all above are false
+
+        if self.len() == 1 {
+            self.set_end(mu, new_node.into());
+            self.set_start(mu, new_node.into());
+        } else if index == 0 {
+            let next = self.node_at(1).unwrap();
+
+            Node::set_prev(mu, next, new_node.into());
+            Node::set_next(mu, new_node, next.into());
+
+            self.set_start(mu, new_node.into())
+        } else if index == (self.len() - 1){
+            let prev = self.node_at(self.len() - 1).unwrap();
+
+            Node::set_next(mu, prev, new_node.into());
+            Node::set_prev(mu, new_node, prev.into());
+
+            self.set_end(mu, new_node.into())
+        } else {
+            let next = self.node_at(index + 1).unwrap();
+            let prev = self.node_at(index - 1).unwrap();
+
+            Node::set_next(mu, prev, new_node.into());
+            Node::set_prev(mu, new_node, prev.into());
+            Node::set_prev(mu, next, new_node.into());
+            Node::set_next(mu, new_node, next.into());
+        }
+    }
+
+    pub fn insert<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize, val: T) {
         todo!()
     }
 
-    pub fn at<M: Mutator<'gc>>(&self, index: usize) -> &T {
-        todo!()
+    pub fn at(&self, index: usize) -> Option<&T> {
+        let mut iter = LinkedListIter::new(self);
+        let mut result = iter.next();
+
+        for _ in 0..index {
+            result = iter.next();
+        }
+
+        result
+    }
+
+    fn node_at(&self, index: usize) -> Option<Gc<'gc, Node<'gc, T>>> {
+        let mut node = self.start.clone();
+        for _ in 0..index {
+            match node.as_option() {
+                None => return None,
+                Some(gc_node) => {
+                    node = gc_node.next.clone()
+                }
+            }
+        }
+
+        node.as_option().map(|gc_node| gc_node.into())
     }
 
     fn len(&self) -> usize {
         self.len.get()
     }
 
-    fn init_push<M: Mutator<'gc>>(&self, mu: &'gc M, gc_node: Gc<'gc, Node<'gc, T>>) {
-        self.set_start(mu, gc_node);
+    fn init_push<M: Mutator<'gc>>(&self, mu: &'gc M, gc_node: GcNullMut<'gc, Node<'gc, T>>) {
+        self.set_start(mu, gc_node.clone());
         self.set_end(mu, gc_node);
         self.len.set(1);
         return;
     }
 
-    fn set_start<M: Mutator<'gc>>(&self, mu: &'gc M, new: Gc<'gc, Node<'gc, T>>) {
+    fn set_start<M: Mutator<'gc>>(&self, mu: &'gc M, new: GcNullMut<'gc, Node<'gc, T>>) {
         let gc_self = self.as_gc();
 
         mu.write_barrier(gc_self, |write_barrier| {
@@ -133,7 +196,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         });
     }
 
-    fn set_end<M: Mutator<'gc>>(&self, mu: &'gc M, new: Gc<'gc, Node<'gc, T>>) {
+    fn set_end<M: Mutator<'gc>>(&self, mu: &'gc M, new: GcNullMut<'gc, Node<'gc, T>>) {
         let gc_self = self.as_gc();
 
         mu.write_barrier(gc_self, |write_barrier| {
@@ -142,14 +205,36 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
     }
 }
 
-#[derive(Trace, Clone)]
-pub struct Node<'gc, T: Trace> {
+use sandpit::Tracer;
+use std::fmt::Debug;
+
+unsafe impl<'a, T: Trace + Debug> Trace for Node<'a, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        self.prev.trace(tracer);
+        self.next.trace(tracer);
+        self.val.trace(tracer);
+    }
+}
+
+unsafe impl<'a, T: Trace + Debug> Trace for LinkedList<'a, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace<R: Tracer>(&self, tracer: &mut R) {
+        self.start.trace(tracer);
+        self.end.trace(tracer);
+    }
+}
+
+#[derive(Clone)]
+pub struct Node<'gc, T: Trace + Debug> {
     prev:  GcNullMut<'gc, Node<'gc, T>>,
     next: GcNullMut<'gc, Node<'gc, T>>,
     val:   T,
 }
 
-impl<'gc, T: Trace> Node<'gc, T> {
+impl<'gc, T: Trace + Debug> Node<'gc, T> {
     pub fn new<M: Mutator<'gc>>(mu: &'gc M, val: T) -> Self 
     {
         Self {
@@ -159,13 +244,13 @@ impl<'gc, T: Trace> Node<'gc, T> {
         }
     }
 
-    pub fn set_prev<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
+    pub fn set_prev<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
         mu.write_barrier(this, |write_barrier| {
             field!(write_barrier, Node, prev).set(new)
         });
     }
 
-    pub fn set_next<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: Gc<'gc, Self>) {
+    pub fn set_next<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
         mu.write_barrier(this, |write_barrier| {
             field!(write_barrier, Node, next).set(new)
         });
@@ -239,6 +324,97 @@ fn list_survives_minor_collect() {
     arena.mutate(|_mu, root| {
         for (idx, val) in root.iter().enumerate() {
             assert_eq!(idx, *val);
+        }
+    });
+}
+
+#[test]
+fn list_survives_multiple_collects() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        LinkedList::new(mu)
+    });
+
+    arena.mutate(|mu, root| {
+        for i in 0..100 {
+            root.push_back(mu, i);
+        }
+
+        assert!(root.len() == 100);
+    });
+
+    for _ in 0..10 {
+        arena.minor_collect();
+        arena.major_collect();
+    }
+
+    arena.mutate(|_mu, root| {
+        for (idx, val) in root.iter().enumerate() {
+            assert_eq!(idx, *val);
+        }
+    });
+}
+
+#[test]
+fn linked_list_at() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        LinkedList::new(mu)
+    });
+
+    arena.mutate(|mu, root| {
+        for i in 0..100 {
+            root.push_back(mu, i);
+        }
+
+        for i in 0..100 {
+            assert!(*(root.at(i).unwrap()) == i);
+        }
+    });
+}
+
+#[test]
+fn list_swap_len_one() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        let list = LinkedList::new(mu);
+        list.push_back(mu, 1);
+        list
+    });
+
+    arena.mutate(|mu, root| {
+        root.swap(mu, 0, 69);
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        assert!(root.at(0) == Some(&69));
+    });
+}
+
+#[test]
+fn list_swap() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
+        let list = LinkedList::new(mu);
+        for i in 0..5 {
+            list.push_back(mu, i);
+        }
+        list
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|mu, root| {
+        root.swap(mu, 3, 69);
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        for i in 0..5 {
+            if i != 3 {
+                assert!(*(root.at(i).unwrap()) == i);
+            } else {
+                assert!(*(root.at(i).unwrap()) == 69);
+            }
         }
     });
 }

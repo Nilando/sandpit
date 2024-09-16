@@ -1,4 +1,4 @@
-use sandpit::{Arena, Gc, Mutator, Root};
+use sandpit::{Arena, Trace, Gc, GcNullMut, Mutator, Root, field};
 use std::mem::{align_of, size_of};
 use std::ptr::NonNull;
 
@@ -134,4 +134,84 @@ fn mutate_output() {
     let output = arena.mutate(|_mu, root| **root );
 
     assert!(output == 69)
+}
+
+#[test]
+fn trace_gc_null_mut() {
+    let arena: Arena<Root![GcNullMut<'_, usize>]> = Arena::new(|mu| GcNullMut::new_null(mu));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 0);
+
+    arena.mutate(|mu, root| {
+        let new = Gc::new(mu, 69);
+        unsafe { root.set(new.into()) };
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+}
+
+#[test]
+fn old_objects_count_stays_constant() {
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
+
+    for _ in 0..5 {
+        arena.major_collect();
+        assert_eq!(arena.metrics().old_objects_count, 1);
+    }
+}
+
+#[test]
+fn write_barrier() {
+    #[derive(Trace)]
+    struct Foo<'gc> {
+        a: GcNullMut<'gc, usize>,
+        b: GcNullMut<'gc, usize>,
+        c: GcNullMut<'gc, usize>,
+    }
+
+    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
+        let foo = Foo {
+            a: GcNullMut::new_null(mu),
+            b: GcNullMut::new_null(mu),
+            c: GcNullMut::new_null(mu),
+        };
+
+        Gc::new(mu, foo)
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+
+    arena.mutate(|mu, root| {
+        let new = Gc::new(mu, 420);
+
+        mu.write_barrier(*root, |write_barrier| {
+            field!(write_barrier, Foo, a).set(new.into());
+            field!(write_barrier, Foo, b).set(new.into());
+            field!(write_barrier, Foo, c).set(new.into());
+        });
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 2);
+}
+
+#[test]
+fn yield_is_not_requested() {
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 3));
+
+    arena.major_collect();
+
+    arena.mutate(|mu, _root| {
+        for _ in 0..1000 {
+            assert!(mu.yield_requested() == false);
+        }
+
+    });
 }
