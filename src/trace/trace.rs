@@ -17,9 +17,9 @@ pub unsafe trait TraceLeaf {
 pub unsafe trait Trace {
     const IS_LEAF: bool = true;
 
-    fn trace<T: Tracer>(&self, _tracer: &mut T) {}
+    fn trace(&self, _tracer: &mut Tracer) {}
 
-    fn dyn_trace<T: Tracer>(ptr: NonNull<()>, tracer: &mut T)
+    fn dyn_trace(ptr: NonNull<()>, tracer: &mut Tracer)
     where
         Self: Sized,
     {
@@ -33,7 +33,7 @@ pub unsafe trait Trace {
 unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
     const IS_LEAF: bool = false;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         let ptr: NonNull<T> = self.as_nonnull();
 
         tracer.trace(ptr)
@@ -43,7 +43,7 @@ unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
 unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
     const IS_LEAF: bool = false;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         let ptr: NonNull<T> = self.as_nonnull();
 
         tracer.trace(ptr)
@@ -53,7 +53,7 @@ unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
 unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
     const IS_LEAF: bool = false;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         if let Some(gc_mut) = self.as_option() {
             gc_mut.trace(tracer);
         }
@@ -116,11 +116,11 @@ unsafe impl<T: TraceLeaf> Trace for OnceCell<T> {}
 // ****************************************************************************
 // TRACE IMPLS
 // ****************************************************************************
-unsafe impl<const N: usize, L: TraceLeaf> TraceLeaf for [L; N] {}
-unsafe impl<const N: usize, L: Trace> Trace for [L; N] {
-    const IS_LEAF: bool = L::IS_LEAF;
+unsafe impl<const N: usize, T: TraceLeaf> TraceLeaf for [T; N] {}
+unsafe impl<const N: usize, T: Trace> Trace for [T; N] {
+    const IS_LEAF: bool = T::IS_LEAF;
 
-    fn trace<T: Tracer>(&self, tracer: &mut T) {
+    fn trace(&self, tracer: &mut Tracer) {
         for item in self.iter() {
             item.trace(tracer)
         }
@@ -131,7 +131,7 @@ unsafe impl<T: TraceLeaf> TraceLeaf for Option<T> {}
 unsafe impl<T: Trace> Trace for Option<T> {
     const IS_LEAF: bool = T::IS_LEAF;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         if let Some(value) = self.as_ref() {
             value.trace(tracer)
         }
@@ -142,7 +142,7 @@ unsafe impl<A: TraceLeaf, B: TraceLeaf> TraceLeaf for Result<A, B> {}
 unsafe impl<A: Trace, B: Trace> Trace for Result<A, B> {
     const IS_LEAF: bool = A::IS_LEAF && B::IS_LEAF;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         match self {
             Ok(res) => res.trace(tracer),
             Err(e) => e.trace(tracer),
@@ -154,7 +154,7 @@ unsafe impl<A: TraceLeaf, B: TraceLeaf> TraceLeaf for (A, B) {}
 unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
     const IS_LEAF: bool = A::IS_LEAF && B::IS_LEAF;
 
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
+    fn trace(&self, tracer: &mut Tracer) {
         self.0.trace(tracer);
         self.1.trace(tracer);
     }

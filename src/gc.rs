@@ -71,7 +71,7 @@ impl<'gc, T: Trace> Gc<'gc, T> {
         self.ptr.into()
     }
 
-    pub fn new<M: Mutator<'gc>>(m: &'gc M, obj: T) -> Self {
+    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj)
     }
 }
@@ -119,7 +119,7 @@ impl<'gc, T: Trace> GcMut<'gc, T> {
         }
     }
 
-    pub fn new<M: Mutator<'gc>>(m: &'gc M, obj: T) -> Self {
+    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj).into()
     }
 
@@ -172,11 +172,11 @@ impl<'gc, T: Trace> GcNullMut<'gc, T> {
         }
     }
 
-    pub fn new<M: Mutator<'gc>>(m: &'gc M, obj: T) -> Self {
+    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj).into()
     }
 
-    pub fn new_null<M: Mutator<'gc>>(_m: &'gc M) -> Self {
+    pub fn new_null(_m: &'gc Mutator<'gc>) -> Self {
         unsafe { Self::from_ptr(std::ptr::null_mut()) }
     }
 

@@ -115,7 +115,7 @@ pub fn trace(input: TokenStream) -> TokenStream {
         unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
             const IS_LEAF: bool = false;
 
-            fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
+            fn trace(&self, tracer: &mut sandpit::Tracer) {
                 #(#trace_body)*
             }
         }

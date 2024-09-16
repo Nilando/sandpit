@@ -2,11 +2,11 @@ use sandpit::{Gc, GcNullMut, GcMut, Arena, Mutator, Root, Trace, TraceLeaf, Writ
 use std::cell::{Cell, RefCell, RefMut, Ref};
 use std::ptr::NonNull;
 
-pub struct LinkedListIter<'gc, T: Trace + Debug> {
+pub struct LinkedListIter<'gc, T: Trace> {
     next: Option<&'gc Node<'gc, T>>
 }
 
-impl<'gc, T: Trace + Debug> Iterator for LinkedListIter<'gc, T> {
+impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
     type Item = &'gc T;
 
     fn next(&mut self) -> Option<&'gc T> { 
@@ -22,7 +22,7 @@ impl<'gc, T: Trace + Debug> Iterator for LinkedListIter<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + Debug> LinkedListIter<'gc, T> {
+impl<'gc, T: Trace> LinkedListIter<'gc, T> {
     pub fn new(list: &LinkedList<'gc, T>) -> Self {
         let next = list.start.as_option().map(|gc_mut| {
             gc_mut.scoped_deref()
@@ -34,15 +34,15 @@ impl<'gc, T: Trace + Debug> LinkedListIter<'gc, T> {
     }
 }
 
-#[derive(Clone)]
-pub struct LinkedList<'gc, T: Trace + Debug> {
+#[derive(Trace, Clone)]
+pub struct LinkedList<'gc, T: Trace> {
     start: GcNullMut<'gc, Node<'gc, T>>,
     end: GcNullMut<'gc, Node<'gc, T>>,
     len: Cell<usize>,
 }
 
-impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
-    pub fn new<M: Mutator<'gc>>(mu: &'gc M) -> Gc<'gc, Self> 
+impl<'gc, T: Trace> LinkedList<'gc, T> {
+    pub fn new(mu: &'gc Mutator<'gc>) -> Gc<'gc, Self> 
     {
         let new = Self {
             start: GcNullMut::new_null(mu),
@@ -64,7 +64,7 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         unsafe { Gc::from_nonnull(NonNull::new_unchecked(self as *const Self as *mut Self)) }
     }
 
-    pub fn push_back<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+    pub fn push_back(&self, mu: &'gc Mutator<'gc>, val: T) {
         let gc_node = Gc::new(mu, Node::new(mu, val));
 
         if self.len.get() == 0 {
@@ -80,7 +80,7 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         self.len.set(new_len);
     }
 
-    pub fn push_front<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+    pub fn push_front(&self, mu: &'gc Mutator<'gc>, val: T) {
         let gc_node = Gc::new(mu, Node::new(mu, val));
 
         if self.len.get() == 0 {
@@ -96,19 +96,19 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         self.len.set(new_len);
     }
 
-    pub fn pop_back<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+    pub fn pop_back(&self, mu: &'gc Mutator<'gc>, val: T) {
         todo!()
     }
 
-    pub fn pop_front<M: Mutator<'gc>>(&self, mu: &'gc M, val: T) {
+    pub fn pop_front(&self, mu: &'gc Mutator<'gc>, val: T) {
         todo!()
     }
 
-    pub fn delete<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize) -> &T {
+    pub fn delete(&self, mu: &'gc Mutator<'gc>, index: usize) -> &T {
         todo!()
     }
 
-    pub fn swap<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize, val: T) {
+    pub fn swap(&self, mu: &'gc Mutator<'gc>, index: usize, val: T) {
         if index >= self.len() {
             panic!("atempted to swap index {} on len {} list", index, self.len());
         }
@@ -148,7 +148,7 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         }
     }
 
-    pub fn insert<M: Mutator<'gc>>(&self, mu: &'gc M, index: usize, val: T) {
+    pub fn insert(&self, mu: &'gc Mutator<'gc>, index: usize, val: T) {
         todo!()
     }
 
@@ -181,14 +181,14 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         self.len.get()
     }
 
-    fn init_push<M: Mutator<'gc>>(&self, mu: &'gc M, gc_node: GcNullMut<'gc, Node<'gc, T>>) {
+    fn init_push(&self, mu: &'gc Mutator<'gc>, gc_node: GcNullMut<'gc, Node<'gc, T>>) {
         self.set_start(mu, gc_node.clone());
         self.set_end(mu, gc_node);
         self.len.set(1);
         return;
     }
 
-    fn set_start<M: Mutator<'gc>>(&self, mu: &'gc M, new: GcNullMut<'gc, Node<'gc, T>>) {
+    fn set_start(&self, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
         let gc_self = self.as_gc();
 
         mu.write_barrier(gc_self, |write_barrier| {
@@ -196,7 +196,7 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
         });
     }
 
-    fn set_end<M: Mutator<'gc>>(&self, mu: &'gc M, new: GcNullMut<'gc, Node<'gc, T>>) {
+    fn set_end(&self, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
         let gc_self = self.as_gc();
 
         mu.write_barrier(gc_self, |write_barrier| {
@@ -205,37 +205,15 @@ impl<'gc, T: Trace + Debug> LinkedList<'gc, T> {
     }
 }
 
-use sandpit::Tracer;
-use std::fmt::Debug;
-
-unsafe impl<'a, T: Trace + Debug> Trace for Node<'a, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
-        self.prev.trace(tracer);
-        self.next.trace(tracer);
-        self.val.trace(tracer);
-    }
-}
-
-unsafe impl<'a, T: Trace + Debug> Trace for LinkedList<'a, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace<R: Tracer>(&self, tracer: &mut R) {
-        self.start.trace(tracer);
-        self.end.trace(tracer);
-    }
-}
-
-#[derive(Clone)]
-pub struct Node<'gc, T: Trace + Debug> {
+#[derive(Trace, Clone)]
+pub struct Node<'gc, T: Trace> {
     prev:  GcNullMut<'gc, Node<'gc, T>>,
     next: GcNullMut<'gc, Node<'gc, T>>,
     val:   T,
 }
 
-impl<'gc, T: Trace + Debug> Node<'gc, T> {
-    pub fn new<M: Mutator<'gc>>(mu: &'gc M, val: T) -> Self 
+impl<'gc, T: Trace> Node<'gc, T> {
+    pub fn new(mu: &'gc Mutator<'gc>, val: T) -> Self 
     {
         Self {
             prev: GcNullMut::new_null(mu),
@@ -244,13 +222,13 @@ impl<'gc, T: Trace + Debug> Node<'gc, T> {
         }
     }
 
-    pub fn set_prev<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
+    pub fn set_prev(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
         mu.write_barrier(this, |write_barrier| {
             field!(write_barrier, Node, prev).set(new)
         });
     }
 
-    pub fn set_next<M: Mutator<'gc>>(mu: &'gc M, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
+    pub fn set_next(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
         mu.write_barrier(this, |write_barrier| {
             field!(write_barrier, Node, next).set(new)
         });

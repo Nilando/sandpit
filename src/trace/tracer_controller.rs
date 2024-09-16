@@ -1,7 +1,6 @@
-use super::marker::Marker;
 use super::trace::Trace;
+use super::tracer::Tracer;
 use super::trace_job::TraceJob;
-use super::tracer::TraceWorker;
 use crate::config::GcConfig;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
@@ -9,10 +8,11 @@ use std::sync::{
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
 };
 use std::time::Instant;
+use crate::allocator::{Allocator, Allocate, GenerationalArena};
 
-pub struct TracerController<M: Marker> {
-    sender: Sender<Vec<TraceJob<M>>>,
-    receiver: Receiver<Vec<TraceJob<M>>>,
+pub struct TracerController {
+    sender: Sender<Vec<TraceJob>>,
+    receiver: Receiver<Vec<TraceJob>>,
 
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
@@ -36,7 +36,7 @@ pub struct TracerController<M: Marker> {
     pub mutator_share_min: usize,
 }
 
-impl<M: Marker> TracerController<M> {
+impl TracerController {
     pub fn new(config: &GcConfig) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
 
@@ -90,12 +90,12 @@ impl<M: Marker> TracerController<M> {
         self.work_received.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn send_work(&self, work: Vec<TraceJob<M>>) {
+    pub fn send_work(&self, work: Vec<TraceJob>) {
         self.work_sent.fetch_add(1, Ordering::SeqCst);
         self.sender.send(work).unwrap();
     }
 
-    pub fn recv_work(&self) -> Option<Vec<TraceJob<M>>> {
+    pub fn recv_work(&self) -> Option<Vec<TraceJob>> {
         self.start_waiting();
 
         let duration = std::time::Duration::from_millis(self.trace_wait_time);
@@ -155,9 +155,9 @@ impl<M: Marker> TracerController<M> {
         self.trace_lock.try_write().is_err()
     }
 
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
-        self.clone().trace_root(root, marker.clone());
-        self.clone().spawn_tracers(marker.clone());
+    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
+        self.clone().trace_root(root, old_object_count.clone(), mark);
+        self.clone().spawn_tracers(old_object_count, mark);
     }
 
     fn clean_up(&self) {
@@ -168,30 +168,32 @@ impl<M: Marker> TracerController<M> {
         self.tracers_waiting.store(0, Ordering::SeqCst);
     }
 
-    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, marker: Arc<M>) {
-        let mut tracer = TraceWorker::new(self.clone(), marker.clone());
+    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
+        let mut tracer = Tracer::new(self.clone(), mark);
         root.trace(&mut tracer);
         tracer.flush_work();
+        old_object_count.fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
     }
 
-    fn spawn_tracers(self: Arc<Self>, marker: Arc<M>) {
+    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
         // create a channel to be used to wait until all tracers have started
         let (sender, receiver) = crossbeam_channel::unbounded::<()>();
 
         for i in 0..self.num_tracers {
             let controller = self.clone();
             let sender = sender.clone();
-            let marker = marker.clone();
             let thread_name: String = format!("GC_TRACER_{i}");
             let thread = std::thread::Builder::new().name(thread_name);
 
+            let object_count = old_object_count.clone();
             let _ = thread.spawn(move || {
                 let _lock = controller.trace_lock.read().unwrap();
-                let mut tracer = TraceWorker::new(controller.clone(), marker);
+                let mut tracer = Tracer::new(controller.clone(), mark);
 
                 sender.send(()).unwrap();
 
                 tracer.trace_loop();
+                object_count.clone().fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
             });
         }
 

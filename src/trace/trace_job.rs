@@ -1,17 +1,16 @@
-use super::marker::Marker;
 use super::trace::Trace;
-use super::tracer::TraceWorker;
+use super::tracer::Tracer;
 use std::ptr::NonNull;
 
-unsafe impl<M: Marker> Send for TraceJob<M> {}
-unsafe impl<M: Marker> Sync for TraceJob<M> {}
+unsafe impl Send for TraceJob {}
+unsafe impl Sync for TraceJob {}
 
-pub struct TraceJob<M: Marker> {
+pub struct TraceJob {
     ptr: NonNull<()>,
-    dyn_trace: fn(NonNull<()>, &mut TraceWorker<M>),
+    dyn_trace: fn(NonNull<()>, &mut Tracer),
 }
 
-impl<M: Marker> TraceJob<M> {
+impl TraceJob {
     pub fn new<T: Trace>(ptr: NonNull<T>) -> Self {
         Self {
             ptr: ptr.cast(),
@@ -19,7 +18,7 @@ impl<M: Marker> TraceJob<M> {
         }
     }
 
-    pub fn trace(&self, tracer: &mut TraceWorker<M>) {
+    pub fn trace(&self, tracer: &mut Tracer) {
         (self.dyn_trace)(self.ptr, tracer);
     }
 }

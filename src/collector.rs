@@ -1,7 +1,8 @@
 use super::allocator::{Allocate, GenerationalArena};
 use super::config::GcConfig;
-use super::mutator::MutatorScope;
-use super::trace::{Marker, Trace, TraceLeaf, TraceMarker, TracerController};
+use super::mutator::Mutator;
+use super::trace::{Trace, TracerController};
+use super::allocator::Allocator;
 use higher_kinded_types::ForLt;
 use std::time::{Duration, Instant};
 
@@ -32,17 +33,17 @@ pub trait Collect {
     fn get_state(&self) -> GcState;
 }
 
-pub struct Collector<A: Allocate, R: ForLt>
+pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    arena: A::Arena,
-    tracer: Arc<TracerController<TraceMarker<A>>>,
+    arena: <Allocator as Allocate>::Arena,
+    tracer: Arc<TracerController>,
     lock: Mutex<()>,
     root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
-    old_objects: AtomicUsize,
+    old_objects: Arc<AtomicUsize>,
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
@@ -54,7 +55,7 @@ where
     slice_min: f32,
 }
 
-impl<A: Allocate, R: ForLt> Collect for Collector<A, R>
+impl<R: ForLt> Collect for Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
@@ -66,7 +67,7 @@ where
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
-        self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
+        self.collect(self.arena.rotate_mark());
         self.major_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
@@ -81,7 +82,7 @@ where
     fn minor_collect(&self) {
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
-        self.collect(TraceMarker::new(self.arena.current_mark()).into());
+        self.collect(self.arena.current_mark());
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
@@ -128,23 +129,23 @@ where
     }
 }
 
-impl<A: Allocate, R: ForLt> Collector<A, R>
+impl<R: ForLt> Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     pub fn new<F>(f: F, config: &GcConfig) -> Self
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>) -> R::Of<'gc>,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
         unsafe {
-            let arena = A::Arena::new();
+            let arena = <Allocator as Allocate>::Arena::new();
             let tracer = Arc::new(TracerController::new(config));
-            let tracer_ref: &'static TracerController<_> =
-                &*(&*tracer as *const TracerController<_>);
+            let tracer_ref: &'static TracerController =
+                &*(&*tracer as *const TracerController);
             let lock = tracer_ref.yield_lock();
-            let mutator: &'static MutatorScope<'static, A> =
-                &*(&MutatorScope::new(&arena, tracer_ref, lock)
-                    as *const MutatorScope<'static, A>);
+            let mutator: &'static Mutator<'static> =
+                &*(&Mutator::new(&arena, tracer_ref, lock)
+                    as *const Mutator<'static>);
             let root: R::Of<'static> = f(mutator);
 
             Self {
@@ -156,7 +157,7 @@ where
                 minor_collections: AtomicUsize::new(0),
                 major_collect_avg_time: AtomicUsize::new(0),
                 minor_collect_avg_time: AtomicUsize::new(0),
-                old_objects: AtomicUsize::new(0),
+                old_objects: Arc::new(AtomicUsize::new(0)),
                 arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
                 max_headroom_ratio: config.collector_max_headroom_ratio,
                 timeslice_size: config.collector_timeslice_size,
@@ -167,7 +168,7 @@ where
 
     pub fn mutate<F, O>(&self, f: F) -> O
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>, &'gc R::Of<'gc>) -> O,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>) -> O,
     {
         unsafe {
             let mutator = self.new_mutator();
@@ -181,11 +182,11 @@ where
         std::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
     }
 
-    fn new_mutator(&self) -> MutatorScope<A> {
+    fn new_mutator(&self) -> Mutator {
         let _collection_lock = self.lock.lock().unwrap();
         let lock = self.tracer.yield_lock();
 
-        MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
+        Mutator::new(&self.arena, self.tracer.as_ref(), lock)
     }
 
     fn update_collection_time(
@@ -257,14 +258,12 @@ where
 
     // TODO: differentiate sync and concurrent collections
     // sync collections need not track headroom
-    fn collect(&self, marker: Arc<TraceMarker<A>>) {
-        self.tracer.clone().trace(&self.root, marker.clone());
+    fn collect(&self, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
+        self.tracer.clone().trace(&self.root, self.old_objects.clone(), mark);
         // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
         // to take 1.4ms
         self.run_space_time_manager();
         self.tracer.wait_for_trace_completion();
-        self.old_objects
-            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
         self.arena.refresh();
     }
 }

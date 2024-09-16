@@ -1,24 +1,38 @@
-use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use std::sync::Arc;
 use std::ptr::NonNull;
+use std::cell::Cell;
+use crate::allocator::{GenerationalArena, Allocator, Allocate};
 
-pub trait Tracer {
-    fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
-    //fn mark<T: Trace>(&mut self, ptr: NonNull<T>);
+pub struct Tracer {
+    controller: Arc<TracerController>,
+    mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark,
+    mark_count: Cell<usize>,
+    work: Vec<TraceJob>,
+
 }
 
-pub struct TraceWorker<M: Marker> {
-    controller: Arc<TracerController<M>>,
-    marker: Arc<M>,
-    work: Vec<TraceJob<M>>,
-}
+impl Tracer {
+    pub fn new(
+        controller: Arc<TracerController>, 
+        mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark
+    ) -> Self {
+        Self {
+            controller,
+            mark,
+            mark_count: Cell::new(0),
+            work: vec![],
+        }
+    }
 
-impl<M: Marker> Tracer for TraceWorker<M> {
-    fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !self.marker.set_mark(ptr) {
+    pub fn get_mark_count(&self) -> usize {
+        self.mark_count.get()
+    }
+
+    pub fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
+        if !self.set_mark(ptr) {
             return;
         }
 
@@ -27,16 +41,6 @@ impl<M: Marker> Tracer for TraceWorker<M> {
         }
 
         self.work.push(TraceJob::new(ptr));
-    }
-}
-
-impl<M: Marker> TraceWorker<M> {
-    pub fn new(controller: Arc<TracerController<M>>, marker: Arc<M>) -> Self {
-        Self {
-            controller,
-            marker,
-            work: vec![],
-        }
     }
 
     pub fn flush_work(&mut self) {
@@ -84,5 +88,23 @@ impl<M: Marker> TraceWorker<M> {
         }
 
         self.controller.send_work(share_work);
+    }
+
+    fn set_mark<T: Trace>(&self, ptr: NonNull<T>) -> bool {
+        let mark = <Allocator as Allocate>::get_mark(ptr);
+
+        if mark == self.mark {
+            return false;
+        }
+
+        self.increment_mark_count();
+
+        <Allocator as Allocate>::set_mark(ptr, self.mark);
+
+        true
+    }
+
+    fn increment_mark_count(&self) {
+        self.mark_count.set(self.mark_count.get() + 1);
     }
 }

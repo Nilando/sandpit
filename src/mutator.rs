@@ -1,6 +1,6 @@
-use super::allocator::{Allocate, GenerationalArena, Marker};
+use super::allocator::{Allocator, Allocate, GenerationalArena, Marker};
 use super::gc::{Gc};
-use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
+use super::trace::{Trace, TraceJob, TracerController};
 use super::barrier::WriteBarrier;
 
 use std::alloc::Layout;
@@ -9,53 +9,28 @@ use std::mem::{align_of, size_of};
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
-// make a GcLayout type that is not trace which we return 
-// from alloc layout
-
-/// An interface for the mutator type which allows for interaction with the
-/// Gc inside a `gc.mutate(...)` context.
-pub trait Mutator<'gc> {
-    // Signal that GC is ready to free memory and the current mutation
-    // callback should be exited.
-    fn yield_requested(&self) -> bool;
-
-    // Useful for implementing write barriers.
-    //fn retrace<T: Trace>(&self, obj: T);
-    fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>);
-
-    fn is_marked<T: Trace + 'gc>(&self, ptr: impl Into<Gc<'gc, T>>) -> bool;
-
-    fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T>;
-    // fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T>;
-    unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
-
-    fn write_barrier<F, T>(&self, gc: impl Into<Gc<'gc, T>>, f: F) 
-    where
-        F: FnOnce(&WriteBarrier<T>),
-        T: Trace + 'gc;
-}
-
-pub struct MutatorScope<'gc, A: Allocate> {
-    allocator: A,
-    tracer_controller: &'gc TracerController<TraceMarker<A>>,
-    rescan: RefCell<Vec<TraceJob<TraceMarker<A>>>>,
+pub struct Mutator<'gc> {
+    allocator: Allocator,
+    tracer_controller: &'gc TracerController,
+    rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
 }
 
 
-impl<'gc, A: Allocate> Drop for MutatorScope<'gc, A> {
+impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
         self.tracer_controller.send_work(work);
     }
 }
-impl<'gc, A: Allocate> MutatorScope<'gc, A> {
+
+impl<'gc> Mutator<'gc> {
     pub fn new(
-        arena: &A::Arena,
-        tracer_controller: &'gc TracerController<TraceMarker<A>>,
+        arena: &<Allocator as Allocate>::Arena,
+        tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
-        let allocator = A::new(arena);
+        let allocator = <Allocator as Allocate>::new(arena);
 
         Self {
             allocator,
@@ -64,10 +39,8 @@ impl<'gc, A: Allocate> MutatorScope<'gc, A> {
             _lock,
         }
     }
-}
 
-impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
-    fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
+    pub fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
         let layout = Layout::new::<T>();
 
         unsafe { 
@@ -97,7 +70,7 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
     }
 */
 
-    unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
+    pub unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
         // TODO: the allocc lock needs to be reworked
         // doesn't really take into account the need to also stop the mutators
         // from access the write barrier... maybe copy this logic into the write barrier
@@ -114,13 +87,13 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
 
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
-    fn yield_requested(&self) -> bool {
+    pub fn yield_requested(&self) -> bool {
         self.tracer_controller.yield_flag()
     }
 
-    fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
+    pub fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
         let gc = gc_into.try_into().ok().unwrap(); // TODO: handle 
-        let trace_job = TraceJob::<TraceMarker<A>>::new(gc.as_nonnull());
+        let trace_job = TraceJob::new(gc.as_nonnull());
 
         self.rescan.borrow_mut().push(trace_job);
 
@@ -130,13 +103,13 @@ impl<'gc, A: Allocate> Mutator<'gc> for MutatorScope<'gc, A> {
         }
     }
 
-    fn is_marked<T: Trace + 'gc>(&self, gc_into: impl Into<Gc<'gc, T>>) -> bool {
+    pub fn is_marked<T: Trace + 'gc>(&self, gc_into: impl Into<Gc<'gc, T>>) -> bool {
         let gc: Gc<'gc, T> = gc_into.into();
 
         self.allocator.is_old(gc.as_nonnull())
     }
 
-    fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F) 
+    pub fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F) 
     where
         F: FnOnce(&WriteBarrier<T>),
         T: Trace + 'gc,
