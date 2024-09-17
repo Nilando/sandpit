@@ -4,11 +4,13 @@ use super::trace_job::TraceJob;
 use crate::config::GcConfig;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, AtomicU8, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
 };
 use std::time::Instant;
-use crate::allocator::{Allocator, Allocate, GenerationalArena};
+use std::thread::JoinHandle;
+use crate::header::GcMark;
+use log::{debug, info};
 
 pub struct TracerController {
     sender: Sender<Vec<TraceJob>>,
@@ -26,6 +28,7 @@ pub struct TracerController {
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
     alloc_lock: Mutex<()>,
+    current_mark: AtomicU8, //todo: this should be a GcMark
 
     // config vars
     pub num_tracers: usize,
@@ -52,6 +55,7 @@ impl TracerController {
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
             alloc_lock: Mutex::new(()),
+            current_mark: AtomicU8::new(GcMark::Red as u8),
 
             num_tracers: config.tracer_threads,
             trace_share_min: config.trace_share_min,
@@ -140,6 +144,7 @@ impl TracerController {
     }
 
     pub fn wait_for_trace_completion(&self) {
+        info!("WAITING TRACERS: START");
         drop(self.trace_lock.write().unwrap());
 
         debug_assert_eq!(self.sent(), self.received());
@@ -149,15 +154,28 @@ impl TracerController {
         debug_assert!(self.mutators_stopped());
 
         self.clean_up();
+        info!("WAITING TRACERS: COMPLETE");
     }
 
     pub fn is_tracing(&self) -> bool {
         self.trace_lock.try_write().is_err()
     }
 
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
-        self.clone().trace_root(root, old_object_count.clone(), mark);
-        self.clone().spawn_tracers(old_object_count, mark);
+    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
+        self.clone().trace_root(root, old_object_count.clone());
+        self.clone().spawn_tracers(old_object_count)
+    }
+
+    pub fn rotate_mark(&self) -> GcMark {
+        let new_mark = self.get_current_mark().rotate();
+
+        self.current_mark.store(new_mark as u8, Ordering::SeqCst);
+
+        new_mark
+    }
+
+    pub fn get_current_mark(&self) -> GcMark {
+        self.current_mark.load(Ordering::SeqCst).into()
     }
 
     fn clean_up(&self) {
@@ -168,39 +186,53 @@ impl TracerController {
         self.tracers_waiting.store(0, Ordering::SeqCst);
     }
 
-    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
-        let mut tracer = Tracer::new(self.clone(), mark);
+    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>) {
+        let mut tracer = self.new_tracer(0);
         root.trace(&mut tracer);
         tracer.flush_work();
         old_object_count.fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
     }
 
-    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
+    fn new_tracer(self: Arc<Self>, id: usize) -> Tracer {
+        let mark = self.get_current_mark();
+
+        Tracer::new(self.clone(), mark, id)
+    }
+
+    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
+        info!("SPAWN TRACERS: START");
         // create a channel to be used to wait until all tracers have started
         let (sender, receiver) = crossbeam_channel::unbounded::<()>();
+        let mut join_handles = vec![];
 
         for i in 0..self.num_tracers {
-            let controller = self.clone();
             let sender = sender.clone();
             let thread_name: String = format!("GC_TRACER_{i}");
             let thread = std::thread::Builder::new().name(thread_name);
-
             let object_count = old_object_count.clone();
-            let _ = thread.spawn(move || {
+            let controller = self.clone();
+
+            let jh = thread.spawn(move || {
                 let _lock = controller.trace_lock.read().unwrap();
-                let mut tracer = Tracer::new(controller.clone(), mark);
+                let mut tracer = controller.clone().new_tracer(i);
 
                 sender.send(()).unwrap();
 
                 tracer.trace_loop();
                 object_count.clone().fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
             });
+
+            join_handles.push(jh.expect("Tracer Thread Spawned Successfully"));
         }
 
         // wait for tracers to start
         for _ in 0..self.num_tracers {
             receiver.recv().unwrap();
         }
+
+        info!("SPAWN TRACERS: COMPLETE");
+
+        join_handles
     }
 
     fn tracers_waiting(&self) -> usize {

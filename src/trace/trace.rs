@@ -3,6 +3,7 @@ use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
 use crate::gc::{Gc, GcMut, GcNullMut};
+use log::debug;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
 /// contain any GcPtr's.
@@ -34,6 +35,7 @@ unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
+        debug!("(TRACER {}) GC TRACE: {:?}", tracer.id(), self as *const Gc<'a, T>);
         let ptr: NonNull<T> = self.as_nonnull();
 
         tracer.trace(ptr)
@@ -44,6 +46,7 @@ unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
+        debug!("(TRACER {}) GC MUT TRACE: {:?}", tracer.id(), self as *const GcMut<'a, T>);
         let ptr: NonNull<T> = self.as_nonnull();
 
         tracer.trace(ptr)
@@ -54,6 +57,8 @@ unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
+        debug!("(TRACER {}) GC MUT TRACE: {:?}", tracer.id(), self as *const GcNullMut<'a, T>);
+
         if let Some(gc_mut) = self.as_option() {
             gc_mut.trace(tracer);
         }

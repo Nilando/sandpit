@@ -1,7 +1,8 @@
-use super::allocator::{Allocator, Allocate, GenerationalArena, Marker};
-use super::gc::{Gc};
+use super::allocator::GcAllocator;
+use super::gc::Gc;
 use super::trace::{Trace, TraceJob, TracerController};
 use super::barrier::WriteBarrier;
+use super::header::Header;
 
 use std::alloc::Layout;
 use std::cell::RefCell;
@@ -9,8 +10,13 @@ use std::mem::{align_of, size_of};
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
+enum GcError {
+    OOM,
+    ObjectSizeLimit,
+}
+
 pub struct Mutator<'gc> {
-    allocator: Allocator,
+    allocator: GcAllocator,
     tracer_controller: &'gc TracerController,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
@@ -26,12 +32,10 @@ impl<'gc> Drop for Mutator<'gc> {
 
 impl<'gc> Mutator<'gc> {
     pub fn new(
-        arena: &<Allocator as Allocate>::Arena,
+        allocator: GcAllocator,
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
-        let allocator = <Allocator as Allocate>::new(arena);
-
         Self {
             allocator,
             tracer_controller,
@@ -41,14 +45,23 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
-        let layout = Layout::new::<T>();
+        let header_layout = Layout::new::<Header>();
+        let object_layout = Layout::new::<T>();
+        let (alloc_layout, object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
 
-        unsafe { 
-            let gc_raw = self.alloc_layout(layout).cast();
 
-            write(gc_raw.as_ptr(), obj);
+        match self.allocator.alloc(alloc_layout) {
+            Ok(ptr) => {
+                unsafe {
+                    let obj_ptr = ptr.as_ptr().add(object_offset).cast();
 
-            Gc::from_nonnull(gc_raw)
+                    write(obj_ptr, obj);
+                    write(ptr.as_ptr().cast(), Header::new());
+
+                    Gc::from_nonnull(NonNull::new_unchecked(obj_ptr))
+                }
+            },
+            Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
         }
     }
 
@@ -70,7 +83,8 @@ impl<'gc> Mutator<'gc> {
     }
 */
 
-    pub unsafe fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
+    /*
+    pub unsafe fn alloc_layout(&self, object_layout: Layout) -> NonNull<u8> {
         // TODO: the allocc lock needs to be reworked
         // doesn't really take into account the need to also stop the mutators
         // from access the write barrier... maybe copy this logic into the write barrier
@@ -79,11 +93,31 @@ impl<'gc> Mutator<'gc> {
             drop(self.tracer_controller.get_alloc_lock());
         }
 
-        match self.allocator.alloc(layout) {
-            Ok(ptr) => ptr.cast(),
-            Err(()) => panic!("failed to allocate"), // TODO: should this return an error?
+        let header_layout = Layout::new::<Header>();
+
+        let (header_object_layout, object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
+
+
+        // TODO: check that the layout size isn't too large?
+
+
+        // this needs to create a layout by adding to it the layout
+        match self.allocator.alloc(header_object_layout) {
+            Ok(ptr) => {
+                unsafe {
+                    todo!()
+                    // Header::new(size)
+
+
+                    NonNull::new_unchecked(
+                        ptr.as_ptr().add(object_offset).cast()
+                    )
+                }
+            },
+            Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
         }
     }
+    */
 
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
@@ -105,8 +139,9 @@ impl<'gc> Mutator<'gc> {
 
     pub fn is_marked<T: Trace + 'gc>(&self, gc_into: impl Into<Gc<'gc, T>>) -> bool {
         let gc: Gc<'gc, T> = gc_into.into();
+        let header = unsafe { &*Header::get_ptr(gc.as_nonnull()) };
 
-        self.allocator.is_old(gc.as_nonnull())
+        header.get_mark() == self.tracer_controller.get_current_mark()
     }
 
     pub fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F) 

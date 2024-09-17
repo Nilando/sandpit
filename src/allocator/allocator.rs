@@ -1,86 +1,103 @@
 use super::alloc_head::AllocHead;
-use super::allocate::Allocate;
-use super::arena::Arena;
-use super::header::Header;
-use super::header::Mark;
-use super::size_class::SizeClass;
+use super::block_meta::BlockMeta;
+use super::block_store::BlockStore;
 use std::alloc::Layout;
-use std::mem::{align_of, size_of};
-use std::ptr::write;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use crate::header::GcMark;
+use super::size_class::SizeClass;
+use std::sync::atomic::{AtomicU8, Ordering};
 
-pub struct Allocator {
-    head: AllocHead,
-    current_mark: Arc<AtomicU8>,
+pub type AllocMark = AtomicU8;
+
+#[derive(Debug)]
+pub enum AllocError {
+    OOM,
+    AllocOverflow,
 }
 
-impl Allocate for Allocator {
-    type Arena = Arena;
-
-    fn new(arena: &Self::Arena) -> Self {
-        let current_mark = arena.get_current_mark_ref();
-
-        Self {
-            head: AllocHead::new(arena.get_block_store()),
-            current_mark,
-        }
-    }
-
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, ()> {
-        let align = std::cmp::max(align_of::<Header>(), layout.align());
-        let header_size = size_of::<Header>();
-        let padding = (align - (header_size % align)) % align;
-        let alloc_size = header_size + padding + layout.size();
-        let size_class = SizeClass::get_for_size(alloc_size)?;
-        // Alloc size could be greater than u16, causing overflow conversion from (as u16).
-        // This is okay though, b/c in that case the object will be SizeClass::Large
-        // where the header size is unused. Normally the header size is used,
-        // for marking block lines, but large objects are stored in bump blocks.
-        let header = Header::new(size_class, alloc_size as u16);
-
-        unsafe {
-            let alloc_layout = Layout::from_size_align(alloc_size, align).unwrap();
-            let space = self.head.alloc(alloc_layout)?;
-            let object_space = space.add(header_size + padding);
-
-            write(space as *mut Header, header);
-            Ok(NonNull::new(object_space as *mut u8).unwrap())
-        }
-    }
-
-    fn get_mark<T>(ptr: NonNull<T>) -> Mark {
-        let header_ptr = Self::get_header(ptr);
-
-        Header::get_mark(header_ptr)
-    }
-
-    fn set_mark<T>(ptr: NonNull<T>, mark: Mark) {
-        let header_ptr = Self::get_header(ptr);
-
-        Header::set_mark(header_ptr, mark)
-    }
-
-    fn is_old<T>(&self, ptr: NonNull<T>) -> bool {
-        Self::get_mark(ptr) == self.get_current_mark()
-    }
+#[derive(Clone)]
+pub struct Allocator {
+    head: AllocHead,
 }
 
 impl Allocator {
-    pub fn get_header<T>(object: NonNull<T>) -> *const Header {
-        let align = std::cmp::max(align_of::<Header>(), align_of::<T>());
-        let header_size = size_of::<Header>();
-        let padding = (align - (header_size % align)) % align;
-        let ptr: *mut u8 = object.as_ptr().cast::<u8>();
+    pub fn new() -> Self {
+        let block_store = BlockStore::new();
 
-        debug_assert!((ptr as usize % align) == 0);
-        debug_assert!((object.as_ptr() as usize % align_of::<T>()) == 0);
-
-        unsafe { ptr.sub(header_size + padding) as *const Header }
+        Self {
+            head: AllocHead::new(Arc::new(block_store)),
+        }
     }
 
-    fn get_current_mark(&self) -> Mark {
-        Mark::from(self.current_mark.load(Ordering::SeqCst))
+    pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        let ptr = self.head.alloc(layout)?;
+
+        unsafe {
+            Ok(NonNull::new_unchecked(ptr as *mut u8))
+        }
+    }
+
+    pub fn mark(ptr: *mut u8, layout: Layout, mark: u8) -> Result<(), AllocError> {
+        if SizeClass::get_for_size(layout.size())? != SizeClass::Large {
+            let meta = BlockMeta::from_ptr(ptr);
+
+            meta.mark(ptr, layout.size() as u32, mark);
+
+        } else {
+            let header_layout = Layout::new::<AllocMark>();
+            let (_header_obj_layout, obj_offset) = header_layout.extend(layout).expect("todo: turn this into an alloc error");
+            let block_ptr: &AtomicU8 = unsafe { &*ptr.sub(obj_offset).cast() };
+
+            block_ptr.store(mark, Ordering::SeqCst)
+        }
+
+        Ok(())
+    }
+
+    pub fn sweep(&self, live_mark: u8) {
+        self.head.sweep(live_mark as u8);
+    }
+
+    pub fn is_sweeping(&self) -> bool {
+        self.head.is_sweeping()
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.head.get_size()
+    }
+}
+
+#[derive(Clone)]
+pub struct GcAllocator {
+    allocator: Allocator,
+}
+
+impl GcAllocator {
+    pub fn new() -> Self {
+        Self {
+            allocator: Allocator::new()
+        }
+    }
+
+    pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        self.allocator.alloc(layout)
+    }
+
+    // needs the layout in the case of large objects
+    pub fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) -> Result<(), AllocError> {
+        Allocator::mark(ptr, layout, mark as u8)
+    }
+
+    pub fn sweep(&self, live_mark: GcMark) {
+        self.allocator.sweep(live_mark as u8)
+    }
+
+    pub fn is_sweeping(&self) -> bool {
+        self.allocator.is_sweeping()
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.allocator.get_size()
     }
 }

@@ -1,3 +1,4 @@
+pub const FREE_MARK: u8 = 0;
 pub const BLOCK_SIZE: usize = 1024 * 32;
 pub const LINE_SIZE: usize = 128;
 

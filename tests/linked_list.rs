@@ -262,6 +262,9 @@ fn empty_list_arena() {
 
 #[test]
 fn list_survives_major_collect() {
+    env_logger::init();
+
+    log::debug!("TESTING");
     let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
         LinkedList::new(mu)
     });

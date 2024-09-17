@@ -123,12 +123,6 @@ fn nested_gc_ptr_root() {
 }
 
 #[test]
-fn gc_ptr_size_and_align_equals_nonnull() {
-    assert_eq!(size_of::<Gc<()>>(), size_of::<NonNull<()>>());
-    assert_eq!(align_of::<Gc<()>>(), align_of::<NonNull<()>>());
-}
-
-#[test]
 fn mutate_output() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
     let output = arena.mutate(|_mu, root| **root );

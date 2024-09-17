@@ -1,13 +1,14 @@
-use super::allocator::{Allocate, GenerationalArena};
 use super::config::GcConfig;
+use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
-use super::allocator::Allocator;
+use super::allocator::GcAllocator;
+use log::{info, debug};
 use higher_kinded_types::ForLt;
 use std::time::{Duration, Instant};
 
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU8, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 
@@ -37,7 +38,7 @@ pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    arena: <Allocator as Allocate>::Arena,
+    arena: GcAllocator,
     tracer: Arc<TracerController>,
     lock: Mutex<()>,
     root: R::Of<'static>,
@@ -64,10 +65,12 @@ where
     }
 
     fn major_collect(&self) {
+        info!("MAJOR COLLECT: START");
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
-        self.collect(self.arena.rotate_mark());
+        self.rotate_mark(); // major collection rotates the mark!
+        self.collect();
         self.major_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
@@ -77,12 +80,14 @@ where
             elapsed_time,
             self.get_major_collections(),
         );
+        info!("MAJOR COLLECT: END");
     }
 
     fn minor_collect(&self) {
+        info!("MINOR COLLECT: START");
         let _lock = self.lock.lock().unwrap();
         let start_time = Instant::now();
-        self.collect(self.arena.current_mark());
+        self.collect();
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
 
         // update collection time
@@ -92,6 +97,7 @@ where
             elapsed_time,
             self.get_minor_collections(),
         );
+        info!("MINOR COLLECT: END");
     }
 
     fn get_major_collections(&self) -> usize {
@@ -138,13 +144,13 @@ where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
         unsafe {
-            let arena = <Allocator as Allocate>::Arena::new();
+            let arena = GcAllocator::new();
             let tracer = Arc::new(TracerController::new(config));
             let tracer_ref: &'static TracerController =
                 &*(&*tracer as *const TracerController);
             let lock = tracer_ref.yield_lock();
             let mutator: &'static Mutator<'static> =
-                &*(&Mutator::new(&arena, tracer_ref, lock)
+                &*(&Mutator::new(arena.clone(), tracer_ref, lock)
                     as *const Mutator<'static>);
             let root: R::Of<'static> = f(mutator);
 
@@ -186,7 +192,7 @@ where
         let _collection_lock = self.lock.lock().unwrap();
         let lock = self.tracer.yield_lock();
 
-        Mutator::new(&self.arena, self.tracer.as_ref(), lock)
+        Mutator::new(self.arena.clone(), self.tracer.as_ref(), lock)
     }
 
     fn update_collection_time(
@@ -215,6 +221,8 @@ where
         let collector_nanos = (self.timeslice_size * one_mili_in_nanos) as u64 - mutator_nanos;
         let mutator_duration = Duration::from_nanos(mutator_nanos);
         let collector_duration = Duration::from_nanos(collector_nanos);
+
+        debug!("TIMESLICE SPLIT :: MUT = {mutator_duration:?}, COL = {collector_duration:?}");
 
         debug_assert_eq!(
             collector_nanos + mutator_nanos,
@@ -256,14 +264,28 @@ where
         }
     }
 
+    fn rotate_mark(&self) -> GcMark {
+        self.tracer.rotate_mark()
+    }
+
+    fn get_current_mark(&self) -> GcMark {
+        self.tracer.get_current_mark()
+    }
+
     // TODO: differentiate sync and concurrent collections
     // sync collections need not track headroom
-    fn collect(&self, mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark) {
-        self.tracer.clone().trace(&self.root, self.old_objects.clone(), mark);
+    fn collect(&self) {
+        let join_handles = self.tracer.clone().trace(&self.root, self.old_objects.clone());
         // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
         // to take 1.4ms
         self.run_space_time_manager();
+        //println!("WAITING FOR TRACER JOIN HANDLES");
+        for jh in join_handles.into_iter() {
+            jh.join().expect("Tracer Returned OK");
+        }
         self.tracer.wait_for_trace_completion();
-        self.arena.refresh();
+        let current_mark = self.get_current_mark();
+
+        self.arena.sweep(current_mark);
     }
 }

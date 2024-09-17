@@ -1,5 +1,5 @@
 use crate::mutator::Mutator;
-
+use super::header::Header;
 use super::trace::Trace;
 
 use std::ops::Deref;
@@ -13,13 +13,18 @@ use std::ptr::NonNull;
 //           Gc<T> 
 //              |
 //              V
-// [ GC Header ][ T value ]
+// [ GC Header ][ T object ]
 //
 //
 // Gc<T>
 // GcMut<T> // can be mutated via fn set, and is atomic in order to sync with tracers
 // GcNullMut<T> // may be a null pointer
 // GcArray<T> 
+//
+struct HeaderObj<T: Trace> {
+    header: Header,
+    object: T
+}
 
 pub struct Gc<'gc, T: Trace> {
     ptr: &'gc T,

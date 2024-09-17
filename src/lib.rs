@@ -50,6 +50,7 @@ mod mutator;
 mod trace;
 mod barrier;
 mod trace_vec;
+mod header;
 
 pub use arena::Arena;
 pub use config::GcConfig;

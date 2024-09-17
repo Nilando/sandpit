@@ -4,11 +4,15 @@ use super::tracer_controller::TracerController;
 use std::sync::Arc;
 use std::ptr::NonNull;
 use std::cell::Cell;
-use crate::allocator::{GenerationalArena, Allocator, Allocate};
+use crate::allocator::GcAllocator;
+use std::alloc::Layout;
+use crate::header::{GcMark, Header};
+use log::debug;
 
 pub struct Tracer {
+    id: usize,
     controller: Arc<TracerController>,
-    mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark,
+    mark: GcMark,
     mark_count: Cell<usize>,
     work: Vec<TraceJob>,
 
@@ -17,14 +21,20 @@ pub struct Tracer {
 impl Tracer {
     pub fn new(
         controller: Arc<TracerController>, 
-        mark: <<Allocator as Allocate>::Arena as GenerationalArena>::Mark
+        mark: GcMark,
+        id: usize,
     ) -> Self {
         Self {
+            id,
             controller,
             mark,
             mark_count: Cell::new(0),
             work: vec![],
         }
+    }
+    
+    pub fn id(&self) -> usize {
+        self.id
     }
 
     pub fn get_mark_count(&self) -> usize {
@@ -40,6 +50,7 @@ impl Tracer {
             return;
         }
 
+        debug!("(TRACER: {}) NEW_JOB = {ptr:?}", self.id);
         self.work.push(TraceJob::new(ptr));
     }
 
@@ -91,15 +102,36 @@ impl Tracer {
     }
 
     fn set_mark<T: Trace>(&self, ptr: NonNull<T>) -> bool {
-        let mark = <Allocator as Allocate>::get_mark(ptr);
+        debug!("(TRACER: {}) SET_MARK = {ptr:?}", self.id);
+        // TODO if T: DYN_HEADER
+        // instead of getting a normal header
+        // get a dyn header
+        let header = unsafe { &*Header::get_ptr(ptr) };
+        let mark = header.get_mark();
 
         if mark == self.mark {
             return false;
         }
 
-        self.increment_mark_count();
 
-        <Allocator as Allocate>::set_mark(ptr, self.mark);
+        self.increment_mark_count();
+        let header_layout = Layout::new::<Header>();
+        let object_layout = Layout::new::<T>();
+        let (alloc_layout, _object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
+
+        header.set_mark(self.mark);
+
+        // For the allocator to correctly mark this object we need to give
+        // it the original layout used to alloc this object, this includes
+        // the header which the original layout extended from.
+        //
+        // If this is an array
+        // 
+        // get the layout of header
+        // extend by the layout of T
+        //
+        // let layout = GcAllocator::gc_layout::<T>();
+        GcAllocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark).expect("set mark failure");
 
         true
     }

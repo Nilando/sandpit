@@ -29,6 +29,8 @@ rust-version.workspace = true
 sandpit_derive = { path = "./derive", version = "0.2.5" }
 crossbeam-channel = "0.5.13"
 higher-kinded-types = "0.1.1"
+log = "0.4.22"
+env_logger = "0.11.5"
 
 [dev-dependencies]
 criterion = "0.5.1"
