@@ -1,16 +1,16 @@
 use super::trace::Trace;
-use super::tracer::Tracer;
 use super::trace_job::TraceJob;
+use super::tracer::Tracer;
 use crate::config::GcConfig;
+use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
+use log::info;
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
 };
-use std::time::Instant;
 use std::thread::JoinHandle;
-use crate::header::GcMark;
-use log::{debug, info};
+use std::time::Instant;
 
 pub struct TracerController {
     sender: Sender<Vec<TraceJob>>,
@@ -161,7 +161,11 @@ impl TracerController {
         self.trace_lock.try_write().is_err()
     }
 
-    pub fn trace<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
+    pub fn trace<T: Trace>(
+        self: Arc<Self>,
+        root: &T,
+        old_object_count: Arc<AtomicUsize>,
+    ) -> Vec<JoinHandle<()>> {
         self.clone().trace_root(root, old_object_count.clone());
         self.clone().spawn_tracers(old_object_count)
     }
@@ -219,7 +223,9 @@ impl TracerController {
                 sender.send(()).unwrap();
 
                 tracer.trace_loop();
-                object_count.clone().fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
+                object_count
+                    .clone()
+                    .fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
             });
 
             join_handles.push(jh.expect("Tracer Thread Spawned Successfully"));

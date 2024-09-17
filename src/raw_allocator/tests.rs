@@ -1,5 +1,5 @@
-use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use super::allocator::Allocator;
+use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE};
 use std::alloc::Layout;
 
 #[test]

@@ -49,11 +49,11 @@ pub const GC_CONFIG_DEFAULT_TRACE_WAIT_TIME: u64 = 1;
 impl GcConfig {
     pub fn default() -> Self {
         GcConfig {
-            tracer_threads:     GC_CONFIG_DEFAULT_TRACE_THREADS,
-            trace_chunk_size:   GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE,
-            trace_share_min:    GC_CONFIG_DEFAULT_TRACE_SHARE_MIN,
-            trace_share_ratio:  GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO,
-            trace_wait_time:    GC_CONFIG_DEFAULT_TRACE_WAIT_TIME,
+            tracer_threads: GC_CONFIG_DEFAULT_TRACE_THREADS,
+            trace_chunk_size: GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE,
+            trace_share_min: GC_CONFIG_DEFAULT_TRACE_SHARE_MIN,
+            trace_share_ratio: GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO,
+            trace_wait_time: GC_CONFIG_DEFAULT_TRACE_WAIT_TIME,
 
             monitor_max_old_growth_rate: 10.0,
             monitor_arena_size_ratio_trigger: 2.0,

@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-#[path = "../tests/node.rs"]
-mod node;
+#[path = "../tests/linked_list.rs"]
+mod linked_list;
 
-use node::Node;
+use linked_list::LinkedList;
 use sandpit::{Arena, Root};
 
 const TREE_LAYERS: usize = 20;

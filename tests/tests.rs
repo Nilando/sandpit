@@ -1,4 +1,4 @@
-use sandpit::{Arena, Trace, Gc, GcNullMut, Mutator, Root, field};
+use sandpit::{field, Arena, Gc, GcNullMut, Mutator, Root, Trace};
 use std::mem::{align_of, size_of};
 use std::ptr::NonNull;
 
@@ -24,7 +24,7 @@ fn arena_allocating_and_collecting() {
         arena.mutate(|mu, _| {
             for _ in 0..10_000 {
                 Gc::new(mu, 420);
-                   
+
                 let data: [u8; 1000] = [0; 1000];
 
                 Gc::new(mu, data);
@@ -39,7 +39,6 @@ fn arena_allocating_and_collecting() {
 
     arena.mutate(|_, root| assert!(**root == 69));
 }
-
 
 #[test]
 fn yield_requested_after_allocating() {
@@ -100,9 +99,9 @@ fn empty_gc_metrics() {
     assert_eq!(metrics.major_collections, 0);
     assert_eq!(metrics.minor_collections, 0);
     assert_eq!(metrics.old_objects_count, 0);
-    assert_eq!(metrics.max_old_objects,   0);
-    assert_eq!(metrics.arena_size,        0);
-    assert_eq!(metrics.prev_arena_size,  0);
+    assert_eq!(metrics.max_old_objects, 0);
+    assert_eq!(metrics.arena_size, 0);
+    assert_eq!(metrics.prev_arena_size, 0);
 }
 
 #[test]
@@ -125,7 +124,7 @@ fn nested_gc_ptr_root() {
 #[test]
 fn mutate_output() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
-    let output = arena.mutate(|_mu, root| **root );
+    let output = arena.mutate(|_mu, root| **root);
 
     assert!(output == 69)
 }
@@ -206,6 +205,5 @@ fn yield_is_not_requested() {
         for _ in 0..1000 {
             assert!(mu.yield_requested() == false);
         }
-
     });
 }

@@ -1,16 +1,15 @@
-use crate::mutator::Mutator;
-use super::header::Header;
 use super::trace::Trace;
+use crate::mutator::Mutator;
 
-use std::ops::Deref;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::ops::Deref;
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
-// Gc points to a valid T within a GC Arena which 
+// Gc points to a valid T within a GC Arena which
 // and is also immediately succeeded by its GC header.
 //
-//           Gc<T> 
+//           Gc<T>
 //              |
 //              V
 // [ GC Header ][ T object ]
@@ -19,13 +18,8 @@ use std::ptr::NonNull;
 // Gc<T>
 // GcMut<T> // can be mutated via fn set, and is atomic in order to sync with tracers
 // GcNullMut<T> // may be a null pointer
-// GcArray<T> 
+// GcArray<T>
 //
-struct HeaderObj<T: Trace> {
-    header: Header,
-    object: T
-}
-
 pub struct Gc<'gc, T: Trace> {
     ptr: &'gc T,
 }
@@ -34,17 +28,13 @@ impl<'gc, T: Trace> Copy for Gc<'gc, T> {}
 
 impl<'gc, T: Trace> Clone for Gc<'gc, T> {
     fn clone(&self) -> Self {
-        Self {
-            ptr: self.ptr,
-        }
+        Self { ptr: self.ptr }
     }
 }
 
 impl<'gc, T: Trace> From<GcMut<'gc, T>> for Gc<'gc, T> {
     fn from(value: GcMut<'gc, T>) -> Self {
-        unsafe {
-                Gc::from_nonnull(NonNull::new_unchecked(value.as_ptr()))
-        }
+        unsafe { Gc::from_nonnull(NonNull::new_unchecked(value.as_ptr())) }
     }
 }
 
@@ -67,9 +57,7 @@ impl<'gc, T: Trace> Gc<'gc, T> {
     // SAFETY: The NonNull must specifically be a NonNull obtained from
     // the mutator alloc function!
     pub unsafe fn from_nonnull(ptr: NonNull<T>) -> Self {
-        Self {
-            ptr: ptr.as_ref(),
-        }
+        Self { ptr: ptr.as_ref() }
     }
 
     pub fn as_nonnull(&self) -> NonNull<T> {
@@ -81,9 +69,8 @@ impl<'gc, T: Trace> Gc<'gc, T> {
     }
 }
 
-
 // GcMut may be updated to point somewhere else
-// needs to be atomic to 
+// needs to be atomic to
 pub struct GcMut<'gc, T: Trace> {
     ptr: AtomicPtr<T>,
     scope: PhantomData<&'gc *mut T>,

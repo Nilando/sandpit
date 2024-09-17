@@ -1,4 +1,4 @@
-use crate::{Gc, GcMut, GcNullMut, Trace};
+use crate::{GcMut, GcNullMut, Trace};
 
 #[repr(transparent)]
 pub struct WriteBarrier<'gc, T: Trace> {
@@ -7,9 +7,7 @@ pub struct WriteBarrier<'gc, T: Trace> {
 
 impl<'gc, T: Trace> WriteBarrier<'gc, T> {
     pub(crate) fn new(gc: &'gc T) -> Self {
-        WriteBarrier {
-            inner: &gc
-        }
+        WriteBarrier { inner: &gc }
     }
 
     pub fn inner(&self) -> &'gc T {
@@ -21,9 +19,7 @@ impl<'gc, T: Trace> WriteBarrier<'gc, T> {
     // SAFETY: this can only be safely called via the field! macro
     // which ensures that the inner value is within an existing write barrier
     pub unsafe fn __from_field(inner: &'gc T, _: *const T) -> Self {
-        Self {
-            inner
-        }
+        Self { inner }
     }
 }
 
@@ -61,13 +57,13 @@ impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, T>> {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! field {
-    ($value:expr, $type:path, $field:ident) => {
-        {
-            let _: &$crate::WriteBarrier<_> = $value;
+    ($value:expr, $type:path, $field:ident) => {{
+        let _: &$crate::WriteBarrier<_> = $value;
 
-            match $value.inner() {
-                $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_field($field, $field as *const _) },
-            }
+        match $value.inner() {
+            $type { ref $field, .. } => unsafe {
+                $crate::WriteBarrier::__from_field($field, $field as *const _)
+            },
         }
-    };
+    }};
 }

@@ -1,16 +1,16 @@
-use sandpit::{Gc, GcNullMut, GcMut, Arena, Mutator, Root, Trace, TraceLeaf, WriteBarrier, field};
-use std::cell::{Cell, RefCell, RefMut, Ref};
+use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Mutator, Root, Trace, TraceLeaf, WriteBarrier};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::ptr::NonNull;
 
 pub struct LinkedListIter<'gc, T: Trace> {
-    next: Option<&'gc Node<'gc, T>>
+    next: Option<&'gc Node<'gc, T>>,
 }
 
 impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
     type Item = &'gc T;
 
-    fn next(&mut self) -> Option<&'gc T> { 
-        self.next.map(|node|  {
+    fn next(&mut self) -> Option<&'gc T> {
+        self.next.map(|node| {
             self.next = node.get_next().map(|node_ptr| {
                 // we need to use scoped deref in order for T: 'gc
                 // regular deref loses that info
@@ -24,13 +24,9 @@ impl<'gc, T: Trace> Iterator for LinkedListIter<'gc, T> {
 
 impl<'gc, T: Trace> LinkedListIter<'gc, T> {
     pub fn new(list: &LinkedList<'gc, T>) -> Self {
-        let next = list.start.as_option().map(|gc_mut| {
-            gc_mut.scoped_deref()
-        });
+        let next = list.start.as_option().map(|gc_mut| gc_mut.scoped_deref());
 
-        Self {
-            next
-        }
+        Self { next }
     }
 }
 
@@ -42,8 +38,7 @@ pub struct LinkedList<'gc, T: Trace> {
 }
 
 impl<'gc, T: Trace> LinkedList<'gc, T> {
-    pub fn new(mu: &'gc Mutator<'gc>) -> Gc<'gc, Self> 
-    {
+    pub fn new(mu: &'gc Mutator<'gc>) -> Gc<'gc, Self> {
         let new = Self {
             start: GcNullMut::new_null(mu),
             end: GcNullMut::new_null(mu),
@@ -59,7 +54,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
 
     fn as_gc(&self) -> Gc<'gc, Self> {
         // SAFETY: b/c the only way to construct a LinkedList is by allocating it in a Gc Arena
-        // This unsafe could be avoided by changing the func signatures 
+        // This unsafe could be avoided by changing the func signatures
         // from `fn foo(&self)` into `fn foo(this: Gc<'gc, Self>)`
         unsafe { Gc::from_nonnull(NonNull::new_unchecked(self as *const Self as *mut Self)) }
     }
@@ -110,7 +105,11 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
 
     pub fn swap(&self, mu: &'gc Mutator<'gc>, index: usize, val: T) {
         if index >= self.len() {
-            panic!("atempted to swap index {} on len {} list", index, self.len());
+            panic!(
+                "atempted to swap index {} on len {} list",
+                index,
+                self.len()
+            );
         }
 
         let new_node = Gc::new(mu, Node::new(mu, val));
@@ -130,7 +129,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
             Node::set_next(mu, new_node, next.into());
 
             self.set_start(mu, new_node.into())
-        } else if index == (self.len() - 1){
+        } else if index == (self.len() - 1) {
             let prev = self.node_at(self.len() - 1).unwrap();
 
             Node::set_next(mu, prev, new_node.into());
@@ -168,9 +167,7 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         for _ in 0..index {
             match node.as_option() {
                 None => return None,
-                Some(gc_node) => {
-                    node = gc_node.next.clone()
-                }
+                Some(gc_node) => node = gc_node.next.clone(),
             }
         }
 
@@ -207,14 +204,13 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
 
 #[derive(Trace, Clone)]
 pub struct Node<'gc, T: Trace> {
-    prev:  GcNullMut<'gc, Node<'gc, T>>,
+    prev: GcNullMut<'gc, Node<'gc, T>>,
     next: GcNullMut<'gc, Node<'gc, T>>,
-    val:   T,
+    val: T,
 }
 
 impl<'gc, T: Trace> Node<'gc, T> {
-    pub fn new(mu: &'gc Mutator<'gc>, val: T) -> Self 
-    {
+    pub fn new(mu: &'gc Mutator<'gc>, val: T) -> Self {
         Self {
             prev: GcNullMut::new_null(mu),
             next: GcNullMut::new_null(mu),
@@ -241,7 +237,7 @@ impl<'gc, T: Trace> Node<'gc, T> {
     pub fn get_next(&self) -> Option<GcMut<'gc, Node<'gc, T>>> {
         self.next.as_option()
     }
-    
+
     pub fn get_prev(&self) -> Option<GcMut<'gc, Node<'gc, T>>> {
         self.prev.as_option()
     }
@@ -251,9 +247,7 @@ impl<'gc, T: Trace> Node<'gc, T> {
 
 #[test]
 fn empty_list_arena() {
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
-        LinkedList::new(mu)
-    });
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     arena.mutate(|_mu, root| {
         assert!(root.len() == 0);
@@ -265,9 +259,7 @@ fn list_survives_major_collect() {
     env_logger::init();
 
     log::debug!("TESTING");
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
-        LinkedList::new(mu)
-    });
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
@@ -288,9 +280,7 @@ fn list_survives_major_collect() {
 
 #[test]
 fn list_survives_minor_collect() {
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
-        LinkedList::new(mu)
-    });
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
@@ -311,9 +301,7 @@ fn list_survives_minor_collect() {
 
 #[test]
 fn list_survives_multiple_collects() {
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
-        LinkedList::new(mu)
-    });
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
@@ -337,9 +325,7 @@ fn list_survives_multiple_collects() {
 
 #[test]
 fn linked_list_at() {
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| {
-        LinkedList::new(mu)
-    });
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     arena.mutate(|mu, root| {
         for i in 0..100 {

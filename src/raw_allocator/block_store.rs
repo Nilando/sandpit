@@ -1,6 +1,6 @@
+use super::allocator::AllocMark;
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::allocator::AllocMark;
 use super::error::AllocError;
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -73,7 +73,9 @@ impl BlockStore {
     // large objects are stored with a single byte of meta info to store their mark
     pub fn create_large(&self, obj_layout: Layout) -> Result<*const u8, AllocError> {
         let header_layout = Layout::new::<AllocMark>();
-        let (header_obj_layout, obj_offset) = header_layout.extend(obj_layout).expect("todo: turn this into an alloc error");
+        let (header_obj_layout, obj_offset) = header_layout
+            .extend(obj_layout)
+            .expect("todo: turn this into an alloc error");
         let block = Block::new(header_obj_layout)?;
         let ptr = unsafe { block.as_ptr().sub(obj_offset) };
 

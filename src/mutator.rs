@@ -1,19 +1,13 @@
 use super::allocator::Allocator;
-use super::gc::Gc;
-use super::trace::{Trace, TraceJob, TracerController};
 use super::barrier::WriteBarrier;
+use super::gc::Gc;
 use super::header::Header;
+use super::trace::{Trace, TraceJob, TracerController};
 
 use std::alloc::Layout;
 use std::cell::RefCell;
-use std::mem::{align_of, size_of};
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
-
-enum GcError {
-    OOM,
-    ObjectSizeLimit,
-}
 
 pub struct Mutator<'gc> {
     allocator: Allocator,
@@ -21,7 +15,6 @@ pub struct Mutator<'gc> {
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
 }
-
 
 impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
@@ -47,41 +40,40 @@ impl<'gc> Mutator<'gc> {
     pub fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
         let header_layout = Layout::new::<Header>();
         let object_layout = Layout::new::<T>();
-        let (alloc_layout, object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
-
+        let (alloc_layout, object_offset) = header_layout
+            .extend(object_layout)
+            .expect("Bad Alloc Layout");
 
         match self.allocator.alloc(alloc_layout) {
-            Ok(ptr) => {
-                unsafe {
-                    let obj_ptr = ptr.as_ptr().add(object_offset).cast();
+            Ok(ptr) => unsafe {
+                let obj_ptr = ptr.as_ptr().add(object_offset).cast();
 
-                    write(obj_ptr, obj);
-                    write(ptr.as_ptr().cast(), Header::new());
+                write(obj_ptr, obj);
+                write(ptr.as_ptr().cast(), Header::new());
 
-                    Gc::from_nonnull(NonNull::new_unchecked(obj_ptr))
-                }
+                Gc::from_nonnull(NonNull::new_unchecked(obj_ptr))
             },
             Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
         }
     }
 
     /*
-    fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T> {
-        let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
+        fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T> {
+            let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
 
-        unsafe {
-            let gc_raw = self.alloc_layout(layout);
-        }
-        todo!()
-            /*
-        let byte_ptr = ptr.as_ptr();
+            unsafe {
+                let gc_raw = self.alloc_layout(layout);
+            }
+            todo!()
+                /*
+            let byte_ptr = ptr.as_ptr();
 
-        for i in 0..layout.size() {
-                *byte_ptr.add(i) = 0;
+            for i in 0..layout.size() {
+                    *byte_ptr.add(i) = 0;
+            }
+            */
         }
-        */
-    }
-*/
+    */
 
     /*
     pub unsafe fn alloc_layout(&self, object_layout: Layout) -> NonNull<u8> {
@@ -126,7 +118,7 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
-        let gc = gc_into.try_into().ok().unwrap(); // TODO: handle 
+        let gc = gc_into.try_into().ok().unwrap(); // TODO: handle
         let trace_job = TraceJob::new(gc.as_nonnull());
 
         self.rescan.borrow_mut().push(trace_job);
@@ -144,7 +136,7 @@ impl<'gc> Mutator<'gc> {
         header.get_mark() == self.tracer_controller.get_current_mark()
     }
 
-    pub fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F) 
+    pub fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F)
     where
         F: FnOnce(&WriteBarrier<T>),
         T: Trace + 'gc,

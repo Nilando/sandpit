@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::ptr::NonNull;
 use std::alloc::Layout;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -35,18 +35,13 @@ impl GcMark {
 impl From<u8> for GcMark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == GcMark::New as u8   => GcMark::New,
-            x if x == GcMark::Red as u8   => GcMark::Red,
+            x if x == GcMark::New as u8 => GcMark::New,
+            x if x == GcMark::Red as u8 => GcMark::Red,
             x if x == GcMark::Green as u8 => GcMark::Green,
-            x if x == GcMark::Blue as u8  => GcMark::Blue,
+            x if x == GcMark::Blue as u8 => GcMark::Blue,
             _ => panic!("Bad GC GcMark"),
         }
     }
-}
-
-pub struct DynHeader {
-    mark: AtomicU8,
-    layout: Layout,
 }
 
 pub struct Header {
@@ -57,7 +52,9 @@ impl Header {
     pub fn get_ptr<T>(ptr: NonNull<T>) -> *const Self {
         let header_layout = Layout::new::<Header>();
         let object_layout = Layout::new::<T>();
-        let (_, object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
+        let (_, object_offset) = header_layout
+            .extend(object_layout)
+            .expect("Bad Alloc Layout");
 
         unsafe {
             let raw_ptr: *mut u8 = ptr.as_ptr().cast();

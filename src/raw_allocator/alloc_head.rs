@@ -1,11 +1,11 @@
 use super::block_store::BlockStore;
 use super::bump_block::BumpBlock;
-use super::size_class::SizeClass;
+use super::constants::BLOCK_SIZE;
 use super::error::AllocError;
+use super::size_class::SizeClass;
 use std::alloc::Layout;
 use std::cell::Cell;
 use std::sync::Arc;
-use super::constants::BLOCK_SIZE;
 
 pub struct AllocHead {
     head: Cell<Option<BumpBlock>>,
@@ -18,7 +18,7 @@ impl Clone for AllocHead {
         Self {
             head: Cell::new(None),
             overflow: Cell::new(None),
-            block_store: self.block_store.clone()
+            block_store: self.block_store.clone(),
         }
     }
 }
@@ -231,8 +231,6 @@ mod tests {
         }
 
         while let Some(ptr) = small_ptrs.pop() {
-            
-
             assert!(!med_ptrs.contains(&ptr));
             assert!(!small_ptrs.contains(&ptr));
         }

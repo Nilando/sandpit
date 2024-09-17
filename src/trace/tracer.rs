@@ -1,13 +1,13 @@
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
-use std::sync::Arc;
-use std::ptr::NonNull;
-use std::cell::Cell;
 use crate::allocator::Allocator;
-use std::alloc::Layout;
 use crate::header::{GcMark, Header};
 use log::debug;
+use std::alloc::Layout;
+use std::cell::Cell;
+use std::ptr::NonNull;
+use std::sync::Arc;
 
 pub struct Tracer {
     id: usize,
@@ -18,11 +18,7 @@ pub struct Tracer {
 }
 
 impl Tracer {
-    pub fn new(
-        controller: Arc<TracerController>, 
-        mark: GcMark,
-        id: usize,
-    ) -> Self {
+    pub fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
         Self {
             id,
             controller,
@@ -31,7 +27,7 @@ impl Tracer {
             work: vec![],
         }
     }
-    
+
     pub fn id(&self) -> usize {
         self.id
     }
@@ -112,11 +108,12 @@ impl Tracer {
             return false;
         }
 
-
         self.increment_mark_count();
         let header_layout = Layout::new::<Header>();
         let object_layout = Layout::new::<T>();
-        let (alloc_layout, _object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
+        let (alloc_layout, _object_offset) = header_layout
+            .extend(object_layout)
+            .expect("Bad Alloc Layout");
 
         header.set_mark(self.mark);
 
@@ -125,12 +122,13 @@ impl Tracer {
         // the header which the original layout extended from.
         //
         // If this is an array
-        // 
+        //
         // get the layout of header
         // extend by the layout of T
         //
         // let layout = Allocator::gc_layout::<T>();
-        Allocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark).expect("set mark failure");
+        Allocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark)
+            .expect("set mark failure");
 
         true
     }

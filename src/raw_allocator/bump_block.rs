@@ -1,7 +1,7 @@
 use super::block::Block;
 use super::block_meta::BlockMeta;
-use super::error::AllocError;
 use super::constants::{BLOCK_CAPACITY, SMALL_OBJECT_MIN};
+use super::error::AllocError;
 use std::alloc::Layout;
 
 pub struct BumpBlock {

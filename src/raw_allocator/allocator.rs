@@ -2,11 +2,11 @@ use super::alloc_head::AllocHead;
 use super::block_meta::BlockMeta;
 use super::block_store::BlockStore;
 use super::error::AllocError;
+use super::size_class::SizeClass;
 use std::alloc::Layout;
 use std::ptr::NonNull;
-use std::sync::Arc;
-use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
 
 pub type AllocMark = AtomicU8;
 
@@ -27,9 +27,7 @@ impl Allocator {
     pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         let ptr = self.head.alloc(layout)?;
 
-        unsafe {
-            Ok(NonNull::new_unchecked(ptr as *mut u8))
-        }
+        unsafe { Ok(NonNull::new_unchecked(ptr as *mut u8)) }
     }
 
     pub fn mark(ptr: *mut u8, layout: Layout, mark: u8) -> Result<(), AllocError> {
@@ -37,10 +35,11 @@ impl Allocator {
             let meta = BlockMeta::from_ptr(ptr);
 
             meta.mark(ptr, layout.size() as u32, mark);
-
         } else {
             let header_layout = Layout::new::<AllocMark>();
-            let (_alloc_layout, obj_offset) = header_layout.extend(layout).expect("todo: turn this into an alloc error");
+            let (_alloc_layout, obj_offset) = header_layout
+                .extend(layout)
+                .expect("todo: turn this into an alloc error");
             let block_ptr: &AtomicU8 = unsafe { &*ptr.sub(obj_offset).cast() };
 
             block_ptr.store(mark, Ordering::SeqCst)

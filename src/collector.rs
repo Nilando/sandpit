@@ -1,14 +1,14 @@
+use super::allocator::Allocator;
 use super::config::GcConfig;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
-use super::allocator::Allocator;
-use log::{info, debug};
 use higher_kinded_types::ForLt;
+use log::{debug, info};
 use std::time::{Duration, Instant};
 
 use std::sync::{
-    atomic::{AtomicU8, AtomicUsize, Ordering},
+    atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
 
@@ -146,12 +146,10 @@ where
         unsafe {
             let arena = Allocator::new();
             let tracer = Arc::new(TracerController::new(config));
-            let tracer_ref: &'static TracerController =
-                &*(&*tracer as *const TracerController);
+            let tracer_ref: &'static TracerController = &*(&*tracer as *const TracerController);
             let lock = tracer_ref.yield_lock();
             let mutator: &'static Mutator<'static> =
-                &*(&Mutator::new(arena.clone(), tracer_ref, lock)
-                    as *const Mutator<'static>);
+                &*(&Mutator::new(arena.clone(), tracer_ref, lock) as *const Mutator<'static>);
             let root: R::Of<'static> = f(mutator);
 
             Self {
@@ -275,7 +273,10 @@ where
     // TODO: differentiate sync and concurrent collections
     // sync collections need not track headroom
     fn collect(&self) {
-        let join_handles = self.tracer.clone().trace(&self.root, self.old_objects.clone());
+        let join_handles = self
+            .tracer
+            .clone()
+            .trace(&self.root, self.old_objects.clone());
         // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
         // to take 1.4ms
         self.run_space_time_manager();

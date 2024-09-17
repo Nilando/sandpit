@@ -1,5 +1,5 @@
+use sandpit::{Gc, GcMut, Mutator, Trace, Tracer};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use sandpit::{Trace, Tracer, Mutator, Gc, GcMut};
 
 const DEFAULT_CAP: usize = 8;
 const VEC_GROW_RATIO: f64 = 0.5;
@@ -35,12 +35,12 @@ impl<'gc, T: Trace> TraceVec<'gc, T> {
         //
         //  if we alloc a new data and the old tracevecdata is marked
         //    we mark the new tracevecdata and send val to be traced
-        
+
         let len = self.len();
         let cap = self.cap();
 
         if len == cap {
-            let new_cap = 
+            let new_cap =
                 if cap == 0 {
                     DEFAULT_CAP
                 } else {

@@ -1,4 +1,6 @@
-use super::constants::{BLOCK_CAPACITY, BLOCK_SIZE, LINE_SIZE, LINE_COUNT, LINE_MARK_START, FREE_MARK};
+use super::constants::{
+    BLOCK_SIZE, FREE_MARK, LINE_COUNT, LINE_MARK_START, LINE_SIZE,
+};
 use super::size_class::SizeClass;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -17,10 +19,7 @@ impl BlockMeta {
         debug_assert!((block_ptr as usize % BLOCK_SIZE) == 0);
 
         Self {
-            lines: unsafe {
-                block_ptr.add(LINE_MARK_START)
-                    as *const [AtomicU8; LINE_COUNT]
-            },
+            lines: unsafe { block_ptr.add(LINE_MARK_START) as *const [AtomicU8; LINE_COUNT] },
         }
     }
 
@@ -35,7 +34,8 @@ impl BlockMeta {
         let addr = ptr as usize;
         let relative_ptr = addr % BLOCK_SIZE;
         let line = relative_ptr / LINE_SIZE;
-        let size_class = SizeClass::get_for_size(size as usize).expect("Object size limit exceeded");
+        let size_class =
+            SizeClass::get_for_size(size as usize).expect("Object size limit exceeded");
 
         debug_assert!(size_class != SizeClass::Large);
 

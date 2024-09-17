@@ -39,21 +39,22 @@
 //! ```
 extern crate self as sandpit;
 
-mod raw_allocator;
 mod allocator;
 mod arena;
+mod barrier;
 mod collector;
 mod config;
 mod gc;
+mod header;
 mod metrics;
 mod monitor;
 mod mutator;
+mod raw_allocator;
 mod trace;
-mod barrier;
-mod trace_vec;
-mod header;
+//mod trace_vec;
 
 pub use arena::Arena;
+pub use barrier::WriteBarrier;
 pub use config::GcConfig;
 pub use gc::{Gc, GcMut, GcNullMut};
 pub use higher_kinded_types::ForLt as Root;
@@ -61,7 +62,6 @@ pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{Trace, TraceLeaf};
-pub use barrier::WriteBarrier;
 
 #[doc(hidden)]
 pub use trace::Tracer;

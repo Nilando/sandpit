@@ -5,8 +5,8 @@ mod block_meta;
 mod block_store;
 mod bump_block;
 mod constants;
-mod size_class;
 mod error;
+mod size_class;
 
 #[cfg(test)]
 mod tests;

@@ -2,8 +2,8 @@ use super::collector::{Collect, Collector};
 use super::config::GcConfig;
 use super::metrics::GcMetrics;
 use super::monitor::Monitor;
-use super::trace::Trace;
 use super::mutator::Mutator;
+use super::trace::Trace;
 
 use higher_kinded_types::ForLt;
 use std::sync::Arc;

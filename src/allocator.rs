@@ -1,8 +1,7 @@
-use crate::raw_allocator::{Allocator as RawAllocator, AllocError as RawAllocError};
-use std::ptr::NonNull;
-use std::alloc::Layout;
 use super::header::GcMark;
-
+use crate::raw_allocator::{AllocError as RawAllocError, Allocator as RawAllocator};
+use std::alloc::Layout;
+use std::ptr::NonNull;
 
 #[derive(Debug)]
 pub enum AllocError {
@@ -27,7 +26,7 @@ pub struct Allocator {
 impl Allocator {
     pub fn new() -> Self {
         Self {
-            allocator: RawAllocator::new()
+            allocator: RawAllocator::new(),
         }
     }
 
