@@ -207,3 +207,18 @@ fn yield_is_not_requested() {
         }
     });
 }
+
+#[test]
+fn resets_old_object_count() {
+    let arena: Arena<Root![GcNullMut<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcNullMut::new(mu, Gc::new(mu, 3)));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 2);
+
+    arena.mutate(|_mu, root| root.set_null() );
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 0);
+}

@@ -34,7 +34,7 @@ pub struct GcConfig {
     pub collector_slice_min: f32,
 }
 
-pub const GC_CONFIG_DEFAULT_TRACE_THREADS: usize = 4;
+pub const GC_CONFIG_DEFAULT_TRACE_THREADS: usize = 2;
 pub const GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE: usize = 500;
 pub const GC_CONFIG_DEFAULT_TRACE_SHARE_MIN: usize = 1_000;
 pub const GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO: f32 = 0.5;

@@ -386,45 +386,29 @@ fn list_swap() {
     });
 }
 
+// this test uses a lot of memory
+#[test]
+#[ignore]
+fn push_until_yield() {
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+    arena.major_collect();
+
+    let mut i = 0;
+
+    arena.mutate(|mu, root| {
+        while !mu.gc_yield() {
+            root.push_back(mu, i);
+            i += 1;
+        }
+    });
+
+    arena.mutate(|_mu, root| {
+        for k in 0..i {
+            assert!(*(root.at(k).unwrap()) == k);
+        }
+    });
+}
 /*
-
-#[test]
-fn multiple_collects() {
-    let gc: GcArena<Gc<Node>> = GcArena::build((), |mu, _| {
-        let root = Node::alloc(mu, 0).unwrap();
-        for _ in 0..1_000 {
-            Node::insert(&root, mu, 123);
-        }
-        Node::insert(&root, mu, 69);
-        root
-    });
-
-    for i in 0..10 {
-        if i % 2 == 0 {
-            gc.minor_collect();
-        } else {
-            gc.major_collect();
-        }
-    }
-
-    gc.mutate((), |root, _, _| {
-        assert!(Node::find(root, 69).is_some());
-    });
-}
-
-#[test]
-fn monitor_requests_yield() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    gc.mutate((), |root, mu, _| loop {
-        Node::insert(root, mu, 0);
-
-        if mu.yield_requested() {
-            Node::kill_children(root);
-            break;
-        }
-    });
-}
 
 #[test]
 fn objects_marked_metric() {
