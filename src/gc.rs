@@ -7,19 +7,25 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 // Gc points to a valid T within a GC Arena which
-// and is also immediately succeeded by its GC header.
+// and is also succeeded by its GC header (which may or may not be padded).
 //
-//           Gc<T>
-//              |
-//              V
-// [ GC Header ][ T object ]
+//                                Gc<T>
+//                                 |
+//                                 V
+// [ GC Header ][ ... padding ... ][ T object ]
 //
+//
+// The padding len is determined by a call to `std::alloc::Layout::extend`
+// By extending the layout of GC Header with the layout of T.
 //
 // Gc<T>
 // GcMut<T> // can be mutated via fn set, and is atomic in order to sync with tracers
 // GcNullMut<T> // may be a null pointer
 // GcArray<T>
 //
+// A GcArray is headed by A DynHeader which includes the layout of the GcArray
+// in the header
+
 pub struct Gc<'gc, T: Trace> {
     ptr: &'gc T,
 }

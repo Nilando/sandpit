@@ -51,6 +51,7 @@ mod monitor;
 mod mutator;
 mod raw_allocator;
 mod trace;
+mod time_slicer;
 //mod trace_vec;
 
 pub use arena::Arena;

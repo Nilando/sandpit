@@ -37,6 +37,7 @@ impl Tracer {
     }
 
     pub fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
+        debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), ptr.as_ptr());
         if !self.set_mark(ptr) {
             return;
         }
@@ -45,7 +46,6 @@ impl Tracer {
             return;
         }
 
-        debug!("(TRACER: {}) NEW_JOB = {ptr:?}", self.id);
         self.work.push(TraceJob::new(ptr));
     }
 
@@ -93,11 +93,12 @@ impl Tracer {
             share_work.push(job);
         }
 
+        debug!("(TRACER: {}) SHARING WORK = {}", self.id, share_work.len());
+
         self.controller.send_work(share_work);
     }
 
     fn set_mark<T: Trace>(&self, ptr: NonNull<T>) -> bool {
-        debug!("(TRACER: {}) SET_MARK = {ptr:?}", self.id);
         // TODO if T: DYN_HEADER
         // instead of getting a normal header
         // get a dyn header
@@ -117,16 +118,6 @@ impl Tracer {
 
         header.set_mark(self.mark);
 
-        // For the allocator to correctly mark this object we need to give
-        // it the original layout used to alloc this object, this includes
-        // the header which the original layout extended from.
-        //
-        // If this is an array
-        //
-        // get the layout of header
-        // extend by the layout of T
-        //
-        // let layout = Allocator::gc_layout::<T>();
         Allocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark)
             .expect("set mark failure");
 

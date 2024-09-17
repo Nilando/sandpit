@@ -45,6 +45,11 @@ impl<'gc> Mutator<'gc> {
             .expect("Bad Alloc Layout");
 
         match self.allocator.alloc(alloc_layout) {
+            // SAFETY: the alloc layout was extended to have capacity
+            // for the header and object to be written into. 
+            //
+            // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
+            // the Gc variant that a Gc points to something
             Ok(ptr) => unsafe {
                 let obj_ptr = ptr.as_ptr().add(object_offset).cast();
 

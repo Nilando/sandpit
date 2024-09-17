@@ -1,11 +1,12 @@
 use super::allocator::Allocator;
+use super::time_slicer::TimeSlicer;
 use super::config::GcConfig;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
 use higher_kinded_types::ForLt;
-use log::{debug, info};
-use std::time::{Duration, Instant};
+use log::info;
+use std::time::Instant;
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -49,11 +50,7 @@ where
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
 
-    //config vars
-    arena_size_ratio_trigger: f32,
-    max_headroom_ratio: f32,
-    timeslice_size: f32,
-    slice_min: f32,
+    time_slicer: TimeSlicer
 }
 
 impl<R: ForLt> Collect for Collector<R>
@@ -151,6 +148,14 @@ where
             let mutator: &'static Mutator<'static> =
                 &*(&Mutator::new(arena.clone(), tracer_ref, lock) as *const Mutator<'static>);
             let root: R::Of<'static> = f(mutator);
+            let time_slicer = TimeSlicer::new(
+                tracer.clone(),
+                arena.clone(),
+                config.monitor_arena_size_ratio_trigger,
+                config.collector_max_headroom_ratio,
+                config.collector_timeslice_size,
+                config.collector_slice_min,
+            );
 
             Self {
                 arena,
@@ -162,10 +167,7 @@ where
                 major_collect_avg_time: AtomicUsize::new(0),
                 minor_collect_avg_time: AtomicUsize::new(0),
                 old_objects: Arc::new(AtomicUsize::new(0)),
-                arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
-                max_headroom_ratio: config.collector_max_headroom_ratio,
-                timeslice_size: config.collector_timeslice_size,
-                slice_min: config.collector_slice_min,
+                time_slicer
             }
         }
     }
@@ -209,59 +211,6 @@ where
         }
     }
 
-    fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
-        // Algorithm inspired from webkit riptide collector:
-        let one_mili_in_nanos = 1_000_000.0;
-        let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
-        let headroom_ratio = available_headroom as f32 / max_headroom as f32;
-        let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
-        let mutator_nanos = (one_mili_in_nanos * m) as u64;
-        let collector_nanos = (self.timeslice_size * one_mili_in_nanos) as u64 - mutator_nanos;
-        let mutator_duration = Duration::from_nanos(mutator_nanos);
-        let collector_duration = Duration::from_nanos(collector_nanos);
-
-        debug!("TIMESLICE SPLIT :: MUT = {mutator_duration:?}, COL = {collector_duration:?}");
-
-        debug_assert_eq!(
-            collector_nanos + mutator_nanos,
-            (one_mili_in_nanos * self.timeslice_size) as u64
-        );
-
-        (mutator_duration, collector_duration)
-    }
-
-    fn run_space_time_manager(&self) {
-        let prev_size = self.arena.get_size();
-        let max_headroom =
-            ((prev_size as f32 / self.arena_size_ratio_trigger) * self.max_headroom_ratio) as usize;
-
-        loop {
-            // we've ran out of headroom, stop the mutators
-            if self.arena.get_size() >= (max_headroom + prev_size) {
-                self.tracer.raise_yield_flag();
-                break;
-            }
-
-            let (mutator_duration, collector_duration) =
-                self.split_timeslice(max_headroom, prev_size);
-
-            std::thread::sleep(mutator_duration);
-
-            if !self.tracer.is_tracing() {
-                break;
-            }
-
-            // TODO: rename this from write_barrier_lock, to like space_time_lock ormaybe
-            // maybe mutator lock
-            let _lock = self.tracer.get_alloc_lock();
-            std::thread::sleep(collector_duration);
-
-            if !self.tracer.is_tracing() {
-                break;
-            }
-        }
-    }
-
     fn rotate_mark(&self) -> GcMark {
         self.tracer.rotate_mark()
     }
@@ -277,13 +226,14 @@ where
             .tracer
             .clone()
             .trace(&self.root, self.old_objects.clone());
-        // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
-        // to take 1.4ms
-        self.run_space_time_manager();
-        //println!("WAITING FOR TRACER JOIN HANDLES");
+
+
+        self.time_slicer.run();
+
         for jh in join_handles.into_iter() {
             jh.join().expect("Tracer Returned OK");
         }
+
         self.tracer.wait_for_trace_completion();
         let current_mark = self.get_current_mark();
 
