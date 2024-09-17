@@ -41,9 +41,13 @@ where
 {
     arena: Allocator,
     tracer: Arc<TracerController>,
+
     // this lock is held while a collection is happening.
-    // It is used to ensure that ....
+    // It is used to ensure that we don't start a collection while a collection 
+    // is happening. TODO: could we possibly start a collection while one is happening?
+    //
     collection_lock: Mutex<()>,
+
     root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
@@ -192,7 +196,7 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        let _collection_lock = self.collection_lock.lock().unwrap();
+        // let _collection_lock = self.collection_lock.lock().unwrap();
         let yield_lock = self.tracer.yield_lock();
 
         Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)

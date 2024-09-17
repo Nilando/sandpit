@@ -1,8 +1,8 @@
 use super::trace::TracerController;
 use super::allocator::Allocator;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::sync::Arc;
-use log::{debug, info};
+use log::debug;
 
 pub struct TimeSlicer {
     tracer_controller: Arc<TracerController>,
@@ -74,7 +74,7 @@ impl TimeSlicer {
                 break;
             }
 
-            let _lock = self.tracer_controller.get_alloc_lock();
+            let _lock = self.tracer_controller.get_time_slice_lock();
             std::thread::sleep(collector_duration);
 
             if self.tracer_controller.yield_flag() {

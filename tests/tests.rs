@@ -48,7 +48,7 @@ fn yield_requested_after_allocating() {
         arena.mutate(|mu, _| loop {
             Gc::new(mu, 420);
 
-            if mu.yield_requested() {
+            if mu.gc_yield() {
                 break;
             }
         });
@@ -203,7 +203,7 @@ fn yield_is_not_requested() {
 
     arena.mutate(|mu, _root| {
         for _ in 0..1000 {
-            assert!(mu.yield_requested() == false);
+            assert!(mu.gc_yield() == false);
         }
     });
 }

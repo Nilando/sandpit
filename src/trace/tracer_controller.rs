@@ -25,10 +25,11 @@ pub struct TracerController {
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
-    current_mark: AtomicU8, //todo: this should be a GcMark
-                            //
-    // Locks
-    alloc_lock: Mutex<()>,
+    current_mark: AtomicU8,
+
+    // This lock is set by time slicer to enlogate the period in which mutators yield
+    time_slice_lock: Mutex<()>,
+
     // mutators hold a ReadGuard of this lock preventing
     // the tracers from declaring the trace complete until
     // all mutators are stopped.
@@ -57,7 +58,7 @@ impl TracerController {
             tracers_waiting: AtomicUsize::new(0),
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
-            alloc_lock: Mutex::new(()),
+            time_slice_lock: Mutex::new(()),
             current_mark: AtomicU8::new(GcMark::Red as u8),
 
             num_tracers: config.tracer_threads,
@@ -81,12 +82,12 @@ impl TracerController {
         self.yield_lock.read().unwrap()
     }
 
-    pub fn get_alloc_lock(&self) -> MutexGuard<()> {
-        self.alloc_lock.lock().unwrap()
+    pub fn get_time_slice_lock(&self) -> MutexGuard<()> {
+        self.time_slice_lock.lock().unwrap()
     }
 
-    pub fn is_alloc_lock(&self) -> bool {
-        self.alloc_lock.try_lock().is_ok()
+    pub fn is_time_slice_lock(&self) -> bool {
+        self.time_slice_lock.try_lock().is_ok()
     }
 
     pub fn has_work(&self) -> bool {

@@ -118,8 +118,15 @@ impl<'gc> Mutator<'gc> {
 
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
-    pub fn yield_requested(&self) -> bool {
-        self.tracer_controller.yield_flag()
+    /// And this should be called by the mutator at a somewhat frequent and 
+    /// constant interval.
+    pub fn gc_yield(&self) -> bool {
+        if self.tracer_controller.yield_flag() {
+            return true;
+        } else {
+            let _lock = self.tracer_controller.get_time_slice_lock();
+            self.tracer_controller.yield_flag()
+        }
     }
 
     pub fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
