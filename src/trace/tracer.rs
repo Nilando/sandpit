@@ -15,7 +15,6 @@ pub struct Tracer {
     mark: GcMark,
     mark_count: Cell<usize>,
     work: Vec<TraceJob>,
-
 }
 
 impl Tracer {

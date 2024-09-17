@@ -1,5 +1,5 @@
 use super::constants::BLOCK_SIZE;
-use super::allocator::AllocError;
+use super::error::AllocError;
 use std::alloc::{alloc, dealloc, Layout};
 use std::ptr::NonNull;
 

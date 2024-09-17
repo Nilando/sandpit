@@ -1,10 +1,10 @@
 use super::block::Block;
 use super::bump_block::BumpBlock;
-use super::allocator::{AllocError, AllocMark};
+use super::allocator::AllocMark;
+use super::error::AllocError;
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use std::collections::HashMap;
 
 pub struct BlockStore {
     block_count: AtomicUsize,

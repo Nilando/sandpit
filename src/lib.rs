@@ -39,6 +39,7 @@
 //! ```
 extern crate self as sandpit;
 
+mod raw_allocator;
 mod allocator;
 mod arena;
 mod collector;
