@@ -17,9 +17,7 @@ pub struct TracerController {
     receiver: Receiver<Vec<TraceJob>>,
 
     yield_flag: AtomicBool,
-    yield_lock: RwLock<()>,
     trace_end_flag: AtomicBool,
-    trace_lock: RwLock<()>,
     // TODO: store in GcArray instead of vec?
     // this will be tricky since then tracing will require
     // access to a mutator, or at least the arena in some way
@@ -27,8 +25,14 @@ pub struct TracerController {
     tracers_waiting: AtomicUsize,
     work_sent: AtomicUsize,
     work_received: AtomicUsize,
-    alloc_lock: Mutex<()>,
     current_mark: AtomicU8, //todo: this should be a GcMark
+                            //
+    // Locks
+    alloc_lock: Mutex<()>,
+    // mutators hold a ReadGuard of this lock preventing
+    // the tracers from declaring the trace complete until
+    // all mutators are stopped.
+    yield_lock: RwLock<()>,
 
     // config vars
     pub num_tracers: usize,
@@ -50,7 +54,6 @@ impl TracerController {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             trace_end_flag: AtomicBool::new(false),
-            trace_lock: RwLock::new(()),
             tracers_waiting: AtomicUsize::new(0),
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
@@ -128,46 +131,38 @@ impl TracerController {
         }
 
         if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
+            // The tracers are out of work, raise this flag to stop the mutators.
+            self.yield_flag.store(true, Ordering::SeqCst);
+
             if self.mutators_stopped() {
-                // Let the other tracers no they should stop by raising this flag
+                // Let the other tracers know they should stop by raising this flag
                 self.trace_end_flag.store(true, Ordering::SeqCst);
                 return true;
-            } else {
-                // The tracers are out of work but the mutators are still running
-                // Raise the yield flag to request the mutators to stop, so tracing
-                // can complete.
-                self.yield_flag.store(true, Ordering::SeqCst);
             }
         }
 
         false
     }
 
-    pub fn wait_for_trace_completion(&self) {
-        info!("WAITING TRACERS: START");
-        drop(self.trace_lock.write().unwrap());
-
-        debug_assert_eq!(self.sent(), self.received());
-        debug_assert_eq!(self.sender.len(), 0);
-        debug_assert_eq!(self.tracers_waiting(), 0);
-        debug_assert!(self.is_trace_completed());
-        debug_assert!(self.mutators_stopped());
-
-        self.clean_up();
-        info!("WAITING TRACERS: COMPLETE");
-    }
-
-    pub fn is_tracing(&self) -> bool {
-        self.trace_lock.try_write().is_err()
-    }
-
-    pub fn trace<T: Trace>(
+    pub fn trace<T: Trace, F: FnOnce() -> ()>(
         self: Arc<Self>,
         root: &T,
         old_object_count: Arc<AtomicUsize>,
-    ) -> Vec<JoinHandle<()>> {
+        f: F
+    ) {
         self.clone().trace_root(root, old_object_count.clone());
-        self.clone().spawn_tracers(old_object_count)
+        let join_handles = self.clone().spawn_tracers(old_object_count);
+        println!("STARTING SPACE AND TIME MANAGER");
+
+        f();
+
+        println!("waiting for tracers");
+        for jh in join_handles.into_iter() {
+            jh.join().expect("Tracer Returned OK");
+        }
+        println!("==== CLEANING UP YAYYYY");
+
+        self.clean_up();
     }
 
     pub fn rotate_mark(&self) -> GcMark {
@@ -183,6 +178,12 @@ impl TracerController {
     }
 
     fn clean_up(&self) {
+        debug_assert_eq!(self.sent(), self.received());
+        debug_assert_eq!(self.sender.len(), 0);
+        debug_assert_eq!(self.tracers_waiting(), 0);
+        debug_assert!(self.is_trace_completed());
+        debug_assert!(self.mutators_stopped());
+
         self.yield_flag.store(false, Ordering::SeqCst);
         self.trace_end_flag.store(false, Ordering::SeqCst);
         self.work_received.store(0, Ordering::SeqCst);
@@ -206,35 +207,24 @@ impl TracerController {
     fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
         info!("SPAWN TRACERS: START");
         // create a channel to be used to wait until all tracers have started
-        let (sender, receiver) = crossbeam_channel::unbounded::<()>();
         let mut join_handles = vec![];
 
         for i in 0..self.num_tracers {
-            let sender = sender.clone();
             let thread_name: String = format!("GC_TRACER_{i}");
             let thread = std::thread::Builder::new().name(thread_name);
             let object_count = old_object_count.clone();
             let controller = self.clone();
-
             let jh = thread.spawn(move || {
-                let _lock = controller.trace_lock.read().unwrap();
                 let mut tracer = controller.clone().new_tracer(i);
+                let marked_objects = tracer.trace_loop();
 
-                sender.send(()).unwrap();
+                object_count.fetch_add(marked_objects, Ordering::SeqCst);
+                println!("TRACER EXITING");
+            }).expect("Thread Spawned Successfully");
 
-                tracer.trace_loop();
-                object_count
-                    .clone()
-                    .fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
-            });
-
-            join_handles.push(jh.expect("Tracer Thread Spawned Successfully"));
+            join_handles.push(jh);
         }
 
-        // wait for tracers to start
-        for _ in 0..self.num_tracers {
-            receiver.recv().unwrap();
-        }
 
         info!("SPAWN TRACERS: COMPLETE");
 

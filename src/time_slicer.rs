@@ -70,14 +70,14 @@ impl TimeSlicer {
 
             std::thread::sleep(mutator_duration);
 
-            if !self.tracer_controller.is_tracing() {
+            if self.tracer_controller.yield_flag() {
                 break;
             }
 
             let _lock = self.tracer_controller.get_alloc_lock();
             std::thread::sleep(collector_duration);
 
-            if !self.tracer_controller.is_tracing() {
+            if self.tracer_controller.yield_flag() {
                 break;
             }
         }

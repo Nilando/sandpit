@@ -57,7 +57,7 @@ impl Tracer {
         self.controller.send_work(work);
     }
 
-    pub fn trace_loop(&mut self) {
+    pub fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
                 match self.controller.recv_work() {
@@ -71,6 +71,8 @@ impl Tracer {
         }
 
         debug_assert_eq!(self.work.len(), 0);
+
+        self.mark_count.get()
     }
 
     fn do_work(&mut self) {

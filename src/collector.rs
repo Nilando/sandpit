@@ -41,11 +41,14 @@ where
 {
     arena: Allocator,
     tracer: Arc<TracerController>,
-    lock: Mutex<()>,
+    // this lock is held while a collection is happening.
+    // It is used to ensure that ....
+    collection_lock: Mutex<()>,
     root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
     old_objects: Arc<AtomicUsize>,
+
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
@@ -58,12 +61,12 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn wait_for_collection(&self) {
-        let _lock = self.lock.lock().unwrap();
+        let _lock = self.collection_lock.lock().unwrap();
     }
 
     fn major_collect(&self) {
         info!("MAJOR COLLECT: START");
-        let _lock = self.lock.lock().unwrap();
+        let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
         self.rotate_mark(); // major collection rotates the mark!
@@ -82,7 +85,7 @@ where
 
     fn minor_collect(&self) {
         info!("MINOR COLLECT: START");
-        let _lock = self.lock.lock().unwrap();
+        let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
         self.minor_collections.fetch_add(1, Ordering::SeqCst);
@@ -122,7 +125,7 @@ where
     }
 
     fn get_state(&self) -> GcState {
-        if self.lock.try_lock().is_ok() {
+        if self.collection_lock.try_lock().is_ok() {
             GcState::Waiting
         } else if self.tracer.yield_flag() {
             GcState::Finishing
@@ -161,7 +164,7 @@ where
                 arena,
                 tracer,
                 root,
-                lock: Mutex::new(()),
+                collection_lock: Mutex::new(()),
                 major_collections: AtomicUsize::new(0),
                 minor_collections: AtomicUsize::new(0),
                 major_collect_avg_time: AtomicUsize::new(0),
@@ -189,10 +192,10 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        let _collection_lock = self.lock.lock().unwrap();
-        let lock = self.tracer.yield_lock();
+        let _collection_lock = self.collection_lock.lock().unwrap();
+        let yield_lock = self.tracer.yield_lock();
 
-        Mutator::new(self.arena.clone(), self.tracer.as_ref(), lock)
+        Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)
     }
 
     fn update_collection_time(
@@ -219,24 +222,13 @@ where
         self.tracer.get_current_mark()
     }
 
-    // TODO: differentiate sync and concurrent collections
-    // sync collections need not track headroom
     fn collect(&self) {
-        let join_handles = self
-            .tracer
-            .clone()
-            .trace(&self.root, self.old_objects.clone());
+        self.tracer.clone()
+            .trace(&self.root, self.old_objects.clone(), || {
+                self.time_slicer.run();
+            });
 
-
-        self.time_slicer.run();
-
-        for jh in join_handles.into_iter() {
-            jh.join().expect("Tracer Returned OK");
-        }
-
-        self.tracer.wait_for_trace_completion();
         let current_mark = self.get_current_mark();
-
         self.arena.sweep(current_mark);
     }
 }
