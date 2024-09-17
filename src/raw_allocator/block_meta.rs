@@ -129,8 +129,11 @@ impl BlockMeta {
 
 #[cfg(test)]
 mod tests {
+    use super::super::allocator::Allocator;
+    use super::super::constants::BLOCK_CAPACITY;
     use super::super::block::Block;
     use super::*;
+    use std::alloc::Layout;
 
     #[test]
     fn test_mark_block() {
@@ -251,15 +254,13 @@ mod tests {
 
     #[test]
     fn mark_block() {
-        /*
-        let alloc = GcAllocator::new();
+        let alloc = Allocator::new();
         let medium = Layout::new::<[u8; 512]>();
-        let ptr: NonNull<[u8; 512]> = alloc.alloc(medium).unwrap().cast();
+        let ptr: *mut u8 = alloc.alloc(medium).unwrap();
 
-        GcAllocator::mark(ptr, 512, 1);
+        Allocator::mark(ptr, medium, 1);
 
         let meta = BlockMeta::from_ptr(ptr);
         assert_eq!(meta.get_block(), 1);
-        */
     }
 }

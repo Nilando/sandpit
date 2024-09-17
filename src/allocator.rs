@@ -31,7 +31,9 @@ impl Allocator {
     }
 
     pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        Ok(self.allocator.alloc(layout)?)
+        let ptr: *mut u8 = self.allocator.alloc(layout)?;
+
+        Ok(NonNull::new(ptr).unwrap().cast())
     }
 
     // needs the layout in the case of large objects

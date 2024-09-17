@@ -24,10 +24,10 @@ impl Allocator {
         }
     }
 
-    pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    pub fn alloc(&self, layout: Layout) -> Result<*mut u8, AllocError> {
         let ptr = self.head.alloc(layout)?;
 
-        unsafe { Ok(NonNull::new_unchecked(ptr as *mut u8)) }
+        Ok(ptr as *mut u8)
     }
 
     pub fn mark(ptr: *mut u8, layout: Layout, mark: u8) -> Result<(), AllocError> {

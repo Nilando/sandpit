@@ -75,7 +75,7 @@ fn object_align() {
         let layout = Layout::from_size_align(32, align).unwrap();
         let ptr = allocator.alloc(layout).unwrap();
 
-        assert!(((ptr.as_ptr() as usize) % align) == 0)
+        assert!((ptr as usize % align) == 0)
     }
 }
 
@@ -85,5 +85,5 @@ fn large_object_align() {
     let layout = Layout::from_size_align(BLOCK_CAPACITY * 2, 128).unwrap();
     let ptr = allocator.alloc(layout).unwrap();
 
-    assert!(((ptr.as_ptr() as usize) % 128) == 0)
+    assert!((ptr as usize % 128) == 0)
 }
