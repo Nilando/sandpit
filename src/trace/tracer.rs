@@ -4,7 +4,7 @@ use super::tracer_controller::TracerController;
 use std::sync::Arc;
 use std::ptr::NonNull;
 use std::cell::Cell;
-use crate::allocator::GcAllocator;
+use crate::allocator::Allocator;
 use std::alloc::Layout;
 use crate::header::{GcMark, Header};
 use log::debug;
@@ -129,8 +129,8 @@ impl Tracer {
         // get the layout of header
         // extend by the layout of T
         //
-        // let layout = GcAllocator::gc_layout::<T>();
-        GcAllocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark).expect("set mark failure");
+        // let layout = Allocator::gc_layout::<T>();
+        Allocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark).expect("set mark failure");
 
         true
     }

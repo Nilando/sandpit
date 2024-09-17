@@ -2,7 +2,7 @@ use super::config::GcConfig;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
-use super::allocator::GcAllocator;
+use super::allocator::Allocator;
 use log::{info, debug};
 use higher_kinded_types::ForLt;
 use std::time::{Duration, Instant};
@@ -38,7 +38,7 @@ pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    arena: GcAllocator,
+    arena: Allocator,
     tracer: Arc<TracerController>,
     lock: Mutex<()>,
     root: R::Of<'static>,
@@ -144,7 +144,7 @@ where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
         unsafe {
-            let arena = GcAllocator::new();
+            let arena = Allocator::new();
             let tracer = Arc::new(TracerController::new(config));
             let tracer_ref: &'static TracerController =
                 &*(&*tracer as *const TracerController);

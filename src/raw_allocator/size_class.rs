@@ -1,5 +1,5 @@
 use super::constants;
-use super::allocator::AllocError;
+use super::error::AllocError;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]

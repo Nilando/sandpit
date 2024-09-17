@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::block_meta::BlockMeta;
-use super::allocator::AllocError;
+use super::error::AllocError;
 use super::constants::{BLOCK_CAPACITY, SMALL_OBJECT_MIN};
 use std::alloc::Layout;
 

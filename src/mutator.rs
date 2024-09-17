@@ -1,4 +1,4 @@
-use super::allocator::GcAllocator;
+use super::allocator::Allocator;
 use super::gc::Gc;
 use super::trace::{Trace, TraceJob, TracerController};
 use super::barrier::WriteBarrier;
@@ -16,7 +16,7 @@ enum GcError {
 }
 
 pub struct Mutator<'gc> {
-    allocator: GcAllocator,
+    allocator: Allocator,
     tracer_controller: &'gc TracerController,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
@@ -32,7 +32,7 @@ impl<'gc> Drop for Mutator<'gc> {
 
 impl<'gc> Mutator<'gc> {
     pub fn new(
-        allocator: GcAllocator,
+        allocator: Allocator,
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {

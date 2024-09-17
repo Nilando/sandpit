@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::ptr::NonNull;
-use super::allocator::GcAllocator;
 use std::alloc::Layout;
 
 #[repr(u8)]
