@@ -148,19 +148,16 @@ impl TracerController {
         self: Arc<Self>,
         root: &T,
         old_object_count: Arc<AtomicUsize>,
-        f: F
+        trace_callback: F
     ) {
         self.clone().trace_root(root, old_object_count.clone());
         let join_handles = self.clone().spawn_tracers(old_object_count);
-        println!("STARTING SPACE AND TIME MANAGER");
 
-        f();
+        trace_callback();
 
-        println!("waiting for tracers");
         for jh in join_handles.into_iter() {
-            jh.join().expect("Tracer Returned OK");
+            jh.join().expect("Tracer Ran Successfully");
         }
-        println!("==== CLEANING UP YAYYYY");
 
         self.clean_up();
     }
@@ -219,7 +216,6 @@ impl TracerController {
                 let marked_objects = tracer.trace_loop();
 
                 object_count.fetch_add(marked_objects, Ordering::SeqCst);
-                println!("TRACER EXITING");
             }).expect("Thread Spawned Successfully");
 
             join_handles.push(jh);
