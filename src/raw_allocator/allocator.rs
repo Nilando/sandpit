@@ -4,7 +4,6 @@ use super::block_store::BlockStore;
 use super::error::AllocError;
 use super::size_class::SizeClass;
 use std::alloc::Layout;
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 

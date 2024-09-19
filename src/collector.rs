@@ -183,12 +183,10 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>) -> O,
     {
-        unsafe {
-            let mutator = self.new_mutator();
-            let root = self.scoped_root();
+        let mutator = self.new_mutator();
+        let root = unsafe { self.scoped_root() };
 
-            f(&mutator, root)
-        }
+        f(&mutator, root)
     }
 
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
@@ -227,12 +225,12 @@ where
     }
 
     fn collect(&self) {
-        self.tracer.clone()
-            .trace(&self.root, self.old_objects.clone(), || {
-                self.time_slicer.run();
-            });
+        self.tracer.clone().trace(&self.root, self.old_objects.clone(), || {
+            self.time_slicer.run();
+        });
 
-        let current_mark = self.get_current_mark();
-        self.arena.sweep(current_mark);
+        // SAFETY: at this point there are no mutators and all garbage collected
+        // values have been marked with the current_mark
+        unsafe { self.arena.sweep(self.get_current_mark()); }
     }
 }

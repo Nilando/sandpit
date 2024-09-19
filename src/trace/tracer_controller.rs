@@ -27,7 +27,7 @@ pub struct TracerController {
     work_received: AtomicUsize,
     current_mark: AtomicU8,
 
-    // This lock is set by time slicer to enlogate the period in which mutators yield
+    // This lock is set by time slicer to elongate the period in which mutators yield
     time_slice_lock: Mutex<()>,
 
     // mutators hold a ReadGuard of this lock preventing
@@ -204,7 +204,6 @@ impl TracerController {
 
     fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
         info!("SPAWN TRACERS: START");
-        // create a channel to be used to wait until all tracers have started
         let mut join_handles = vec![];
 
         for i in 0..self.num_tracers {

@@ -30,18 +30,19 @@ impl Allocator {
         }
     }
 
-    pub fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    pub unsafe fn alloc(&self, layout: Layout) -> Result<*mut u8, AllocError> {
         let ptr: *mut u8 = self.allocator.alloc(layout)?;
 
-        Ok(NonNull::new(ptr).unwrap().cast())
+        Ok(ptr)
     }
 
     // needs the layout in the case of large objects
-    pub fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) -> Result<(), AllocError> {
+    pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) -> Result<(), AllocError> {
         Ok(RawAllocator::mark(ptr, layout, mark as u8)?)
     }
 
-    pub fn sweep(&self, live_mark: GcMark) {
+    // Anything not marked with the live mark will be freed
+    pub unsafe fn sweep(&self, live_mark: GcMark) {
         self.allocator.sweep(live_mark as u8)
     }
 

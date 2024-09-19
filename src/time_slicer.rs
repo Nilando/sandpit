@@ -44,7 +44,6 @@ impl TimeSlicer {
         let collector_duration = Duration::from_nanos(collector_nanos);
 
         debug!("TIMESLICE SPLIT :: MUT = {mutator_duration:?}, COL = {collector_duration:?}");
-
         debug_assert_eq!(
             collector_nanos + mutator_nanos,
             (one_mili_in_nanos * self.timeslice_size) as u64

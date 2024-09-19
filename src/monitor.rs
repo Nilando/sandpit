@@ -7,7 +7,6 @@ use std::time;
 
 use super::collector::Collect;
 use super::config::GcConfig;
-use super::metrics::GcMetrics;
 
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
@@ -121,34 +120,5 @@ impl<T: Collect + 'static> Monitor<T> {
         let duration = time::Duration::from_millis(self.wait_duration);
 
         thread::sleep(duration);
-    }
-
-    pub fn metrics(&self) -> GcMetrics {
-        GcMetrics {
-            state: self.collector.get_state(),
-            // Collector Metrics:
-
-            // Running count of how many times major/minor collections have happend.
-            major_collections: self.collector.get_major_collections(),
-            minor_collections: self.collector.get_minor_collections(),
-
-            //average collect times in millis
-            major_collect_avg_time: self.collector.get_major_collect_avg_time(),
-            minor_collect_avg_time: self.collector.get_minor_collect_avg_time(),
-
-            // How many old objects there were as per the last trace.
-            old_objects_count: self.collector.get_old_objects_count(),
-            // The current size of the arena including large objects and blocks.
-            arena_size: self.collector.get_arena_size(),
-
-            // Monitor Metrics:
-
-            // How many old objects must exist before a major collection is triggered.
-            // If you divide this number by the monitor's 'MAX_OLD_GROWTH_RATE, you get the number
-            // of old objects at the end of the last major collection
-            max_old_objects: self.get_max_old_objects(),
-            // The size of the arena at the end of the last collection.
-            prev_arena_size: self.get_prev_arena_size(),
-        }
     }
 }
