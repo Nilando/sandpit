@@ -1,8 +1,11 @@
 use super::trace::Trace;
+use super::header::GcMark;
 use crate::mutator::Mutator;
+use crate::header::{GcHeader, DynHeader, Header};
+use std::alloc::Layout;
 
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, Index};
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -25,6 +28,79 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 //
 // A GcArray is headed by A DynHeader which includes the layout of the GcArray
 // in the header
+
+
+pub unsafe trait GcPtr<'gc, T: Trace + ?Sized> {
+    type Header: GcHeader;
+
+    fn get_header(&self) -> Result<&Self::Header, ()>;
+    fn as_nonnull(&self) -> Result<NonNull<T>, ()>;
+    fn as_ref(&self) -> Result<&T, ()>;
+}
+
+unsafe impl<'gc, T: Trace> GcPtr<'gc, T> for Gc<'gc, T> {
+    type Header = Header;
+
+    fn as_nonnull(&self) -> Result<NonNull<T>, ()> {
+        todo!()
+    }
+
+    fn get_header(&self) -> Result<&Self::Header, ()> {
+        todo!()
+    }
+
+    fn as_ref(&self) -> Result<&T, ()> {
+        todo!()
+    }
+}
+
+unsafe impl<'gc, T: Trace> GcPtr<'gc, T> for GcMut<'gc, T> {
+    type Header = Header;
+
+    fn as_nonnull(&self) -> Result<NonNull<T>, ()> {
+        todo!()
+    }
+
+    fn get_header(&self) -> Result<&Self::Header, ()> {
+        todo!()
+    }
+
+    fn as_ref(&self) -> Result<&T, ()> {
+        todo!()
+    }
+}
+
+unsafe impl<'gc, T: Trace> GcPtr<'gc, T> for GcNullMut<'gc, T> {
+    type Header = Header;
+
+    fn as_nonnull(&self) -> Result<NonNull<T>, ()> {
+        todo!()
+    }
+
+    fn get_header(&self) -> Result<&Self::Header, ()> {
+        todo!()
+    }
+
+    fn as_ref(&self) -> Result<&T, ()> {
+        todo!()
+    }
+}
+
+unsafe impl<'gc, T: Trace> GcPtr<'gc, [T]> for GcArray<'gc, T> {
+    type Header = DynHeader;
+
+    fn as_nonnull(&self) -> Result<NonNull<[T]>, ()> {
+        todo!()
+    }
+
+    fn get_header(&self) -> Result<&Self::Header, ()> {
+        todo!()
+    }
+
+    fn as_ref(&self) -> Result<&[T], ()> {
+        todo!()
+    }
+}
 
 pub struct Gc<'gc, T: Trace> {
     ptr: &'gc T,
@@ -64,6 +140,10 @@ impl<'gc, T: Trace> Gc<'gc, T> {
     // the mutator alloc function!
     pub unsafe fn from_nonnull(ptr: NonNull<T>) -> Self {
         Self { ptr: ptr.as_ref() }
+    }
+
+    pub unsafe fn from_ptr(ptr: *mut T) -> Self {
+        Self { ptr: &*ptr }
     }
 
     pub fn as_nonnull(&self) -> NonNull<T> {
@@ -207,5 +287,42 @@ impl<'gc, T: Trace> GcNullMut<'gc, T> {
         } else {
             unsafe { Some(GcMut::from_nonnull(NonNull::new_unchecked(ptr))) }
         }
+    }
+}
+
+pub struct GcArray<'gc, T: Trace> {
+    slice: &'gc [T]
+}
+
+impl<'gc, T: Trace> GcArray<'gc, T> {
+    pub unsafe fn from_slice(slice: &'gc [T]) -> Self {
+        Self {
+            slice
+        }
+    }
+
+    pub fn at(&self, idx: usize) -> &'gc T {
+        &self.slice[idx]
+    }
+
+    pub fn len(&self) -> usize {
+        self.slice.len()
+    }
+}
+
+impl<'gc, T: Trace> Deref for GcArray<'gc, T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        self.slice
+    }
+}
+
+impl<'gc, T: Trace> Index<usize> for GcArray<'gc, T> {
+    type Output = T;
+
+    // the lifetime in the return here is different from calling `at` by itself!
+    fn index(&self, index: usize) -> &Self::Output {
+        self.at(index)
     }
 }

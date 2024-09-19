@@ -1,22 +1,19 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcNullMut};
-use log::debug;
+use crate::gc::{Gc, GcMut, GcNullMut, GcArray};
 use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
 
 /// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
 /// contain any GcPtr's.
-/// It would be written like TraceLeaf: Trace but unfortunately due to negative
-/// trait bounds being unstable it makes it infeasible to do;
-pub unsafe trait TraceLeaf {
+pub unsafe trait TraceLeaf: Trace {
     fn __assert_trace_leaf() {}
 }
 
 /// Types allocated in a Gc are required to implement this trait.
 /// The default impl if for a type that impls TraceLeaf
 pub unsafe trait Trace {
-    const IS_LEAF: bool = true;
+    const IS_LEAF: bool;
 
     fn trace(&self, _tracer: &mut Tracer) {}
 
@@ -28,36 +25,46 @@ pub unsafe trait Trace {
     }
 }
 
-// Gc, GcMut, and GcNullMut are the 3 "core" non TraceLeaf types
+// Gc, GcMut, GcNullMut, and GcArray are the 4 "core" non TraceLeaf types.
 // That is to say, every other type that impls Trace + !TraceLeaf
 // must also contains one of these types within it.
-unsafe impl<'a, T: Trace> Trace for Gc<'a, T> {
+//
+// Also these are the only 4 types which impl GcPtr.
+unsafe impl<'gc, T: Trace> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        let ptr: NonNull<T> = self.as_nonnull();
-
-        tracer.trace(ptr)
+        tracer.mark_and_trace(self.clone())
     }
 }
 
-unsafe impl<'a, T: Trace> Trace for GcMut<'a, T> {
+unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        let ptr: NonNull<T> = self.as_nonnull();
-
-        tracer.trace(ptr)
+        tracer.mark_and_trace(self.clone())
     }
 }
 
-unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
+unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        if let Some(gc_mut) = self.as_option() {
-            gc_mut.trace(tracer);
+        tracer.mark_and_trace(self.clone())
+    }
+}
+
+unsafe impl<'gc, T: Trace> Trace for GcArray<'gc, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        // first mark self using the layout stored in the header
+        
+        if T::IS_LEAF {
+            return;
         }
+
+        // push each item as a job to the tracer
     }
 }
 
@@ -67,7 +74,9 @@ unsafe impl<'a, T: Trace> Trace for GcNullMut<'a, T> {
 
 macro_rules! impl_trace_leaf {
     ($($t:ty),*) => {
-        $(unsafe impl Trace for $t {})*
+        $(unsafe impl Trace for $t {
+            const IS_LEAF: bool = true;
+        })*
         $(unsafe impl TraceLeaf for $t {})*
     };
 }
@@ -103,22 +112,41 @@ impl_trace_leaf!(
 );
 
 unsafe impl<T: TraceLeaf> TraceLeaf for UnsafeCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for UnsafeCell<T> {}
+unsafe impl<T: TraceLeaf> Trace for UnsafeCell<T> {
+    const IS_LEAF: bool = true;
+}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for Cell<T> {}
-unsafe impl<T: TraceLeaf> Trace for Cell<T> {}
+unsafe impl<T: TraceLeaf> Trace for Cell<T> {
+    const IS_LEAF: bool = true;
+}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for RefCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for RefCell<T> {}
+unsafe impl<T: TraceLeaf> Trace for RefCell<T> {
+    const IS_LEAF: bool = true;
+}
 
 unsafe impl<T: TraceLeaf> TraceLeaf for OnceCell<T> {}
-unsafe impl<T: TraceLeaf> Trace for OnceCell<T> {}
+unsafe impl<T: TraceLeaf> Trace for OnceCell<T> {
+    const IS_LEAF: bool = true;
+}
 
 // ****************************************************************************
 // TRACE IMPLS
 // ****************************************************************************
 unsafe impl<const N: usize, T: TraceLeaf> TraceLeaf for [T; N] {}
 unsafe impl<const N: usize, T: Trace> Trace for [T; N] {
+    const IS_LEAF: bool = T::IS_LEAF;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        for item in self.iter() {
+            item.trace(tracer)
+        }
+    }
+}
+
+unsafe impl<T: TraceLeaf> TraceLeaf for [T] {}
+unsafe impl<T: Trace> Trace for [T] {
     const IS_LEAF: bool = T::IS_LEAF;
 
     fn trace(&self, tracer: &mut Tracer) {
@@ -158,5 +186,16 @@ unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
     fn trace(&self, tracer: &mut Tracer) {
         self.0.trace(tracer);
         self.1.trace(tracer);
+    }
+}
+
+unsafe impl<A: TraceLeaf, B: TraceLeaf, C: TraceLeaf> TraceLeaf for (A, B, C) {}
+unsafe impl<A: Trace, B: Trace, C: Trace> Trace for (A, B, C) {
+    const IS_LEAF: bool = A::IS_LEAF && B::IS_LEAF && C::IS_LEAF;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+        self.2.trace(tracer);
     }
 }

@@ -2,11 +2,17 @@ use std::alloc::Layout;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+pub unsafe trait GcHeader {
+    fn get_mark(&self) -> GcMark;
+    fn set_mark(&self, mark: GcMark);
+    fn as_ptr(&self) -> *mut u8;
+    fn get_layout<T>(&self) -> Layout;
+}
+
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum GcMark {
     New,
-
     // these are the marks that rotate
     Red,
     Green,
@@ -49,32 +55,61 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn get_ptr<T>(ptr: NonNull<T>) -> *const Self {
-        let header_layout = Layout::new::<Header>();
-        let object_layout = Layout::new::<T>();
-        let (_, object_offset) = header_layout
-            .extend(object_layout)
-            .expect("Bad Alloc Layout");
-
-        unsafe {
-            let raw_ptr: *mut u8 = ptr.as_ptr().cast();
-            let header_ptr = raw_ptr.sub(object_offset);
-
-            header_ptr.cast()
-        }
-    }
-
     pub fn new() -> Self {
-        Header {
+        Self {
             mark: AtomicU8::new(GcMark::New as u8),
         }
     }
+}
 
-    pub fn get_mark(&self) -> GcMark {
+unsafe impl GcHeader for Header {
+    fn set_mark(&self, mark: GcMark) {
+        self.mark.store(mark as u8, Ordering::Release);
+    }
+
+    fn get_mark(&self) -> GcMark {
         self.mark.load(Ordering::Acquire).into()
     }
 
-    pub fn set_mark(&self, mark: GcMark) {
-        self.mark.store(mark as u8, Ordering::Release);
+    fn as_ptr(&self) -> *mut u8 {
+        self as *const Header as *mut u8
+    }
+
+    fn get_layout<T: ?Sized>(&self) -> Layout {
+        todo!()
+    }
+}
+
+
+// for dynamically sized types
+pub struct DynHeader {
+    mark: AtomicU8,
+    layout: Layout,
+}
+
+impl DynHeader {
+    pub fn new(layout: Layout) -> Self {
+        Self {
+            mark: AtomicU8::new(GcMark::New as u8),
+            layout
+        }
+    }
+}
+
+unsafe impl GcHeader for DynHeader {
+    fn set_mark(&self, mark: GcMark) {
+        todo!()
+    }
+
+    fn get_mark(&self) -> GcMark {
+        todo!()
+    }
+
+    fn as_ptr(&self) -> *mut u8 {
+        todo!()
+    }
+
+    fn get_layout<T>(&self) -> Layout {
+        todo!()
     }
 }
