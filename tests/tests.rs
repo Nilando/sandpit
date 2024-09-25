@@ -1,4 +1,4 @@
-use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Mutator, Root, Trace};
+use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Root, Trace};
 
 #[test]
 fn new_arena() {
@@ -333,5 +333,41 @@ fn alloc_array_of_gc_mut() {
         for (idx, gc) in root.iter().enumerate() {
             assert!((idx + 100) == **gc);
         }
+    });
+}
+
+#[test]
+fn two_dimensional_array() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, [Gc<'_, usize>]>]>]> = Arena::new(|mu| {
+        mu.alloc_array_from_fn(100, |i| {
+            mu.alloc_array_from_fn(100, |k| {
+                Gc::new(mu, i + k)
+            })
+        })
+    });
+
+    arena.mutate(|_mu, root| {
+        for (i, gc) in root.iter().enumerate() {
+            for (k, gc) in gc.iter().enumerate() {
+                assert!(i + k == **gc);
+            }
+        }
+    });
+}
+
+#[test]
+fn change_array_size() {
+    let arena: Arena<Root![Gc<'_, GcMut<'_, [usize]>>]> = Arena::new(|mu| {
+        Gc::new(mu, mu.alloc_array_from_fn(100, |i| i).into())
+    });
+
+    arena.mutate(|mu, root| {
+        let new = mu.alloc_array_from_fn(10, |_| 69);
+
+        mu.write_barrier(root.clone(), |barrier| {
+            barrier.set(new.into())
+        });
+
+        assert!(root.len() == 10);
     });
 }
