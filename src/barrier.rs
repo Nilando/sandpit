@@ -1,10 +1,10 @@
 use crate::{GcMut, GcNullMut, Trace};
 
-pub struct WriteBarrier<'gc, T: Trace> {
+pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
     inner: &'gc T,
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, T> {
+impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     // WriteBarriers are unsafe to create, as they themselves don't ensure
     // anything is retraced, they only communicate that they should have been 
     // created in some context where retracing will happen after the barrier
@@ -54,6 +54,24 @@ impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, T>> {
         unsafe {
             self.inner.set(gc);
         }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, [GcMut<'gc, T>]> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcMut<'gc, T>> {
+        WriteBarrier { inner: &self.inner[idx] }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, [GcNullMut<'gc, T>]> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcNullMut<'gc, T>> {
+        WriteBarrier { inner: &self.inner[idx] }
     }
 }
 

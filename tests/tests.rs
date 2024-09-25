@@ -1,4 +1,4 @@
-use sandpit::{field, Arena, Gc, GcNullMut, Mutator, Root, Trace};
+use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Mutator, Root, Trace};
 
 #[test]
 fn new_arena() {
@@ -220,4 +220,117 @@ fn resets_old_object_count() {
     arena.major_collect();
 
     assert_eq!(arena.metrics().old_objects_count, 0);
+}
+
+#[test]
+fn alloc_array() {
+    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
+        mu.alloc_array(69, 420)
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+
+    arena.mutate(|_mu, root| {
+        for x in root.iter() {
+            assert!(*x == 69);
+        }
+
+        assert!(root.len() == 420);
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+}
+
+#[test]
+fn alloc_array_from_fn() {
+    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
+        mu.alloc_array_from_fn(100, |idx| {
+            idx
+        })
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+
+    arena.mutate(|_mu, root| {
+        for (i, x) in root.iter().enumerate() {
+            assert!(*x == i);
+        }
+
+        assert!(root.len() == 100);
+    });
+}
+
+#[test]
+fn alloc_array_from_slice() {
+    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
+        mu.alloc_array_from_fn(100, |idx| {
+            idx
+        })
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+
+    arena.mutate(|mu, root| {
+        let root_copy = mu.alloc_array_from_slice(root);
+
+        assert!(*root_copy == **root);
+    });
+}
+
+#[test]
+fn alloc_array_of_gc() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> = Arena::new(|mu| {
+        mu.alloc_array_from_fn(100, |idx| {
+            Gc::new(mu, idx)
+        })
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 101);
+
+    arena.mutate(|_mu, root| {
+        for (idx, gc) in root.iter().enumerate() {
+            assert!(idx == **gc);
+        }
+    });
+}
+
+#[test]
+fn alloc_array_of_gc_mut() {
+    let arena: Arena<Root![Gc<'_, [GcMut<'_, usize>]>]> = Arena::new(|mu| {
+        mu.alloc_array_from_fn(100, |idx| {
+            GcMut::new(mu, idx)
+        })
+    });
+
+    arena.major_collect();
+    assert_eq!(arena.metrics().old_objects_count, 101);
+
+    arena.mutate(|mu, root| {
+        for i in 0..100 {
+            let new = GcMut::new(mu, i + 100);
+
+            mu.array_write_barrier(root.clone(), |barrier| {
+                barrier.at(i).set(new);
+            });
+        }
+    });
+
+    arena.major_collect();
+    assert_eq!(arena.metrics().old_objects_count, 101);
+
+    arena.mutate(|_mu, root| {
+        for (idx, gc) in root.iter().enumerate() {
+            assert!((idx + 100) == **gc);
+        }
+    });
 }
