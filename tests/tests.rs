@@ -326,6 +326,7 @@ fn alloc_array_of_gc_mut() {
     });
 
     arena.major_collect();
+    arena.major_collect();
     assert_eq!(arena.metrics().old_objects_count, 101);
 
     arena.mutate(|_mu, root| {

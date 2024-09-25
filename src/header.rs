@@ -86,7 +86,6 @@ unsafe impl GcHeader for SizedHeader {
     }
 }
 
-
 // for dynamically sized types
 pub struct SliceHeader {
     mark: AtomicU8,
