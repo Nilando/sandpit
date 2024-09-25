@@ -38,8 +38,8 @@ unsafe impl<T: Trace> GcPointee for T {
     }
 
     fn get_header<'a>(ptr: *mut ThinPtr<Self>) -> &'a Self::GcHeader {
-        let header_layout = std::alloc::Layout::new::<SliceHeader>();
-        let item_layout = std::alloc::Layout::new::<T>();
+        let header_layout = Layout::new::<SizedHeader>();
+        let item_layout = Layout::new::<T>();
 
         // Unwrap safe b/c layout has already been validated during alloc.
         let (_, item_offset) = header_layout.extend(item_layout).unwrap();
@@ -64,10 +64,10 @@ unsafe impl<T: Trace> GcPointee for [T] {
     }
 
     fn get_header<'a>(ptr: *mut ThinPtr<Self>) -> &'a Self::GcHeader {
-        let header_layout = std::alloc::Layout::new::<SliceHeader>();
+        let header_layout = Layout::new::<SliceHeader>();
         // note: item_layout might not be the same layout used to alloc [T], but should 
         // still be fine in calculating the offset needed to get to the header.
-        let item_layout = std::alloc::Layout::new::<T>();
+        let item_layout = Layout::new::<T>();
 
         // Unwrap safe b/c layout has already been validated during alloc.
         let (_, item_offset) = header_layout.extend(item_layout).unwrap();
@@ -105,7 +105,7 @@ impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
 
 impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
     fn from(gc_mut: GcMut<'gc, T>) -> Self {
-        let thin = gc_mut.ptr.load(Ordering::Relaxed);
+        let thin = gc_mut.ptr.load(Ordering::SeqCst);
         
         Self {
             ptr: <T as GcPointee>::deref(thin)
@@ -175,9 +175,19 @@ impl<'gc, T: Trace> Deref for GcMut<'gc, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        let thin_ptr = self.ptr.load(Ordering::Acquire);
+        let thin_ptr = self.ptr.load(Ordering::SeqCst);
 
         <T as GcPointee>::deref(thin_ptr)
+    }
+}
+
+impl<'gc, T: Trace> Deref for GcMut<'gc, [T]> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        let thin_ptr = self.ptr.load(Ordering::SeqCst);
+
+        <[T] as GcPointee>::deref(thin_ptr)
     }
 }
 
@@ -192,7 +202,7 @@ impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcMut<'gc, T> {
 
 impl<'gc, T: Trace + ?Sized> Clone for GcMut<'gc, T> {
     fn clone(&self) -> Self {
-        let ptr = self.ptr.load(Ordering::Relaxed);
+        let ptr = self.ptr.load(Ordering::SeqCst);
 
         Self {
             ptr: AtomicPtr::new(ptr),
@@ -211,11 +221,11 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     pub(crate) unsafe fn set(&self, new_gc: impl Into<Gc<'gc, T>>) {
         let thin_ptr = new_gc.into().as_thin();
 
-        self.ptr.store(thin_ptr, Ordering::Release);
+        self.ptr.store(thin_ptr, Ordering::SeqCst);
     }
 
     pub fn scoped_deref(&self) -> &'gc T {
-        let thin_ptr = self.ptr.load(Ordering::Acquire);
+        let thin_ptr = self.ptr.load(Ordering::SeqCst);
 
         <T as GcPointee>::deref(thin_ptr)
     }
@@ -238,7 +248,7 @@ impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcNullMut<'gc, T> {
 impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcNullMut<'gc, T> {
     fn from(gc: GcMut<'gc, T>) -> Self {
         Self {
-            ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
+            ptr: AtomicPtr::new(gc.ptr.load(Ordering::SeqCst)),
             scope: PhantomData::<&'gc *mut T>,
         }
     }
@@ -247,7 +257,7 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcNullMut<'gc, T> {
 impl<'gc, T: Trace + ?Sized> Clone for GcNullMut<'gc, T> {
     fn clone(&self) -> Self {
         Self {
-            ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
+            ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
             scope: PhantomData::<&'gc *mut T>,
         }
     }
@@ -262,7 +272,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
     }
 
     pub fn is_null(&self) -> bool {
-        self.ptr.load(Ordering::Relaxed).is_null()
+        self.ptr.load(Ordering::SeqCst).is_null()
     }
 
     // If the tracers have already traced this pointer, than the new pointer
@@ -270,14 +280,14 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
     //
     // Use a write barrier to call this method safely.
     pub(crate) unsafe fn set(&self, new: GcNullMut<'gc, T>) {
-        let thin_ptr = new.ptr.load(Ordering::Acquire);
+        let thin_ptr = new.ptr.load(Ordering::SeqCst);
 
-        self.ptr.store(thin_ptr, Ordering::Release);
+        self.ptr.store(thin_ptr, Ordering::SeqCst);
     }
 
     // safe because setting to null doesn't require anything to be retraced!
     pub fn set_null(&self) {
-        self.ptr.store(null_mut(), Ordering::Relaxed)
+        self.ptr.store(null_mut(), Ordering::SeqCst)
     }
 
     pub fn as_option(&self) -> Option<GcMut<'gc, T>> {
@@ -286,7 +296,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
         } else {
             Some(
                 GcMut {
-                    ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
+                    ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
                     scope: PhantomData::<&'gc *mut T>,
                 }
             )
@@ -297,5 +307,39 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
 impl<'gc, T: Trace> GcNullMut<'gc, T> {
     pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{field, Arena, Root, Trace};
+    use crate::header::GcMark;
+
+    #[test]
+    fn valid_sized_header() {
+        let _: Arena<Root![_]> = Arena::new(|mu| {
+            let gc = Gc::new(mu, 69); 
+            let header = gc.get_header();
+
+            assert!(*gc == 69);
+            assert_eq!(header.get_mark(), GcMark::New);
+            header.set_mark(GcMark::Red);
+            assert_eq!(header.get_mark(), GcMark::Red);
+            assert!(*gc == 69);
+        });
+    }
+
+    #[test]
+    fn gc_from_gcmut() {
+        let _: Arena<Root![_]> = Arena::new(|mu| {
+            let gc = Gc::new(mu, 69); 
+            let gc_mut = GcMut::from(gc);
+            let gc = Gc::from(gc_mut);
+            let header = gc.get_header();
+
+            assert!(*gc == 69);
+            assert_eq!(header.get_mark(), GcMark::New);
+        });
     }
 }

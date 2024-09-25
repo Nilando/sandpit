@@ -1,6 +1,4 @@
 use sandpit::{field, Arena, Gc, GcNullMut, Mutator, Root, Trace};
-use std::mem::{align_of, size_of};
-use std::ptr::NonNull;
 
 #[test]
 fn new_arena() {
@@ -105,7 +103,7 @@ fn empty_gc_metrics() {
 }
 
 #[test]
-fn nested_gc_ptr_root() {
+fn nested_root() {
     let arena: Arena<Root![Gc<'_, Gc<'_, Gc<'_, usize>>>]> = Arena::new(|mu| {
         let p1 = Gc::new(mu, 69);
         let p2 = Gc::new(mu, p1);

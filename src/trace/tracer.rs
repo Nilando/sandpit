@@ -40,6 +40,7 @@ impl Tracer {
         let header = gc.get_header();
         let alloc_layout = gc.get_layout();
         let alloc_ptr = header.as_ptr();
+        let gc_ptr = &*gc as *const [T] as *mut [T];
 
         if header.get_mark() == self.mark {
             return;
@@ -55,20 +56,18 @@ impl Tracer {
             return;
         }
 
-        for item in gc.iter() {
-            let item_ptr = item as *const T as *mut T;
-
-            self.work.push(TraceJob::new(NonNull::new(item_ptr).unwrap()));
-        }
+        // self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
+        todo!()
     }
 
     // doesn't work for pointer to dynamically sized types
     pub fn mark_and_trace<'gc, T: Trace>(&mut self, gc: Gc<'gc, T>) {
-        //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), gc);
+        //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
 
         let header = gc.get_header();
         let alloc_layout = gc.get_layout();
         let alloc_ptr = header.as_ptr();
+        let gc_ptr = &*gc as *const T as *mut T;
 
         if header.get_mark() == self.mark {
             return;
@@ -84,7 +83,7 @@ impl Tracer {
             return;
         }
 
-        self.work.push(TraceJob::new(NonNull::new(alloc_ptr).unwrap()));
+        self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
     }
 
     pub fn flush_work(&mut self) {

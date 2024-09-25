@@ -10,6 +10,7 @@ use std::sync::RwLockReadGuard;
 
 enum GcError {
     LayoutError,
+    OOM,
 }
 
 pub struct Mutator<'gc> {
@@ -125,51 +126,33 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn retrace<P, V>(&self, gc_ptr: P) 
-    where
-        P: TryInto<Gc<'gc, V>>,
-        V: Trace + 'gc
-    {
-        if let Ok(gc_ptr) = gc_ptr.try_into() {
-            let ptr: NonNull<V> = NonNull::new(&*gc_ptr as *const V as *mut V).unwrap();
+    pub fn retrace<T: Trace>(&self, gc_ptr: Gc<'gc, T>) {
+        let ptr: NonNull<T> = NonNull::new(&*gc_ptr as *const T as *mut T).unwrap();
+        let trace_job = TraceJob::new(ptr);
 
-            let trace_job = TraceJob::new(ptr);
+        self.rescan.borrow_mut().push(trace_job);
 
-            self.rescan.borrow_mut().push(trace_job);
-
-            if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
-                let work = self.rescan.take();
-                self.tracer_controller.send_work(work);
-            }
+        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
+            let work = self.rescan.take();
+            self.tracer_controller.send_work(work);
         }
     }
 
-    pub fn is_marked<P, V>(&self, gc_ptr: P) -> bool 
-    where
-        P: TryInto<Gc<'gc, V>>,
-        V: Trace + 'gc
-    {
-        if let Ok(gc_ptr) = gc_ptr.try_into() {
-            gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
-        } else {
-            false
-        }
+    pub fn is_marked<T: Trace>(&self, gc_ptr: Gc<'gc, T>) -> bool {
+        gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
     }
 
-    pub fn write_barrier<P, V, F>(&self, gc_ptr: P, f: F)
+    pub fn write_barrier<T, F>(&self, gc_ptr: Gc<'gc, T>, f: F)
     where
-        P: TryInto<Gc<'gc, V>>,
-        V: Trace + 'gc,
-        F: FnOnce(&WriteBarrier<V>),
+        T: Trace,
+        F: FnOnce(&WriteBarrier<T>),
     {
-        if let Ok(gc_ptr) = gc_ptr.try_into() {
-            let barrier = unsafe { WriteBarrier::new(&*gc_ptr) };
+        let barrier = unsafe { WriteBarrier::new(&*gc_ptr) };
 
-            f(&barrier);
+        f(&barrier);
 
-            if self.is_marked(gc_ptr) {
-                self.retrace(gc_ptr);
-            }
+        if self.is_marked(gc_ptr) {
+            self.retrace(gc_ptr);
         }
     }
 }

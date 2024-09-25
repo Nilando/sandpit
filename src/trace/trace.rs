@@ -10,7 +10,6 @@ pub unsafe trait TraceLeaf: Trace {
     fn __assert_trace_leaf() {}
 }
 
-
 /// Types allocated in a Gc are required to implement this trait.
 /// The default impl if for a type that impls TraceLeaf
 pub unsafe trait Trace: GcPointee {
@@ -42,15 +41,34 @@ unsafe impl<'gc, T: Trace> Trace for Gc<'gc, [T]> {
     }
 }
 
-unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
+unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        Gc::from(self.clone()).trace(tracer);
+        Gc::from(self.clone()).trace(tracer)
     }
 }
 
-unsafe impl<'gc, T: Trace + ?Sized> Trace for GcNullMut<'gc, T> {
+unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, [T]> {
+    const IS_LEAF: bool = false;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        Gc::from(self.clone()).trace(tracer)
+    }
+}
+
+unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        match self.as_option() {
+            Some(gc_mut) => gc_mut.trace(tracer),
+            None => {}
+        }
+    }
+}
+
+unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, [T]> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
@@ -79,6 +97,7 @@ macro_rules! impl_trace_leaf {
 impl_trace_leaf!(
     (),
     bool,
+    char,
     u8,
     u16,
     u32,
