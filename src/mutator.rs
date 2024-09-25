@@ -1,17 +1,21 @@
 use super::allocator::Allocator;
 use super::barrier::WriteBarrier;
-use super::gc::Gc;
-use super::header::Header;
+use super::gc::{Gc};
+use super::header::{GcHeader, SizedHeader, SliceHeader};
 use super::trace::{Trace, TraceJob, TracerController};
-
 use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
+enum GcError {
+    LayoutError,
+    OOM,
+}
+
 pub struct Mutator<'gc> {
-    allocator: Allocator,
     tracer_controller: &'gc TracerController,
+    allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
 }
@@ -24,7 +28,7 @@ impl<'gc> Drop for Mutator<'gc> {
 }
 
 impl<'gc> Mutator<'gc> {
-    pub fn new(
+    pub(crate) fn new(
         allocator: Allocator,
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
@@ -37,89 +41,82 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn alloc<T: Trace>(&self, obj: T) -> Gc<'gc, T> {
-        let header_layout = Layout::new::<Header>();
-        let object_layout = Layout::new::<T>();
-        let (alloc_layout, object_offset) = header_layout
-            .extend(object_layout)
-            .expect("Bad Alloc Layout");
+    pub fn alloc<T: Trace>(&self, value: T) -> Gc<'gc, T> {
+        let header_layout = Layout::new::<SizedHeader>();
+        let val_layout = Layout::new::<T>();
+        let (alloc_layout_not_padded, val_offset) = header_layout
+            .extend(val_layout)
+            .expect("remove this expect");
+        let alloc_layout = alloc_layout_not_padded.pad_to_align();
 
-        match self.allocator.alloc(alloc_layout) {
-            // SAFETY: the alloc layout was extended to have capacity
-            // for the header and object to be written into. 
-            //
-            // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
-            // the Gc variant that a Gc points to something
-            Ok(ptr) => unsafe {
-                let obj_ptr = ptr.as_ptr().add(object_offset).cast();
+        unsafe {
+            match self.allocator.alloc(alloc_layout) {
+                // SAFETY: the alloc layout was extended to have capacity
+                // for the header and object to be written into. 
+                
+                // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
+                // the Gc invariant that a Gc<T> points to a T with a padded header.
+                Ok(ptr) => {
+                    let val_ptr = ptr.add(val_offset).cast();
+                    let header_ptr = ptr.cast();
 
-                write(obj_ptr, obj);
-                write(ptr.as_ptr().cast(), Header::new());
+                    write(val_ptr, value);
+                    write(header_ptr, SizedHeader::new());
 
-                Gc::from_nonnull(NonNull::new_unchecked(obj_ptr))
-            },
-            Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
+                    Gc::from_ptr(val_ptr)
+                },
+                Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
+            }
         }
     }
 
-    /*
-        fn alloc_array<T: Trace + Default>(&'gc self, size: usize) -> GcArray<'gc, T> {
-            let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
+    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<[T]> {
+        self.alloc_array_from_fn(len, |_| value.clone())
+    }
 
-            unsafe {
-                let gc_raw = self.alloc_layout(layout);
+    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<[T]> {
+        self.alloc_array_from_fn(slice.len(), |idx| {
+            slice[idx].clone()
+        })
+    }
+
+    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<[T]> 
+    where
+        T: Trace,
+        F: FnMut(usize) -> T
+    {
+        let header_layout = Layout::new::<SliceHeader>();
+        let slice_layout = Layout::array::<T>(len).expect("todo remove this expect");
+        let (alloc_layout_not_padded, slice_offset) = header_layout
+            .extend(slice_layout)
+            .expect("todo remove this expect");
+        let alloc_layout = alloc_layout_not_padded.pad_to_align();
+
+        unsafe {
+            match self.allocator.alloc(alloc_layout) {
+                Ok(ptr) => {
+                    let header_ptr = ptr.cast();
+                    let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+                    for i in 0..len {
+                        let item = cb(i);
+                        write(slice_ptr.add(i), item);
+                    }
+
+                    let slice: &[T] = std::slice::from_raw_parts(slice_ptr, len);
+                    write(header_ptr, SliceHeader::new(len));
+
+                    Gc::from_ptr(slice as *const [T] )
+                },
+                Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
             }
-            todo!()
-                /*
-            let byte_ptr = ptr.as_ptr();
-
-            for i in 0..layout.size() {
-                    *byte_ptr.add(i) = 0;
-            }
-            */
-        }
-    */
-
-    /*
-    pub unsafe fn alloc_layout(&self, object_layout: Layout) -> NonNull<u8> {
-        // TODO: the allocc lock needs to be reworked
-        // doesn't really take into account the need to also stop the mutators
-        // from access the write barrier... maybe copy this logic into the write barrier
-        //
-        if self.tracer_controller.is_alloc_lock() {
-            drop(self.tracer_controller.get_alloc_lock());
-        }
-
-        let header_layout = Layout::new::<Header>();
-
-        let (header_object_layout, object_offset) = header_layout.extend(object_layout).expect("Bad Alloc Layout");
-
-
-        // TODO: check that the layout size isn't too large?
-
-
-        // this needs to create a layout by adding to it the layout
-        match self.allocator.alloc(header_object_layout) {
-            Ok(ptr) => {
-                unsafe {
-                    todo!()
-                    // Header::new(size)
-
-
-                    NonNull::new_unchecked(
-                        ptr.as_ptr().add(object_offset).cast()
-                    )
-                }
-            },
-            Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
         }
     }
-    */
 
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
     /// And this should be called by the mutator at a somewhat frequent and 
-    /// constant interval.
+    /// constant interval. I wou
     pub fn gc_yield(&self) -> bool {
         if self.tracer_controller.yield_flag() {
             return true;
@@ -129,9 +126,9 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn retrace<T: Trace + 'gc>(&self, gc_into: impl TryInto<Gc<'gc, T>>) {
-        let gc = gc_into.try_into().ok().unwrap(); // TODO: handle
-        let trace_job = TraceJob::new(gc.as_nonnull());
+    pub fn retrace<T: Trace>(&self, gc_ptr: Gc<'gc, T>) {
+        let ptr: NonNull<T> = NonNull::new(&*gc_ptr as *const T as *mut T).unwrap();
+        let trace_job = TraceJob::new(ptr);
 
         self.rescan.borrow_mut().push(trace_job);
 
@@ -141,25 +138,21 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn is_marked<T: Trace + 'gc>(&self, gc_into: impl Into<Gc<'gc, T>>) -> bool {
-        let gc: Gc<'gc, T> = gc_into.into();
-        let header = unsafe { &*Header::get_ptr(gc.as_nonnull()) };
-
-        header.get_mark() == self.tracer_controller.get_current_mark()
+    pub fn is_marked<T: Trace>(&self, gc_ptr: Gc<'gc, T>) -> bool {
+        gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
     }
 
-    pub fn write_barrier<F, T>(&self, gc_into: impl Into<Gc<'gc, T>>, f: F)
+    pub fn write_barrier<T, F>(&self, gc_ptr: Gc<'gc, T>, f: F)
     where
+        T: Trace,
         F: FnOnce(&WriteBarrier<T>),
-        T: Trace + 'gc,
     {
-        let gc: Gc<'gc, T> = gc_into.into();
-        let barrier = WriteBarrier::new(&*gc);
+        let barrier = unsafe { WriteBarrier::new(&*gc_ptr) };
 
         f(&barrier);
 
-        if self.is_marked(gc) {
-            self.retrace(gc);
+        if self.is_marked(gc_ptr) {
+            self.retrace(gc_ptr);
         }
     }
 }

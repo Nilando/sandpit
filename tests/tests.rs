@@ -1,6 +1,4 @@
 use sandpit::{field, Arena, Gc, GcNullMut, Mutator, Root, Trace};
-use std::mem::{align_of, size_of};
-use std::ptr::NonNull;
 
 #[test]
 fn new_arena() {
@@ -105,7 +103,7 @@ fn empty_gc_metrics() {
 }
 
 #[test]
-fn nested_gc_ptr_root() {
+fn nested_root() {
     let arena: Arena<Root![Gc<'_, Gc<'_, Gc<'_, usize>>>]> = Arena::new(|mu| {
         let p1 = Gc::new(mu, 69);
         let p2 = Gc::new(mu, p1);
@@ -131,20 +129,21 @@ fn mutate_output() {
 
 #[test]
 fn trace_gc_null_mut() {
-    let arena: Arena<Root![GcNullMut<'_, usize>]> = Arena::new(|mu| GcNullMut::new_null(mu));
-
-    arena.major_collect();
-
-    assert_eq!(arena.metrics().old_objects_count, 0);
-
-    arena.mutate(|mu, root| {
-        let new = Gc::new(mu, 69);
-        unsafe { root.set(new.into()) };
+    let arena: Arena<Root![GcNullMut<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+        GcNullMut::new(mu, Gc::new(mu, 69))
     });
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().old_objects_count, 2);
+
+    arena.mutate(|_, root| {
+        root.set_null();
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 0);
 }
 
 #[test]

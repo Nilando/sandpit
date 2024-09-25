@@ -1,12 +1,15 @@
 use crate::{GcMut, GcNullMut, Trace};
 
-#[repr(transparent)]
 pub struct WriteBarrier<'gc, T: Trace> {
     inner: &'gc T,
 }
 
 impl<'gc, T: Trace> WriteBarrier<'gc, T> {
-    pub(crate) fn new(gc: &'gc T) -> Self {
+    // WriteBarriers are unsafe to create, as they themselves don't ensure
+    // anything is retraced, they only communicate that they should have been 
+    // created in some context where retracing will happen after the barrier
+    // goes out of context.
+    pub(crate) unsafe fn new(gc: &'gc T) -> Self {
         WriteBarrier { inner: &gc }
     }
 
@@ -14,10 +17,10 @@ impl<'gc, T: Trace> WriteBarrier<'gc, T> {
         self.inner
     }
 
-    #[doc(hidden)]
-
     // SAFETY: this can only be safely called via the field! macro
     // which ensures that the inner value is within an existing write barrier
+    // needs to be pub so that the field! macro can work
+    #[doc(hidden)]
     pub unsafe fn __from_field(inner: &'gc T, _: *const T) -> Self {
         Self { inner }
     }

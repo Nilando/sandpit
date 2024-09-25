@@ -2,12 +2,12 @@ use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use crate::allocator::Allocator;
-use crate::header::{GcMark, Header};
+use crate::header::{GcHeader, GcMark};
 use log::debug;
-use std::alloc::Layout;
 use std::cell::Cell;
-use std::ptr::NonNull;
 use std::sync::Arc;
+use std::ptr::NonNull;
+use crate::gc::Gc;
 
 pub struct Tracer {
     id: usize,
@@ -36,17 +36,54 @@ impl Tracer {
         self.mark_count.get()
     }
 
-    pub fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), ptr.as_ptr());
-        if !self.set_mark(ptr) {
+    pub fn mark_and_trace_slice<'gc, T: Trace>(&mut self, gc: Gc<'gc, [T]>) {
+        let header = gc.get_header();
+        let alloc_layout = gc.get_layout();
+        let alloc_ptr = header.as_ptr();
+        let gc_ptr = &*gc as *const [T] as *mut [T];
+
+        if header.get_mark() == self.mark {
             return;
         }
+
+        header.set_mark(self.mark);
+
+        self.increment_mark_count();
+
+        unsafe { Allocator::mark(alloc_ptr, alloc_layout, self.mark).expect("set mark failure") };
 
         if T::IS_LEAF {
             return;
         }
 
-        self.work.push(TraceJob::new(ptr));
+        // self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
+        todo!()
+    }
+
+    // doesn't work for pointer to dynamically sized types
+    pub fn mark_and_trace<'gc, T: Trace>(&mut self, gc: Gc<'gc, T>) {
+        //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
+
+        let header = gc.get_header();
+        let alloc_layout = gc.get_layout();
+        let alloc_ptr = header.as_ptr();
+        let gc_ptr = &*gc as *const T as *mut T;
+
+        if header.get_mark() == self.mark {
+            return;
+        }
+
+        header.set_mark(self.mark);
+
+        self.increment_mark_count();
+
+        unsafe { Allocator::mark(alloc_ptr, alloc_layout, self.mark).expect("set mark failure") };
+
+        if T::IS_LEAF {
+            return;
+        }
+
+        self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
     }
 
     pub fn flush_work(&mut self) {
@@ -98,32 +135,6 @@ impl Tracer {
         debug!("(TRACER: {}) SHARING WORK = {}", self.id, share_work.len());
 
         self.controller.send_work(share_work);
-    }
-
-    fn set_mark<T: Trace>(&self, ptr: NonNull<T>) -> bool {
-        // TODO if T: DYN_HEADER
-        // instead of getting a normal header
-        // get a dyn header
-        let header = unsafe { &*Header::get_ptr(ptr) };
-        let mark = header.get_mark();
-
-        if mark == self.mark {
-            return false;
-        }
-
-        self.increment_mark_count();
-        let header_layout = Layout::new::<Header>();
-        let object_layout = Layout::new::<T>();
-        let (alloc_layout, _object_offset) = header_layout
-            .extend(object_layout)
-            .expect("Bad Alloc Layout");
-
-        header.set_mark(self.mark);
-
-        Allocator::mark(header as *const Header as *mut u8, alloc_layout, self.mark)
-            .expect("set mark failure");
-
-        true
     }
 
     fn increment_mark_count(&self) {
