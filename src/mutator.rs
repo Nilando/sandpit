@@ -1,12 +1,16 @@
 use super::allocator::Allocator;
 use super::barrier::WriteBarrier;
-use super::gc::{GcPtr, Gc, GcArray};
-use super::header::{GcHeader, Header, DynHeader};
+use super::gc::{Gc};
+use super::header::{GcHeader, SizedHeader, SliceHeader};
 use super::trace::{Trace, TraceJob, TracerController};
 use std::alloc::Layout;
 use std::cell::RefCell;
-use std::ptr::write;
+use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
+
+enum GcError {
+    LayoutError,
+}
 
 pub struct Mutator<'gc> {
     tracer_controller: &'gc TracerController,
@@ -37,11 +41,12 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub fn alloc<T: Trace>(&self, value: T) -> Gc<'gc, T> {
-        let header_layout = Layout::new::<Header>();
+        let header_layout = Layout::new::<SizedHeader>();
         let val_layout = Layout::new::<T>();
-        let (alloc_layout, val_offset) = header_layout
+        let (alloc_layout_not_padded, val_offset) = header_layout
             .extend(val_layout)
             .expect("remove this expect");
+        let alloc_layout = alloc_layout_not_padded.pad_to_align();
 
         unsafe {
             match self.allocator.alloc(alloc_layout) {
@@ -49,13 +54,13 @@ impl<'gc> Mutator<'gc> {
                 // for the header and object to be written into. 
                 
                 // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
-                // the Gc variant that a Gc points to something
+                // the Gc invariant that a Gc<T> points to a T with a padded header.
                 Ok(ptr) => {
                     let val_ptr = ptr.add(val_offset).cast();
                     let header_ptr = ptr.cast();
 
                     write(val_ptr, value);
-                    write(header_ptr, Header::new());
+                    write(header_ptr, SizedHeader::new());
 
                     Gc::from_ptr(val_ptr)
                 },
@@ -64,20 +69,27 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> GcArray<T> {
+    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<[T]> {
         self.alloc_array_from_fn(len, |_| value.clone())
     }
 
-    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> GcArray<T> 
+    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<[T]> {
+        self.alloc_array_from_fn(slice.len(), |idx| {
+            slice[idx].clone()
+        })
+    }
+
+    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<[T]> 
     where
         T: Trace,
         F: FnMut(usize) -> T
     {
-        let header_layout = Layout::new::<DynHeader>();
+        let header_layout = Layout::new::<SliceHeader>();
         let slice_layout = Layout::array::<T>(len).expect("todo remove this expect");
-        let (alloc_layout, slice_offset) = header_layout
+        let (alloc_layout_not_padded, slice_offset) = header_layout
             .extend(slice_layout)
             .expect("todo remove this expect");
+        let alloc_layout = alloc_layout_not_padded.pad_to_align();
 
         unsafe {
             match self.allocator.alloc(alloc_layout) {
@@ -90,10 +102,10 @@ impl<'gc> Mutator<'gc> {
                         write(slice_ptr.add(i), item);
                     }
 
-                    let slice = std::slice::from_raw_parts(slice_ptr, len);
-                    write(header_ptr, DynHeader::new(alloc_layout));
+                    let slice: &[T] = std::slice::from_raw_parts(slice_ptr, len);
+                    write(header_ptr, SliceHeader::new(len));
 
-                    GcArray::from_slice(slice)
+                    Gc::from_ptr(slice as *const [T] )
                 },
                 Err(_) => panic!("failed to allocate"), // TODO: should this return an error?
             }
@@ -113,12 +125,14 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn retrace<P, V>(&self, gc_ptr: &P) 
+    pub fn retrace<P, V>(&self, gc_ptr: P) 
     where
-        P: GcPtr<'gc, V>,
-        V: Trace
+        P: TryInto<Gc<'gc, V>>,
+        V: Trace + 'gc
     {
-        if let Ok(ptr) = gc_ptr.as_nonnull() {
+        if let Ok(gc_ptr) = gc_ptr.try_into() {
+            let ptr: NonNull<V> = NonNull::new(&*gc_ptr as *const V as *mut V).unwrap();
+
             let trace_job = TraceJob::new(ptr);
 
             self.rescan.borrow_mut().push(trace_job);
@@ -130,13 +144,13 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn is_marked<P, V>(&self, gc_ptr: &P) -> bool 
+    pub fn is_marked<P, V>(&self, gc_ptr: P) -> bool 
     where
-        P: GcPtr<'gc, V>,
-        V: Trace
+        P: TryInto<Gc<'gc, V>>,
+        V: Trace + 'gc
     {
-        if let Ok(header) = gc_ptr.get_header() {
-            header.get_mark() == self.tracer_controller.get_current_mark()
+        if let Ok(gc_ptr) = gc_ptr.try_into() {
+            gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
         } else {
             false
         }
@@ -144,17 +158,17 @@ impl<'gc> Mutator<'gc> {
 
     pub fn write_barrier<P, V, F>(&self, gc_ptr: P, f: F)
     where
-        P: GcPtr<'gc, V>,
-        V: Trace,
+        P: TryInto<Gc<'gc, V>>,
+        V: Trace + 'gc,
         F: FnOnce(&WriteBarrier<V>),
     {
-        if let Ok(gc_ref) = gc_ptr.as_ref() {
-            let barrier = WriteBarrier::new(gc_ref);
+        if let Ok(gc_ptr) = gc_ptr.try_into() {
+            let barrier = WriteBarrier::new(&*gc_ptr);
 
             f(&barrier);
 
-            if self.is_marked(&gc_ptr) {
-                self.retrace(&gc_ptr);
+            if self.is_marked(gc_ptr) {
+                self.retrace(gc_ptr);
             }
         }
     }

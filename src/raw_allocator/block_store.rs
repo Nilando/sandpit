@@ -77,7 +77,9 @@ impl BlockStore {
             .extend(obj_layout)
             .expect("todo: turn this into an alloc error");
         let block = Block::new(header_obj_layout)?;
-        let ptr = unsafe { block.as_ptr().sub(obj_offset) };
+        let ptr = unsafe { block.as_ptr().add(obj_offset) };
+
+        self.large.lock().unwrap().push(block);
 
         Ok(ptr)
     }

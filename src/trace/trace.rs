@@ -1,5 +1,5 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcNullMut, GcArray};
+use crate::gc::{Gc, GcMut, GcNullMut, GcPointee};
 use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
@@ -10,12 +10,13 @@ pub unsafe trait TraceLeaf: Trace {
     fn __assert_trace_leaf() {}
 }
 
+
 /// Types allocated in a Gc are required to implement this trait.
 /// The default impl if for a type that impls TraceLeaf
-pub unsafe trait Trace {
+pub unsafe trait Trace: GcPointee {
     const IS_LEAF: bool;
 
-    fn trace(&self, _tracer: &mut Tracer) {}
+    fn trace(&self, _tracer: &mut Tracer);
 
     fn dyn_trace(ptr: NonNull<()>, tracer: &mut Tracer)
     where
@@ -25,46 +26,38 @@ pub unsafe trait Trace {
     }
 }
 
-// Gc, GcMut, GcNullMut, and GcArray are the 4 "core" non TraceLeaf types.
-// That is to say, every other type that impls Trace + !TraceLeaf
-// must also contains one of these types within it.
-//
-// Also these are the only 4 types which impl GcPtr.
 unsafe impl<'gc, T: Trace> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(self.clone())
+        tracer.mark_and_trace(self.clone());
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, T> {
+unsafe impl<'gc, T: Trace> Trace for Gc<'gc, [T]> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(self.clone())
+        tracer.mark_and_trace_slice(self.clone());
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, T> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(self.clone())
+        Gc::from(self.clone()).trace(tracer);
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for GcArray<'gc, T> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for GcNullMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        // first mark self using the layout stored in the header
-        
-        if T::IS_LEAF {
-            return;
+        match self.as_option() {
+            Some(gc_mut) => gc_mut.trace(tracer),
+            None => {}
         }
-
-        // push each item as a job to the tracer
     }
 }
 
@@ -76,6 +69,8 @@ macro_rules! impl_trace_leaf {
     ($($t:ty),*) => {
         $(unsafe impl Trace for $t {
             const IS_LEAF: bool = true;
+
+            fn trace(&self, _: &mut Tracer) {}
         })*
         $(unsafe impl TraceLeaf for $t {})*
     };
@@ -114,21 +109,29 @@ impl_trace_leaf!(
 unsafe impl<T: TraceLeaf> TraceLeaf for UnsafeCell<T> {}
 unsafe impl<T: TraceLeaf> Trace for UnsafeCell<T> {
     const IS_LEAF: bool = true;
+
+    fn trace(&self, _: &mut Tracer) {}
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for Cell<T> {}
 unsafe impl<T: TraceLeaf> Trace for Cell<T> {
     const IS_LEAF: bool = true;
+
+    fn trace(&self, _: &mut Tracer) {}
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for RefCell<T> {}
 unsafe impl<T: TraceLeaf> Trace for RefCell<T> {
     const IS_LEAF: bool = true;
+
+    fn trace(&self, _: &mut Tracer) {}
 }
 
 unsafe impl<T: TraceLeaf> TraceLeaf for OnceCell<T> {}
 unsafe impl<T: TraceLeaf> Trace for OnceCell<T> {
     const IS_LEAF: bool = true;
+
+    fn trace(&self, _: &mut Tracer) {}
 }
 
 // ****************************************************************************

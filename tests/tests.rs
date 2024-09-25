@@ -131,20 +131,21 @@ fn mutate_output() {
 
 #[test]
 fn trace_gc_null_mut() {
-    let arena: Arena<Root![GcNullMut<'_, usize>]> = Arena::new(|mu| GcNullMut::new_null(mu));
-
-    arena.major_collect();
-
-    assert_eq!(arena.metrics().old_objects_count, 0);
-
-    arena.mutate(|mu, root| {
-        let new = Gc::new(mu, 69);
-        unsafe { root.set(new.into()) };
+    let arena: Arena<Root![GcNullMut<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+        GcNullMut::new(mu, Gc::new(mu, 69))
     });
 
     arena.major_collect();
 
     assert_eq!(arena.metrics().old_objects_count, 1);
+
+    arena.mutate(|_, root| {
+        root.set_null();
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 0);
 }
 
 #[test]
