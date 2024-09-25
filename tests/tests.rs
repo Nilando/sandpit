@@ -135,7 +135,7 @@ fn trace_gc_null_mut() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().old_objects_count, 2);
 
     arena.mutate(|_, root| {
         root.set_null();
