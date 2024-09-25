@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
 // we need to mark a layout to mark an object
-pub unsafe trait GcHeader {
+pub trait GcHeader {
     fn get_mark(&self) -> GcMark;
     fn set_mark(&self, mark: GcMark);
     fn get_alloc_layout<T>(&self) -> Layout;
@@ -66,7 +66,7 @@ impl SizedHeader {
     }
 }
 
-unsafe impl GcHeader for SizedHeader {
+impl GcHeader for SizedHeader {
     fn set_mark(&self, mark: GcMark) {
         self.mark.store(mark as u8, Ordering::Release);
     }
@@ -85,7 +85,6 @@ unsafe impl GcHeader for SizedHeader {
         alloc_layout.pad_to_align()
     }
 }
-
 
 // for dynamically sized types
 pub struct SliceHeader {
@@ -106,7 +105,7 @@ impl SliceHeader {
     }
 }
 
-unsafe impl GcHeader for SliceHeader {
+impl GcHeader for SliceHeader {
     fn set_mark(&self, mark: GcMark) {
         self.mark.store(mark as u8, Ordering::Release);
     }

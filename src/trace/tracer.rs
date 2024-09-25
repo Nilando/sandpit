@@ -40,7 +40,6 @@ impl Tracer {
         let header = gc.get_header();
         let alloc_layout = gc.get_layout();
         let alloc_ptr = header.as_ptr();
-        let gc_ptr = &*gc as *const [T] as *mut [T];
 
         if header.get_mark() == self.mark {
             return;
@@ -56,8 +55,11 @@ impl Tracer {
             return;
         }
 
-        // self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
-        todo!()
+        for item in gc.iter() {
+            let item_ptr: *mut T = item as *const T as *mut T;
+
+            self.work.push(TraceJob::new(NonNull::new(item_ptr).unwrap()));
+        }
     }
 
     // doesn't work for pointer to dynamically sized types

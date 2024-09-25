@@ -138,7 +138,20 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub fn is_marked<T: Trace>(&self, gc_ptr: Gc<'gc, T>) -> bool {
+    pub fn retrace_array<T: Trace>(&self, gc_ptr: Gc<'gc, [T]>) {
+        for item in gc_ptr.iter() {
+            let ptr: NonNull<T> = NonNull::new(&*item as *const T as *mut T).unwrap();
+            let trace_job = TraceJob::new(ptr);
+            self.rescan.borrow_mut().push(trace_job);
+        }
+
+        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
+            let work = self.rescan.take();
+            self.tracer_controller.send_work(work);
+        }
+    }
+
+    pub fn is_marked<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) -> bool {
         gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
     }
 
@@ -155,4 +168,20 @@ impl<'gc> Mutator<'gc> {
             self.retrace(gc_ptr);
         }
     }
+
+    pub fn array_write_barrier<T, F>(&self, gc_ptr: Gc<'gc, [T]>, f: F)
+    where
+        T: Trace,
+        F: FnOnce(&WriteBarrier<[T]>),
+    {
+        let barrier = unsafe { WriteBarrier::new(&*gc_ptr) };
+
+        f(&barrier);
+
+        if self.is_marked(gc_ptr) {
+            self.retrace_array(gc_ptr);
+        }
+    }
+
+    // TODO make a write barrier for Gc<'gc, [T]>
 }

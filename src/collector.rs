@@ -147,35 +147,34 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        unsafe {
-            let arena = Allocator::new();
-            let tracer = Arc::new(TracerController::new(config));
-            let tracer_ref: &'static TracerController = &*(&*tracer as *const TracerController);
-            let lock = tracer_ref.yield_lock();
-            let mutator: &'static Mutator<'static> =
-                &*(&Mutator::new(arena.clone(), tracer_ref, lock) as *const Mutator<'static>);
-            let root: R::Of<'static> = f(mutator);
-            let time_slicer = TimeSlicer::new(
-                tracer.clone(),
-                arena.clone(),
-                config.monitor_arena_size_ratio_trigger,
-                config.collector_max_headroom_ratio,
-                config.collector_timeslice_size,
-                config.collector_slice_min,
-            );
+        let arena = Allocator::new();
+        let tracer = Arc::new(TracerController::new(config));
+        let tracer_ref: &'static TracerController = unsafe { &*(&*tracer as *const TracerController) };
+        let lock = tracer_ref.yield_lock();
+        let mutator: &'static Mutator<'static> =
+            unsafe { &*(&Mutator::new(arena.clone(), tracer_ref, lock) as *const Mutator<'static>) };
 
-            Self {
-                arena,
-                tracer,
-                root,
-                collection_lock: Mutex::new(()),
-                major_collections: AtomicUsize::new(0),
-                minor_collections: AtomicUsize::new(0),
-                major_collect_avg_time: AtomicUsize::new(0),
-                minor_collect_avg_time: AtomicUsize::new(0),
-                old_objects: Arc::new(AtomicUsize::new(0)),
-                time_slicer
-            }
+        let root: R::Of<'static> = f(mutator);
+        let time_slicer = TimeSlicer::new(
+            tracer.clone(),
+            arena.clone(),
+            config.monitor_arena_size_ratio_trigger,
+            config.collector_max_headroom_ratio,
+            config.collector_timeslice_size,
+            config.collector_slice_min,
+        );
+
+        Self {
+            arena,
+            tracer,
+            root,
+            collection_lock: Mutex::new(()),
+            major_collections: AtomicUsize::new(0),
+            minor_collections: AtomicUsize::new(0),
+            major_collect_avg_time: AtomicUsize::new(0),
+            minor_collect_avg_time: AtomicUsize::new(0),
+            old_objects: Arc::new(AtomicUsize::new(0)),
+            time_slicer
         }
     }
 
