@@ -163,7 +163,7 @@ impl<'gc> Mutator<'gc> {
         F: FnOnce(&WriteBarrier<V>),
     {
         if let Ok(gc_ptr) = gc_ptr.try_into() {
-            let barrier = WriteBarrier::new(&*gc_ptr);
+            let barrier = unsafe { WriteBarrier::new(&*gc_ptr) };
 
             f(&barrier);
 
