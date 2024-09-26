@@ -1,17 +1,18 @@
 use super::trace::Trace;
 use super::tracer::Tracer;
 use std::ptr::NonNull;
+use crate::pointee::Thin;
 
 unsafe impl Send for TraceJob {}
 unsafe impl Sync for TraceJob {}
 
 pub struct TraceJob {
-    ptr: NonNull<()>,
-    dyn_trace: fn(NonNull<()>, &mut Tracer),
+    ptr: NonNull<Thin<()>>,
+    dyn_trace: fn(NonNull<Thin<()>>, &mut Tracer),
 }
 
 impl TraceJob {
-    pub fn new<T: Trace>(ptr: NonNull<T>) -> Self {
+    pub fn new<T: Trace + ?Sized>(ptr: NonNull<Thin<T>>) -> Self {
         Self {
             ptr: ptr.cast(),
             dyn_trace: T::dyn_trace,

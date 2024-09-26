@@ -1,84 +1,15 @@
 use super::trace::Trace;
 use crate::mutator::Mutator;
 use crate::header::{GcHeader, SliceHeader, SizedHeader};
+use crate::barrier::WriteBarrier;
+use crate::pointee::{GcPointee, Thin};
 
 use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicPtr, Ordering};
-use std::ptr::null_mut;
+use std::ptr::{null_mut, NonNull};
 
-// Gc pointer types are capable of pointing to [T]. However, you can not
-// have an AtomicPtr<T> where T: ?Sized b/c atomic operations can only operate
-// on the word size of the machine, which is smaller than the size of a fat pointer.
-//
-// So in order to support the atomic operations on a pointer to [T],
-// you can hold a `*const Thin<[T]>` (which is a thin pointer).
-// However, due to being a thin pointer, the length of the [T] must be stored
-// somewhere else. So the length of a Gc<[T]> is stored in the header to the [T].
-pub(crate) struct Thin<T: ?Sized> {
-    kind: PhantomData<T>,
-}
-
-// The two basic kinda of GcPointee's are T and [T] where T: Sized.
-// Due to the usage of thin pointers, the length of [T], needs
-// to be stored in the header.
-pub(crate) trait GcPointee {
-    type GcHeader: GcHeader;
-
-    fn deref<'a>(ptr: *mut Thin<Self>) -> &'a Self;
-    fn get_header<'a>(ptr: *mut Thin<Self>) -> &'a Self::GcHeader;
-}
-
-impl<T: Trace> GcPointee for T {
-    type GcHeader = SizedHeader;
-
-    fn deref<'a>(ptr: *mut Thin<Self>) -> &'a Self {
-        unsafe { &*(ptr as *mut Self) }
-    }
-
-    fn get_header<'a>(ptr: *mut Thin<Self>) -> &'a Self::GcHeader {
-        let header_layout = Layout::new::<SizedHeader>();
-        let item_layout = Layout::new::<T>();
-
-        // Unwrap safe b/c layout has already been validated during alloc.
-        let (_, item_offset) = header_layout.extend(item_layout).unwrap();
-
-        unsafe {
-            let header_ptr = ptr.byte_sub(item_offset) as *mut Self::GcHeader;
-
-            &*header_ptr
-        }
-    }
-}
-
-impl<T: Trace> GcPointee for [T] {
-    type GcHeader = SliceHeader;
-
-    fn deref<'a>(ptr: *mut Thin<Self>) -> &'a Self {
-        let header: &SliceHeader = Self::get_header(ptr);
-        let len = header.len();
-
-        // SAFETY: the length of the slice is stored in the SliceHeader.
-        unsafe { &*std::ptr::slice_from_raw_parts(ptr as *mut T, len) }
-    }
-
-    fn get_header<'a>(ptr: *mut Thin<Self>) -> &'a Self::GcHeader {
-        let header_layout = Layout::new::<SliceHeader>();
-        // note: item_layout might not be the same layout used to alloc [T], but should 
-        // still be fine in calculating the offset needed to get to the header.
-        let item_layout = Layout::new::<T>();
-
-        // Unwrap safe b/c layout has already been validated during alloc.
-        let (_, item_offset) = header_layout.extend(item_layout).unwrap();
-
-        unsafe {
-            let header_ptr = ptr.byte_sub(item_offset) as *mut Self::GcHeader;
-
-            &*header_ptr
-        }
-    }
-}
 
 // A Gc points to a valid T within a GC Arena which is also succeeded by its 
 // GC header which may or may not be padded.
@@ -96,16 +27,21 @@ impl<T: Trace> GcPointee for [T] {
 /// A shared reference to generic garbage collected value that is branded with 
 /// a mutation context lifetime. 
 ///
-/// A [`crate::gc::Gc<'gc, T>`] can safely dereference into 
+/// An object may only be referenced by a [`Gc`] if it implements `Trace` see [`crate::trace::Trace`] for more details.
+///
+/// A [`Gc`] can safely dereference into 
 /// a `&'gc T`, but provides no option to obtain mutable references to it's
 /// inner value. Due to all GC values sharing the same 'gc lifetime,
 /// any number of GC values are allowed to reference each other at anytime. This
 /// is beneficial in easing the creation of graphs and cyclical data structures,
 /// but means any mutation of a GC value requires some form of interior mutatbility.
 ///
-/// A [`crate::gc::Gc<'gc, T>`] is itself immutable in that it's inner pointer may never be
-/// changed. The [`crate::gc::GcMut<'gc, T>`] and [`crate::gc::GcNullMut<'gc, T>`] types allow for updating
+/// A [`Gc`] is itself immutable in that it's inner pointer may never be
+/// changed. The [`GcMut`] and [`GcNullMut`] types allow for updating
 /// which value it is referencing through the means of a write barrier.
+/// A [`Gc`] may also point at a garbage collected array like `Gc<'gc, [T]>`. A Gc referencing an
+/// array can be obtained via the mutator by using one of several array allocation methods
+/// including [`crate::mutator::Mutator::alloc_array`].
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: &'gc T,
 }
@@ -123,7 +59,7 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
         let thin = gc_mut.ptr.load(Ordering::SeqCst);
         
         Self {
-            ptr: <T as GcPointee>::deref(thin)
+            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap())
         }
     }
 }
@@ -131,24 +67,25 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
 impl<'gc, T: Trace + ?Sized> Deref for Gc<'gc, T> {
     type Target = T;
 
+    /// Get a reference to a garbage collected value.
+    /// The lifetime of the reference is restricted to the lifetime of the `&'a Gc<_>`
+    /// but the by using [`crate::gc::Gc::scoped_deref`] the lifetime of the reference can be
+    /// extended to be that of the entire mutation context.
+    ///
+    /// May either dereference into a `&'gc [T]` or a sized `&'gc T`. 
     fn deref(&self) -> &Self::Target {
         self.ptr
     }
 }
 
-impl<'gc, T: Trace> Gc<'gc, T> {
+impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     pub(crate) fn get_layout(&self) -> Layout {
-        <T as GcPointee>::get_header(self.as_thin()).get_alloc_layout::<T>()
-    }
-}
-
-impl<'gc, T: Trace> Gc<'gc, [T]> {
-    pub(crate) fn get_layout(&self) -> Layout {
-        <[T] as GcPointee>::get_header(self.as_thin()).get_alloc_layout::<T>()
+        <T as GcPointee>::get_header(self.as_thin()).get_alloc_layout()
     }
 }
 
 impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
+    /// Get a reference to a garabage collected value with the lifetime of the mutation.
     pub fn scoped_deref(&self) -> &'gc T {
         self.ptr
     }
@@ -162,14 +99,27 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         <T as GcPointee>::get_header(self.as_thin())
     }
 
-    fn as_thin(&self) -> *mut Thin<T> {
-        self.ptr as *const T as *const Thin<T> as *mut Thin<T>
+    pub(crate) fn as_thin(&self) -> NonNull<Thin<T>> {
+        NonNull::new(self.ptr as *const T as *const Thin<T> as *mut Thin<T>).unwrap()
+    }
+
+    pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F) 
+    where
+        F: FnOnce(&WriteBarrier<T>)
+    {
+        let barrier = unsafe { WriteBarrier::new(&**self) };
+
+        f(&barrier);
+
+        if mu.is_marked(*self) {
+            mu.retrace(*self);
+        }
     }
 }
 
 impl<'gc, T: Trace> Gc<'gc, T> {
     /// Provides a way to allocate a value into the GC arena, returning a `Gc<T>`.
-    /// This method is equivalent to calling mutator.alloc(obj).
+    /// This method is equivalent to calling [`crate::mutator::Mutator::alloc`].
     pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj)
     }
@@ -182,30 +132,20 @@ pub struct GcMut<'gc, T: Trace + ?Sized> {
     scope: PhantomData<&'gc *mut T>,
 }
 
-impl<'gc, T: Trace> Deref for GcMut<'gc, T> {
+impl<'gc, T: Trace + ?Sized> Deref for GcMut<'gc, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         let thin_ptr = self.ptr.load(Ordering::Acquire);
 
-        <T as GcPointee>::deref(thin_ptr)
-    }
-}
-
-impl<'gc, T: Trace> Deref for GcMut<'gc, [T]> {
-    type Target = [T];
-
-    fn deref(&self) -> &Self::Target {
-        let thin_ptr = self.ptr.load(Ordering::Acquire);
-
-        <[T] as GcPointee>::deref(thin_ptr)
+        <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
 }
 
 impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcMut<'gc, T> {
     fn from(gc: Gc<'gc, T>) -> Self {
         Self {
-            ptr: AtomicPtr::new(gc.as_thin()),
+            ptr: AtomicPtr::new(gc.as_thin().as_ptr()),
             scope: PhantomData::<&'gc *mut T>
         }
     }
@@ -230,7 +170,7 @@ impl<'gc, T: Trace> GcMut<'gc, T> {
 
 impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     pub(crate) unsafe fn set(&self, new_gc: impl Into<Gc<'gc, T>>) {
-        let thin_ptr = new_gc.into().as_thin();
+        let thin_ptr = new_gc.into().as_thin().as_ptr();
 
         self.ptr.store(thin_ptr, Ordering::Release);
     }
@@ -238,7 +178,7 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     pub fn scoped_deref(&self) -> &'gc T {
         let thin_ptr = self.ptr.load(Ordering::Acquire);
 
-        <T as GcPointee>::deref(thin_ptr)
+        <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
 }
 
@@ -250,7 +190,7 @@ pub struct GcNullMut<'gc, T: Trace + ?Sized> {
 impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcNullMut<'gc, T> {
     fn from(gc: Gc<'gc, T>) -> Self {
         Self {
-            ptr: AtomicPtr::new(gc.as_thin()),
+            ptr: AtomicPtr::new(gc.as_thin().as_ptr()),
             scope: PhantomData::<&'gc *mut T>,
         }
     }
@@ -324,7 +264,7 @@ impl<'gc, T: Trace> GcNullMut<'gc, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{field, Arena, Root, Trace};
+    use crate::{Arena, Root};
     use crate::header::GcMark;
 
     #[test]

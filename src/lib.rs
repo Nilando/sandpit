@@ -53,6 +53,7 @@ mod mutator;
 mod raw_allocator;
 mod trace;
 mod time_slicer;
+mod pointee;
 
 pub use arena::Arena;
 pub use barrier::WriteBarrier;

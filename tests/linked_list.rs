@@ -179,13 +179,13 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
     }
 
     fn set_start(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
-        mu.write_barrier(this, |write_barrier| {
+        this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, LinkedList, start).set(new);
         });
     }
 
     fn set_end(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
-        mu.write_barrier(this, |write_barrier| {
+        this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, LinkedList, end).set(new)
         });
     }
@@ -208,13 +208,13 @@ impl<'gc, T: Trace> Node<'gc, T> {
     }
 
     pub fn set_prev(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
-        mu.write_barrier(this, |write_barrier| {
+        this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, Node, prev).set(new)
         });
     }
 
     pub fn set_next(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
-        mu.write_barrier(this, |write_barrier| {
+        this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, Node, next).set(new)
         });
     }

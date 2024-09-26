@@ -1,31 +1,52 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcNullMut, GcPointee};
+use crate::gc::{Gc, GcMut, GcNullMut};
+use crate::pointee::GcPointee;
 use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
 
-/// TraceLeaf is a sub-trait of Trace which ensures its implementor does not
-/// contain any GcPtr's.
+/// Indicates a type contains no Gc references internally.
+///
+/// Allows for this type to be put into the std `Cell` types, as `Cell<T>` only impls
+/// `Trace` if its inner type if TraceLeaf. This is because interior mutability requires
+/// careful consideration so that the tracers correctly mark all GC references reachable from
+/// the root. If a type 
+///
+///
+///
+/// TraceLeaf is a sub-trait of Trace which indicates its implementor does not
+/// contain any GcPtr's. Unsafe to impl b/c if the trait does have internal GcPtr's 
+/// then referenced memory may be freed.
 pub unsafe trait TraceLeaf: Trace {
+    // used by the traceleaf derive to statically assert that all inner types also impl TraceLeaf
+    #[doc(hidden)]
     fn __assert_trace_leaf() {}
 }
 
-/// Types allocated in a Gc are required to implement this trait.
-/// The default impl if for a type that impls TraceLeaf
+use crate::pointee::Thin;
+
+/// Allows tracer to find all Gc references stored in a type.
+///
+/// Types allocated in a Gc are required to implement this trait so that tracing reaches all
+/// objects. It is unsafe to implement b/c if a Gc reference is not traced, it could result
+/// in a Gc value being freed with the reference still existing.
+///
+/// Can safely be implemented using `#[derive(Trace)]`.
 pub unsafe trait Trace: GcPointee {
+    #[doc(hidden)]
     const IS_LEAF: bool;
 
+    #[doc(hidden)]
     fn trace(&self, _tracer: &mut Tracer);
 
-    fn dyn_trace(ptr: NonNull<()>, tracer: &mut Tracer)
-    where
-        Self: Sized,
+    #[doc(hidden)]
+    fn dyn_trace(ptr: NonNull<Thin<()>>, tracer: &mut Tracer)
     {
-        unsafe { ptr.cast::<Self>().as_ref().trace(tracer) }
+        <Self as GcPointee>::deref(ptr.cast()).trace(tracer)
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for Gc<'gc, T> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
@@ -33,15 +54,7 @@ unsafe impl<'gc, T: Trace> Trace for Gc<'gc, T> {
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for Gc<'gc, [T]> {
-    const IS_LEAF: bool = false;
-
-    fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace_slice(self.clone());
-    }
-}
-
-unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, T> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
@@ -49,26 +62,7 @@ unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, T> {
     }
 }
 
-unsafe impl<'gc, T: Trace> Trace for GcMut<'gc, [T]> {
-    const IS_LEAF: bool = false;
-
-    fn trace(&self, tracer: &mut Tracer) {
-        Gc::from(self.clone()).trace(tracer)
-    }
-}
-
-unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace(&self, tracer: &mut Tracer) {
-        match self.as_option() {
-            Some(gc_mut) => gc_mut.trace(tracer),
-            None => {}
-        }
-    }
-}
-
-unsafe impl<'gc, T: Trace> Trace for GcNullMut<'gc, [T]> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for GcNullMut<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {

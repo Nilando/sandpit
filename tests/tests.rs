@@ -175,7 +175,7 @@ fn write_barrier() {
     arena.mutate(|mu, root| {
         let new = Gc::new(mu, 420);
 
-        mu.write_barrier(*root, |write_barrier| {
+        root.write_barrier(mu, |write_barrier| {
             field!(write_barrier, Foo, a).set(new.into());
             field!(write_barrier, Foo, b).set(new.into());
             field!(write_barrier, Foo, c).set(new.into());
@@ -312,7 +312,7 @@ fn alloc_array_of_gc_mut() {
         for i in 0..100 {
             let new = GcMut::new(mu, i + 100);
 
-            mu.array_write_barrier(root.clone(), |barrier| {
+            root.write_barrier(mu, |barrier| {
                 barrier.at(i).set(new);
             });
         }
@@ -357,7 +357,7 @@ fn change_array_size() {
     arena.mutate(|mu, root| {
         let new = mu.alloc_array_from_fn(10, |_| 69);
 
-        mu.write_barrier(root.clone(), |barrier| {
+        root.write_barrier(mu, |barrier| {
             barrier.set(new.into())
         });
 

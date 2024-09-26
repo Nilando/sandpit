@@ -35,40 +35,13 @@ impl Tracer {
         self.mark_count.get()
     }
 
-    pub fn mark_and_trace_slice<'gc, T: Trace>(&mut self, gc: Gc<'gc, [T]>) {
-        let header = gc.get_header();
-        let alloc_layout = gc.get_layout();
-        let alloc_ptr = header.as_ptr();
-
-        if header.get_mark() == self.mark {
-            return;
-        }
-
-        header.set_mark(self.mark);
-
-        self.increment_mark_count();
-
-        unsafe { Allocator::mark(alloc_ptr, alloc_layout, self.mark).expect("set mark failure") };
-
-        if T::IS_LEAF {
-            return;
-        }
-
-        for item in gc.iter() {
-            let item_ptr: *mut T = item as *const T as *mut T;
-
-            self.work.push(TraceJob::new(NonNull::new(item_ptr).unwrap()));
-        }
-    }
-
     // doesn't work for pointer to dynamically sized types
-    pub fn mark_and_trace<'gc, T: Trace>(&mut self, gc: Gc<'gc, T>) {
+    pub fn mark_and_trace<'gc, T: Trace + ?Sized>(&mut self, gc: Gc<'gc, T>) {
         //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
 
         let header = gc.get_header();
         let alloc_layout = gc.get_layout();
         let alloc_ptr = header.as_ptr();
-        let gc_ptr = &*gc as *const T as *mut T;
 
         if header.get_mark() == self.mark {
             return;
@@ -84,7 +57,7 @@ impl Tracer {
             return;
         }
 
-        self.work.push(TraceJob::new(NonNull::new(gc_ptr).unwrap()));
+        self.work.push(TraceJob::new(gc.as_thin()));
     }
 
     pub fn flush_work(&mut self) {

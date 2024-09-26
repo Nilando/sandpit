@@ -1,5 +1,6 @@
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::marker::PhantomData;
 
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
@@ -7,7 +8,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 pub trait GcHeader {
     fn get_mark(&self) -> GcMark;
     fn set_mark(&self, mark: GcMark);
-    fn get_alloc_layout<T>(&self) -> Layout;
+    fn get_alloc_layout(&self) -> Layout;
     fn as_ptr(&self) -> *mut u8 {
         self as *const Self as *const u8 as *mut u8
     }
@@ -54,19 +55,21 @@ impl From<u8> for GcMark {
     }
 }
 
-pub struct SizedHeader {
+pub struct SizedHeader<T> {
     mark: AtomicU8,
+    _item_type: PhantomData<T>
 }
 
-impl SizedHeader {
+impl<T> SizedHeader<T> {
     pub fn new() -> Self {
         Self {
             mark: AtomicU8::new(GcMark::New as u8),
+            _item_type: PhantomData::<T>
         }
     }
 }
 
-impl GcHeader for SizedHeader {
+impl<T> GcHeader for SizedHeader<T> {
     fn set_mark(&self, mark: GcMark) {
         self.mark.store(mark as u8, Ordering::Release);
     }
@@ -75,8 +78,8 @@ impl GcHeader for SizedHeader {
         self.mark.load(Ordering::Acquire).into()
     }
 
-    fn get_alloc_layout<T>(&self) -> Layout {
-        let header_layout = Layout::new::<SizedHeader>();
+    fn get_alloc_layout(&self) -> Layout {
+        let header_layout = Layout::new::<SizedHeader<T>>();
         let val_layout = Layout::new::<T>();
         let (alloc_layout, _) = header_layout
             .extend(val_layout)
@@ -87,16 +90,18 @@ impl GcHeader for SizedHeader {
 }
 
 // for dynamically sized types
-pub struct SliceHeader {
+pub struct SliceHeader<T> {
     mark: AtomicU8,
     len: usize,
+    _item_type: PhantomData<T>
 }
 
-impl SliceHeader {
+impl<T> SliceHeader<T> {
     pub fn new(len: usize) -> Self {
         Self {
             mark: AtomicU8::new(GcMark::New as u8),
-            len
+            len,
+            _item_type: PhantomData::<T>
         }
     }
 
@@ -105,7 +110,7 @@ impl SliceHeader {
     }
 }
 
-impl GcHeader for SliceHeader {
+impl<T> GcHeader for SliceHeader<T> {
     fn set_mark(&self, mark: GcMark) {
         self.mark.store(mark as u8, Ordering::Release);
     }
@@ -114,8 +119,8 @@ impl GcHeader for SliceHeader {
         self.mark.load(Ordering::Acquire).into()
     }
 
-    fn get_alloc_layout<T>(&self) -> Layout {
-        let header_layout = Layout::new::<SliceHeader>();
+    fn get_alloc_layout(&self) -> Layout {
+        let header_layout = Layout::new::<SliceHeader<T>>();
         let slice_layout = Layout::array::<T>(self.len).expect("todo remove this expect");
         let (alloc_layout, _) = header_layout
             .extend(slice_layout)
