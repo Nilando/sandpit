@@ -4,7 +4,6 @@ use super::tracer::Tracer;
 use crate::config::GcConfig;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
-use log::info;
 use std::sync::{
     atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
@@ -203,7 +202,6 @@ impl TracerController {
     }
 
     fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
-        info!("SPAWN TRACERS: START");
         let mut join_handles = vec![];
 
         for i in 0..self.num_tracers {
@@ -220,9 +218,6 @@ impl TracerController {
 
             join_handles.push(jh);
         }
-
-
-        info!("SPAWN TRACERS: COMPLETE");
 
         join_handles
     }

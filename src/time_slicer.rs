@@ -2,7 +2,6 @@ use super::trace::TracerController;
 use super::allocator::Allocator;
 use std::time::Duration;
 use std::sync::Arc;
-use log::debug;
 
 pub struct TimeSlicer {
     tracer_controller: Arc<TracerController>,
@@ -43,7 +42,6 @@ impl TimeSlicer {
         let mutator_duration = Duration::from_nanos(mutator_nanos);
         let collector_duration = Duration::from_nanos(collector_nanos);
 
-        debug!("TIMESLICE SPLIT :: MUT = {mutator_duration:?}, COL = {collector_duration:?}");
         debug_assert_eq!(
             collector_nanos + mutator_nanos,
             (one_mili_in_nanos * self.timeslice_size) as u64

@@ -91,6 +91,21 @@ impl<T: Trace> GcPointee for [T] {
 //
 // Since Gc cannot be mutated and therefore has no need to be atomic, 
 // it is able to be a wide pointer.
+
+
+/// A shared reference to generic garbage collected value that is branded with 
+/// a mutation context lifetime. 
+///
+/// A Gc<'gc, T> can safely dereference into 
+/// a &'gc T, but provides no option to obtain mutable references to it's
+/// inner value. Due to all GC values sharing the same 'gc lifetime,
+/// any number of GC values are allowed to reference each other at anytime. This
+/// is beneficial in easing the creation of graphs and cyclical data structures,
+/// but means any mutation of a GC value requires some form of interior mutatbility.
+///
+/// A Gc<'gc, T> is itself immutable in that it's inner pointer may never be
+/// changed. The GcMut<'gc, T> and GcNullMut<'gc, T> types allow for updating
+/// which value it is referencing through the means of a write barrier.
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: &'gc T,
 }
@@ -134,6 +149,9 @@ impl<'gc, T: Trace> Gc<'gc, [T]> {
 }
 
 impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
+    pub fn scoped_deref(&self) -> &'gc T {
+        self.ptr
+    }
     // SAFETY: the pointer must have a valid GcHeader for T, and be allocated
     // within a GC Arena
     pub(crate) unsafe fn from_ptr(ptr: *const T) -> Self {
@@ -144,21 +162,14 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         <T as GcPointee>::get_header(self.as_thin())
     }
 
-
-    pub fn as_ptr(&self) -> *mut T {
-        self.ptr as *const T as *mut T
-    }
-
     fn as_thin(&self) -> *mut Thin<T> {
         self.ptr as *const T as *const Thin<T> as *mut Thin<T>
-    }
-
-    pub fn scoped_deref(&self) -> &'gc T {
-        self.ptr
     }
 }
 
 impl<'gc, T: Trace> Gc<'gc, T> {
+    /// Provides a way to allocate a value into the GC arena, returning a Gc<T>.
+    /// This method is equivalent to calling mutator.alloc(obj).
     pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj)
     }

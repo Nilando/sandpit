@@ -5,7 +5,6 @@ use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
 use higher_kinded_types::ForLt;
-use log::info;
 use std::time::Instant;
 
 use std::sync::{
@@ -69,7 +68,6 @@ where
     }
 
     fn major_collect(&self) {
-        info!("MAJOR COLLECT: START");
         let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::SeqCst);
@@ -84,11 +82,9 @@ where
             elapsed_time,
             self.get_major_collections(),
         );
-        info!("MAJOR COLLECT: END");
     }
 
     fn minor_collect(&self) {
-        info!("MINOR COLLECT: START");
         let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
@@ -101,7 +97,6 @@ where
             elapsed_time,
             self.get_minor_collections(),
         );
-        info!("MINOR COLLECT: END");
     }
 
     fn get_major_collections(&self) -> usize {

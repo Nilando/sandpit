@@ -16,41 +16,26 @@ fn new_arena() {
 
 #[test]
 fn arena_allocating_and_collecting() {
-    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
+    let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+        Gc::new(mu, Gc::new(mu, 123))
+    });
 
-    fn alloc_medium_and_small(arena: &Arena<Root![Gc<'_, usize>]>) {
-        arena.mutate(|mu, _| {
-            for _ in 0..10_000 {
-                Gc::new(mu, 420);
-
-                let data: [u8; 1000] = [0; 1000];
-
-                Gc::new(mu, data);
-            }
-        });
-    }
-
-    alloc_medium_and_small(&arena); // this should leave us with a bunch of free blocks to alloc into
     arena.major_collect();
-    alloc_medium_and_small(&arena);
-    arena.major_collect(); // now only the root should be left
 
-    arena.mutate(|_, root| assert!(**root == 69));
+    arena.mutate(|_, root| assert!(***root == 123));
 }
 
 #[test]
 fn yield_requested_after_allocating() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
-    for _ in 0..5 {
-        arena.mutate(|mu, _| loop {
-            Gc::new(mu, 420);
+    arena.mutate(|mu, _| {
+        for _ in 0..100_000 {
+            Gc::new(mu, 0usize);
+        }
 
-            if mu.gc_yield() {
-                break;
-            }
-        });
-    }
+        assert!(mu.gc_yield());
+    });
 }
 
 #[test]

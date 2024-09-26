@@ -3,7 +3,6 @@ use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use crate::allocator::Allocator;
 use crate::header::{GcHeader, GcMark};
-use log::debug;
 use std::cell::Cell;
 use std::sync::Arc;
 use std::ptr::NonNull;
@@ -133,8 +132,6 @@ impl Tracer {
             let job = self.work.pop().unwrap();
             share_work.push(job);
         }
-
-        debug!("(TRACER: {}) SHARING WORK = {}", self.id, share_work.len());
 
         self.controller.send_work(share_work);
     }
