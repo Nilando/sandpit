@@ -44,13 +44,17 @@ use std::ptr::{null_mut, NonNull};
 /// including [`crate::mutator::Mutator::alloc_array`].
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: &'gc T,
+    _no_send: PhantomData<*mut T>
 }
 
 impl<'gc, T: Trace + ?Sized> Copy for Gc<'gc, T> {}
 
 impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
     fn clone(&self) -> Self {
-        Self { ptr: self.ptr }
+        Self { 
+            ptr: self.ptr,
+            _no_send: PhantomData::<*mut T>
+        }
     }
 }
 
@@ -59,7 +63,8 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
         let thin = gc_mut.ptr.load(Ordering::SeqCst);
         
         Self {
-            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap())
+            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap()),
+            _no_send: PhantomData::<*mut T>
         }
     }
 }
@@ -92,7 +97,10 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     // SAFETY: the pointer must have a valid GcHeader for T, and be allocated
     // within a GC Arena
     pub(crate) unsafe fn from_ptr(ptr: *const T) -> Self {
-        Self { ptr: &*ptr }
+        Self { 
+            ptr: &*ptr,
+            _no_send: PhantomData::<*mut T>
+        }
     }
 
     pub(crate) fn get_header(&self) -> &<T as GcPointee>::GcHeader {
