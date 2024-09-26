@@ -53,7 +53,7 @@ where
     /// Root needs to simultaneously have a lifetime that is of the Arena it is
     /// contained in, and also so that it can be branded with the lifetime of a
     /// mutation context. In order to ease the creation of HKT Root there is the 
-    /// [`crate::Root`] macro, which can take a type and convert it into an HTK.
+    /// [`crate::Root!`] macro, which can take a type and convert it into an HTK.
     ///
     pub fn new<F>(f: F) -> Self
     where

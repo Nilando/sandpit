@@ -8,6 +8,10 @@ use std::time;
 use super::collector::Collect;
 use super::config::GcConfig;
 
+// The monitor is responsible for automatically triggering garbage collections.
+// It determines when to make a major and or minor collection by considering,
+// the current and past size of the arena, as well as the number of "old objects"
+// which are objects that have been traced.
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
     flag: AtomicBool,

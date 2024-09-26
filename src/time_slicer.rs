@@ -2,7 +2,17 @@ use super::trace::TracerController;
 use super::allocator::Allocator;
 use std::time::Duration;
 use std::sync::Arc;
-
+// The time slicer's job is to slow down aggresively allocating mutators so 
+// that they are not able to outpace the tracers while simulatenously trying
+// not to get too much in the way of less aggressive mutators.
+//
+// It does this by using a concept the "headroom" which is the amount of memory
+// that is deemed acceptable to be allocated during the course of a single collection.
+//
+// The more a mutator usees up its head room, the more the time slicer will 
+// make requests for the mutators to yield.
+//
+// The timeslicer relies on the assumption that the mutators regularly call `gc_yield`
 pub struct TimeSlicer {
     tracer_controller: Arc<TracerController>,
     allocator: Allocator,

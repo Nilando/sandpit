@@ -182,6 +182,4 @@ impl<'gc> Mutator<'gc> {
             self.retrace_array(gc_ptr);
         }
     }
-
-    // TODO make a write barrier for Gc<'gc, [T]>
 }
