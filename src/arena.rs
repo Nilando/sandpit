@@ -30,6 +30,15 @@ where
     }
 }
 
+unsafe impl<R: ForLt + Send + 'static> Send for Arena<R> 
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace
+{}
+unsafe impl<R: ForLt + Sync + 'static> Sync for Arena<R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace
+{}
+
 impl<R: ForLt + 'static> Arena<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
@@ -173,9 +182,11 @@ where
     /// Returns a copy of the the GcConfig that the arena was created with.
     /// Currently there is no way to update the GcConfig after the arena
     /// has been created.
+    /*
     fn get_config(&self) -> GcConfig {
         self.config
     }
+    */
 
     /// Returns a snap short of the GC's current metrics that provide information
     /// about how the GC is running.
