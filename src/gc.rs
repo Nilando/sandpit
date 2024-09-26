@@ -16,14 +16,14 @@ use std::ptr::null_mut;
 // you can hold a `*const Thin<[T]>` (which is a thin pointer).
 // However, due to being a thin pointer, the length of the [T] must be stored
 // somewhere else. So the length of a Gc<[T]> is stored in the header to the [T].
-pub struct Thin<T: ?Sized> {
+pub(crate) struct Thin<T: ?Sized> {
     kind: PhantomData<T>,
 }
 
 // The two basic kinda of GcPointee's are T and [T] where T: Sized.
 // Due to the usage of thin pointers, the length of [T], needs
 // to be stored in the header.
-pub trait GcPointee {
+pub(crate) trait GcPointee {
     type GcHeader: GcHeader;
 
     fn deref<'a>(ptr: *mut Thin<Self>) -> &'a Self;
@@ -96,15 +96,15 @@ impl<T: Trace> GcPointee for [T] {
 /// A shared reference to generic garbage collected value that is branded with 
 /// a mutation context lifetime. 
 ///
-/// A Gc<'gc, T> can safely dereference into 
-/// a &'gc T, but provides no option to obtain mutable references to it's
+/// A [`crate::gc::Gc<'gc, T>`] can safely dereference into 
+/// a `&'gc T`, but provides no option to obtain mutable references to it's
 /// inner value. Due to all GC values sharing the same 'gc lifetime,
 /// any number of GC values are allowed to reference each other at anytime. This
 /// is beneficial in easing the creation of graphs and cyclical data structures,
 /// but means any mutation of a GC value requires some form of interior mutatbility.
 ///
-/// A Gc<'gc, T> is itself immutable in that it's inner pointer may never be
-/// changed. The GcMut<'gc, T> and GcNullMut<'gc, T> types allow for updating
+/// A [`crate::gc::Gc<'gc, T>`] is itself immutable in that it's inner pointer may never be
+/// changed. The [`crate::gc::GcMut<'gc, T>`] and [`crate::gc::GcNullMut<'gc, T>`] types allow for updating
 /// which value it is referencing through the means of a write barrier.
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: &'gc T,
@@ -168,7 +168,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
 }
 
 impl<'gc, T: Trace> Gc<'gc, T> {
-    /// Provides a way to allocate a value into the GC arena, returning a Gc<T>.
+    /// Provides a way to allocate a value into the GC arena, returning a `Gc<T>`.
     /// This method is equivalent to calling mutator.alloc(obj).
     pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj)

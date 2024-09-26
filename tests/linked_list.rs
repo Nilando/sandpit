@@ -1,4 +1,4 @@
-use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Mutator, Root, Trace, TraceLeaf, WriteBarrier};
+use sandpit::{field, Arena, gc::{Gc, GcMut, GcNullMut}, Mutator, Root, Trace, TraceLeaf, WriteBarrier};
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::ptr::NonNull;
 

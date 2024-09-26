@@ -6,7 +6,7 @@
 //! will be freed.
 //! To build a Arena, you must pass a callback to the Arena::build method which must return the arena's root object. The Arena::build method also provides a mutator as an argument to allow for the option of allocating the root object within the Arena.
 //! ```rust
-//! use sandpit::{Arena, Mutator, Gc, Root};
+//! use sandpit::{Arena, Mutator, gc::Gc, Root};
 //!
 //! // This creates an arena with a Gc<usize> as the root.
 //! let gc: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
@@ -22,7 +22,7 @@
 //! not impl Drop. This is because the trace and sweep collector by design only keeps track of what
 //! is still reachable from the root, and implicitly frees what is not.
 //! ```
-//! use sandpit::{Arena, Trace, Gc, Root};
+//! use sandpit::{Arena, Trace, gc::Gc, Root};
 //!
 //! #[derive(Trace)]
 //! struct Foo {
@@ -39,12 +39,13 @@
 //! ```
 extern crate self as sandpit;
 
-mod allocator;
+pub mod gc;
+
 mod arena;
+mod allocator;
 mod barrier;
 mod collector;
 mod config;
-mod gc;
 mod header;
 mod metrics;
 mod monitor;
@@ -56,7 +57,6 @@ mod time_slicer;
 pub use arena::Arena;
 pub use barrier::WriteBarrier;
 pub use config::GcConfig;
-pub use gc::{Gc, GcMut, GcNullMut};
 pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;

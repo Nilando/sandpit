@@ -116,7 +116,7 @@ impl<'gc> Mutator<'gc> {
     /// This flag will be set to true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
     /// And this should be called by the mutator at a somewhat frequent and 
-    /// constant interval. I wou
+    /// constant interval.
     pub fn gc_yield(&self) -> bool {
         if self.tracer_controller.yield_flag() {
             return true;

@@ -1,4 +1,5 @@
-use crate::{GcMut, GcNullMut, Trace};
+use super::gc::{GcMut, GcNullMut};
+use super::trace::Trace;
 
 pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
     inner: &'gc T,

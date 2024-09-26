@@ -40,7 +40,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use sandpit::{Arena, Root, Gc};
+    /// use sandpit::{Arena, Root, gc::Gc};
     ///
     /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     ///     Gc::new(mu, 42)
@@ -91,7 +91,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use sandpit::{Arena, Root, Gc};
+    /// use sandpit::{Arena, Root, gc::Gc};
     ///
     /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     ///     Gc::new(mu, 42)
@@ -113,7 +113,7 @@ where
     /// context they are commonly branded with the `'gc` lifetime.
     ///
     /// ```compile_fail
-    /// # use sandpit::{Arena, Root, Gc};
+    /// # use sandpit::{Arena, Root, gc::Gc};
     /// #
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 42)

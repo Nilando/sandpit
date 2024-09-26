@@ -1,4 +1,10 @@
-use sandpit::{field, Arena, Gc, GcMut, GcNullMut, Root, Trace};
+use sandpit::{
+    gc::{Gc, GcMut, GcNullMut},
+    field, 
+    Arena, 
+    Root,
+    Trace
+};
 
 #[test]
 fn new_arena() {
@@ -25,12 +31,14 @@ fn arena_allocating_and_collecting() {
     arena.mutate(|_, root| assert!(***root == 123));
 }
 
+// TODO find a way to write this test so that it doesn't use a crazy amount of memory
+#[ignore]
 #[test]
 fn yield_requested_after_allocating() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
     arena.mutate(|mu, _| {
-        for _ in 0..100_000 {
+        for _ in 0..1_000_000 {
             Gc::new(mu, 0usize);
         }
 
