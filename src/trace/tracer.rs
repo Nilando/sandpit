@@ -27,10 +27,6 @@ impl Tracer {
         }
     }
 
-    pub fn id(&self) -> usize {
-        self.id
-    }
-
     pub fn get_mark_count(&self) -> usize {
         self.mark_count.get()
     }

@@ -1,10 +1,23 @@
 use sandpit::{
     gc::{Gc, GcMut, GcNullMut},
     field, 
+    Mutator,
     Arena, 
     Root,
-    Trace
+    Trace,
+    TraceLeaf
 };
+
+fn alloc_rand(mu: &Mutator) {
+    // for a random number of times
+    // alloc a random number of usizes
+    // alloc a random number of arrays
+}
+
+fn alloc_rand_nested(mu: &Mutator) {
+    // flip a coin
+    //  
+}
 
 #[test]
 fn new_arena() {
@@ -37,12 +50,10 @@ fn arena_allocating_and_collecting() {
 fn yield_requested_after_allocating() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
-    arena.mutate(|mu, _| {
-        for _ in 0..1_000_000 {
-            Gc::new(mu, 0usize);
-        }
+    arena.mutate(|mu, _| loop {
+        Gc::new(mu, 42);
 
-        assert!(mu.gc_yield());
+        if mu.gc_yield() { break; }
     });
 }
 
@@ -362,5 +373,97 @@ fn change_array_size() {
         });
 
         assert!(root.len() == 10);
+    });
+}
+
+#[test]
+fn derive_trace_unit_struct() {
+    #[derive(Trace)]
+    struct Foo;
+
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
+        Gc::new(mu, Foo)
+    });
+
+    arena.major_collect();
+}
+
+#[test]
+fn trace_complex_enum() {
+    #[derive(Trace)]
+    enum Foo {
+        A,
+        B(u8, u8),
+        C {
+            a: u8,
+            b: u8,
+            c: u8
+        }
+    };
+
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
+        Gc::new(mu, Foo::A)
+    });
+
+    arena.major_collect();
+}
+
+#[test]
+fn derive_empty_enums() {
+    #[derive(Trace)]
+    enum Foo {}
+
+    #[derive(TraceLeaf)]
+    enum Bar {}
+    // can't actually instantiate Foo so this test is just
+    // making sure Trace derive works
+}
+
+#[test]
+fn traceleaf_tuple_struct() {
+    use std::cell::Cell;
+
+    #[derive(TraceLeaf)]
+    struct Foo(u8, u8);
+
+    let arena: Arena<Root![Gc<'_, Cell<Foo>>]> = Arena::new(|mu| {
+        Gc::new(mu, Cell::new(Foo(0, 1)))
+    });
+
+    arena.major_collect();
+}
+
+#[test]
+fn trace_tuple_struct() {
+    #[derive(Trace)]
+    struct Foo(u8, u8);
+
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
+        Gc::new(mu, Foo(0, 1))
+    });
+
+    arena.major_collect();
+}
+
+#[test]
+fn multi_threaded_allocating() {
+    use std::sync::Arc;
+    let arena: Arc<Arena<Root![usize]>> = Arc::new(Arena::new(|_| 42));
+    let arena_copy = Arc::clone(&arena);
+
+    std::thread::spawn(move || {
+        arena.mutate(|mu, _| loop {
+            Gc::new(mu, 42);
+
+            if mu.gc_yield() { break; }
+        });
+    });
+
+    std::thread::spawn(move || {
+        arena_copy.mutate(|mu, _| loop {
+            Gc::new(mu, 42);
+
+            if mu.gc_yield() { break; }
+        });
     });
 }

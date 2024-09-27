@@ -25,14 +25,6 @@ pub enum GcMark {
 }
 
 impl GcMark {
-    pub fn new() -> Self {
-        Self::New
-    }
-
-    pub fn is_new(&self) -> bool {
-        *self == Self::New
-    }
-
     pub fn rotate(&self) -> Self {
         match self {
             GcMark::Red   => GcMark::Green,

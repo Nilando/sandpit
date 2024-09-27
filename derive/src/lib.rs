@@ -210,7 +210,11 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                 #(#trace_body)*
             }
         }
-        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {}
+        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
+            const IS_LEAF: bool = false;
+
+            fn trace(&self, tracer: &mut sandpit::Tracer) {}
+        }
     };
 
     TokenStream::from(expanded)

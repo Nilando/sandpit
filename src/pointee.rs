@@ -31,6 +31,7 @@ impl<T: Trace> GcPointee for T {
     type GcHeader = SizedHeader<T>;
 
     fn deref<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self {
+        // Saftey: T is sized, so derefing the thin pointer is okay
         unsafe { &*thin_ptr.cast().as_ptr() }
     }
 
@@ -40,6 +41,7 @@ impl<T: Trace> GcPointee for T {
 
         // Unwrap safe b/c layout has already been validated during alloc.
         let (_, item_offset) = header_layout.extend(item_layout).unwrap();
+        // Safety:
         unsafe {
             let header_ptr = thin_ptr.as_ptr().byte_sub(item_offset) as *mut Self::GcHeader;
 

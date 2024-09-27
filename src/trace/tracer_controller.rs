@@ -132,7 +132,7 @@ impl TracerController {
 
         if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
             // The tracers are out of work, raise this flag to stop the mutators.
-            self.yield_flag.store(true, Ordering::SeqCst);
+            self.raise_yield_flag();
 
             if self.mutators_stopped() {
                 // Let the other tracers know they should stop by raising this flag
