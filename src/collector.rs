@@ -146,10 +146,11 @@ where
         let tracer = Arc::new(TracerController::new(config));
         let tracer_ref: &'static TracerController = unsafe { &*(&*tracer as *const TracerController) };
         let lock = tracer_ref.yield_lock();
-        let mutator: &'static Mutator<'static> =
-            unsafe { &*(&Mutator::new(arena.clone(), tracer_ref, lock) as *const Mutator<'static>) };
+        let mutator = Mutator::new(arena.clone(), tracer_ref, lock);
+        let mutator_ref: &'static Mutator<'static> =
+            unsafe { &*(&mutator as *const Mutator<'static>) };
 
-        let root: R::Of<'static> = f(mutator);
+        let root: R::Of<'static> = f(mutator_ref);
         let time_slicer = TimeSlicer::new(
             tracer.clone(),
             arena.clone(),
