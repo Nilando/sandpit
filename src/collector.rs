@@ -189,7 +189,7 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        // let _collection_lock = self.collection_lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
         let yield_lock = self.tracer.yield_lock();
 
         Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)
