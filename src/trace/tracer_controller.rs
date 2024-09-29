@@ -174,6 +174,10 @@ impl TracerController {
         self.current_mark.load(Ordering::SeqCst).into()
     }
 
+    pub fn prev_mark(&self) -> GcMark {
+        self.get_current_mark().prev()
+    }
+
     fn clean_up(&self) {
         debug_assert_eq!(self.sent(), self.received());
         debug_assert_eq!(self.sender.len(), 0);

@@ -5,7 +5,6 @@ use crate::allocator::Allocator;
 use crate::header::{GcHeader, GcMark};
 use std::cell::Cell;
 use std::sync::Arc;
-use std::ptr::NonNull;
 use crate::gc::Gc;
 
 pub struct Tracer {

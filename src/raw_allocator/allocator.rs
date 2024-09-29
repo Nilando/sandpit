@@ -1,3 +1,4 @@
+use super::constants::FREE_MARK;
 use super::alloc_head::AllocHead;
 use super::block_meta::BlockMeta;
 use super::block_store::BlockStore;
@@ -30,6 +31,10 @@ impl Allocator {
     }
 
     pub fn mark(ptr: *mut u8, layout: Layout, mark: u8) -> Result<(), AllocError> {
+        if mark == FREE_MARK {
+            panic!("passed free mark to sweep");
+        }
+
         if SizeClass::get_for_size(layout.size())? != SizeClass::Large {
             let meta = BlockMeta::from_ptr(ptr);
 
@@ -47,8 +52,12 @@ impl Allocator {
         Ok(())
     }
 
-    pub fn sweep(&self, live_mark: u8) {
-        self.head.sweep(live_mark as u8);
+    pub fn sweep(&self, mark: u8) {
+        if mark == FREE_MARK {
+            panic!("passed free mark to sweep");
+        }
+
+        self.head.sweep(mark as u8);
     }
 
     pub fn is_sweeping(&self) -> bool {

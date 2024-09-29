@@ -282,9 +282,9 @@ mod tests {
             let header = gc.get_header();
 
             assert!(*gc == 69);
-            assert_eq!(header.get_mark(), GcMark::New);
-            header.set_mark(GcMark::Red);
-            assert_eq!(header.get_mark(), GcMark::Red);
+            assert_eq!(header.get_mark(), GcMark::Blue);
+            header.set_mark(GcMark::Green);
+            assert_eq!(header.get_mark(), GcMark::Green);
             assert!(*gc == 69);
         });
     }
@@ -298,7 +298,7 @@ mod tests {
             let header = gc.get_header();
 
             assert!(*gc == 69);
-            assert_eq!(header.get_mark(), GcMark::New);
+            assert_eq!(header.get_mark(), GcMark::Blue);
         });
     }
 }

@@ -1,7 +1,7 @@
 use super::allocator::Allocator;
 use super::gc::Gc;
 use super::pointee::Thin;
-use super::header::{GcHeader, SizedHeader, SliceHeader};
+use super::header::{GcMark, GcHeader, SizedHeader, SliceHeader};
 use super::trace::{Trace, TraceJob, TracerController};
 use std::alloc::Layout;
 use std::cell::RefCell;
@@ -42,6 +42,7 @@ pub struct Mutator<'gc> {
     allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
+    mark: GcMark,
 }
 
 impl<'gc> Drop for Mutator<'gc> {
@@ -57,10 +58,13 @@ impl<'gc> Mutator<'gc> {
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
+        let mark = tracer_controller.prev_mark();
+
         Self {
             allocator,
             tracer_controller,
             rescan: RefCell::new(vec![]),
+            mark,
             _lock,
         }
     }
@@ -88,7 +92,7 @@ impl<'gc> Mutator<'gc> {
             let header_ptr = ptr.cast();
 
             write(val_ptr, value);
-            write(header_ptr, SizedHeader::<T>::new());
+            write(header_ptr, SizedHeader::<T>::new(self.mark));
 
             Gc::from_ptr(val_ptr)
         }
@@ -142,7 +146,7 @@ impl<'gc> Mutator<'gc> {
             }
 
             let slice: &[T] = std::slice::from_raw_parts(slice_ptr, len);
-            write(header_ptr, SliceHeader::<T>::new(len));
+            write(header_ptr, SliceHeader::<T>::new(self.mark, len));
 
             Gc::from_ptr(slice as *const [T] )
         }

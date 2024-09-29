@@ -17,8 +17,6 @@ pub trait GcHeader {
 #[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum GcMark {
-    New,
-    // these are the marks that rotate
     Red,
     Green,
     Blue,
@@ -30,15 +28,17 @@ impl GcMark {
             GcMark::Red   => GcMark::Green,
             GcMark::Green => GcMark::Blue,
             GcMark::Blue  => GcMark::Red,
-            _             => panic!("Attempted to rotate a mark that shouldn't be rotated"),
         }
+    }
+
+    pub fn prev(&self) -> Self {
+        self.rotate().rotate()
     }
 }
 
 impl From<u8> for GcMark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == GcMark::New as u8 => GcMark::New,
             x if x == GcMark::Red as u8 => GcMark::Red,
             x if x == GcMark::Green as u8 => GcMark::Green,
             x if x == GcMark::Blue as u8 => GcMark::Blue,
@@ -53,9 +53,9 @@ pub struct SizedHeader<T> {
 }
 
 impl<T> SizedHeader<T> {
-    pub fn new() -> Self {
+    pub fn new(mark: GcMark) -> Self {
         Self {
-            mark: AtomicU8::new(GcMark::New as u8),
+            mark: AtomicU8::new(mark as u8),
             _item_type: PhantomData::<T>
         }
     }
@@ -89,9 +89,9 @@ pub struct SliceHeader<T> {
 }
 
 impl<T> SliceHeader<T> {
-    pub fn new(len: usize) -> Self {
+    pub fn new(mark: GcMark, len: usize) -> Self {
         Self {
-            mark: AtomicU8::new(GcMark::New as u8),
+            mark: AtomicU8::new(mark as u8),
             len,
             _item_type: PhantomData::<T>
         }
