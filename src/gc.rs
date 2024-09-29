@@ -43,8 +43,8 @@ use std::ptr::{null_mut, NonNull};
 /// array can be obtained via the mutator by using one of several array allocation methods
 /// including [`crate::mutator::Mutator::alloc_array`].
 pub struct Gc<'gc, T: Trace + ?Sized> {
-    ptr: &'gc T,
-    _no_send: PhantomData<*mut T>
+    ptr: *mut T,
+    _no_send: PhantomData<&'gc T>
 }
 
 impl<'gc, T: Trace + ?Sized> Copy for Gc<'gc, T> {}
@@ -53,7 +53,7 @@ impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
     fn clone(&self) -> Self {
         Self { 
             ptr: self.ptr,
-            _no_send: PhantomData::<*mut T>
+            _no_send: PhantomData::<&'gc T>
         }
     }
 }
@@ -63,8 +63,8 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
         let thin = gc_mut.ptr.load(Ordering::SeqCst);
         
         Self {
-            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap()),
-            _no_send: PhantomData::<*mut T>
+            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap()) as *const T as *mut T,
+            _no_send: PhantomData::<&'gc T>
         }
     }
 }
@@ -79,7 +79,7 @@ impl<'gc, T: Trace + ?Sized> Deref for Gc<'gc, T> {
     ///
     /// May either dereference into a `&'gc [T]` or a sized `&'gc T`. 
     fn deref(&self) -> &Self::Target {
-        self.ptr
+        unsafe { &*self.ptr }
     }
 }
 
@@ -92,14 +92,14 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
 impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     /// Get a reference to a garabage collected value with the lifetime of the mutation.
     pub fn scoped_deref(&self) -> &'gc T {
-        self.ptr
+        unsafe { &*self.ptr }
     }
     // SAFETY: the pointer must have a valid GcHeader for T, and be allocated
     // within a GC Arena
     pub(crate) unsafe fn from_ptr(ptr: *const T) -> Self {
         Self { 
-            ptr: &*ptr,
-            _no_send: PhantomData::<*mut T>
+            ptr: ptr as *mut T,
+            _no_send: PhantomData::<&'gc T>
         }
     }
 

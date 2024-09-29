@@ -145,10 +145,10 @@ impl<'gc> Mutator<'gc> {
                 write(slice_ptr.add(i), item);
             }
 
-            let slice: &[T] = std::slice::from_raw_parts(slice_ptr, len);
+            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
             write(header_ptr, SliceHeader::<T>::new(self.mark, len));
 
-            Gc::from_ptr(slice as *const [T] )
+            Gc::from_ptr(slice)
         }
     }
 
