@@ -113,17 +113,17 @@ impl<'gc> Mutator<'gc> {
     ///
     /// ```
     ///
-    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<[T]> {
+    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
         self.alloc_array_from_fn(len, |_| value.clone())
     }
 
-    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<[T]> {
+    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
         self.alloc_array_from_fn(slice.len(), |idx| {
             slice[idx].clone()
         })
     }
 
-    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<[T]> 
+    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<'gc, [T]> 
     where
         T: Trace,
         F: FnMut(usize) -> T

@@ -1,5 +1,5 @@
 use super::header::GcMark;
-use crate::raw_allocator::{AllocError as RawAllocError, Allocator as RawAllocator};
+use nimix::{AllocError as RawAllocError, Allocator as RawAllocator};
 use std::alloc::Layout;
 
 #[derive(Debug)]

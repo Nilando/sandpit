@@ -266,6 +266,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
 
 [[package]]
+name = "nimix"
+version = "0.1.0"
+source = "git+https://github.com/Nilando/nimix?branch=main#618646680da1bf39ecaf175e52346b8a13eb68d3"
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -403,6 +408,7 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "higher-kinded-types",
+ "nimix",
  "sandpit_derive",
 ]
 

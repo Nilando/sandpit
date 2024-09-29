@@ -50,7 +50,6 @@ mod header;
 mod metrics;
 mod monitor;
 mod mutator;
-mod raw_allocator;
 mod trace;
 mod time_slicer;
 mod pointee;
