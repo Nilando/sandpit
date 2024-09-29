@@ -8,10 +8,11 @@ use sandpit::{
     TraceLeaf
 };
 
-fn alloc_rand(mu: &Mutator) {
+fn alloc_data(mu: &Mutator) {
     // for a random number of times
     // alloc a random number of usizes
     // alloc a random number of arrays
+    // of a random size
 }
 
 fn alloc_rand_nested(mu: &Mutator) {

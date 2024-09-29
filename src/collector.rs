@@ -70,10 +70,10 @@ where
     fn major_collect(&self) {
         let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
-        self.old_objects.store(0, Ordering::SeqCst);
+        self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
         self.collect();
-        self.major_collections.fetch_add(1, Ordering::SeqCst);
+        self.major_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -88,7 +88,7 @@ where
         let _lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
-        self.minor_collections.fetch_add(1, Ordering::SeqCst);
+        self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -100,11 +100,11 @@ where
     }
 
     fn get_major_collections(&self) -> usize {
-        self.major_collections.load(Ordering::SeqCst)
+        self.major_collections.load(Ordering::Relaxed)
     }
 
     fn get_minor_collections(&self) -> usize {
-        self.minor_collections.load(Ordering::SeqCst)
+        self.minor_collections.load(Ordering::Relaxed)
     }
 
     fn get_arena_size(&self) -> usize {
@@ -112,15 +112,15 @@ where
     }
 
     fn get_old_objects_count(&self) -> usize {
-        self.old_objects.load(Ordering::SeqCst)
+        self.old_objects.load(Ordering::Relaxed)
     }
 
     fn get_major_collect_avg_time(&self) -> usize {
-        self.major_collect_avg_time.load(Ordering::SeqCst)
+        self.major_collect_avg_time.load(Ordering::Relaxed)
     }
 
     fn get_minor_collect_avg_time(&self) -> usize {
-        self.minor_collect_avg_time.load(Ordering::SeqCst)
+        self.minor_collect_avg_time.load(Ordering::Relaxed)
     }
 
     fn get_state(&self) -> GcState {
@@ -201,13 +201,13 @@ where
         elapsed_time: usize,
         num_collections: usize,
     ) {
-        let avg = average.load(Ordering::SeqCst);
+        let avg = average.load(Ordering::Relaxed);
         let update = elapsed_time.abs_diff(avg) / num_collections;
 
         if avg > elapsed_time {
-            average.fetch_sub(update, Ordering::SeqCst);
+            average.fetch_sub(update, Ordering::Relaxed);
         } else {
-            average.fetch_add(update, Ordering::SeqCst);
+            average.fetch_add(update, Ordering::Relaxed);
         }
     }
 

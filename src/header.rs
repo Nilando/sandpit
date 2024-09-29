@@ -9,9 +9,6 @@ pub trait GcHeader {
     fn get_mark(&self) -> GcMark;
     fn set_mark(&self, mark: GcMark);
     fn get_alloc_layout(&self) -> Layout;
-    fn as_ptr(&self) -> *mut u8 {
-        self as *const Self as *const u8 as *mut u8
-    }
 }
 
 #[repr(u8)]

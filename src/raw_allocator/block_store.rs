@@ -125,7 +125,7 @@ impl BlockStore {
         while let Some(block) = large.pop() {
             let header_mark = unsafe { &*(block.as_ptr() as *const AllocMark) };
 
-            if header_mark.load(Ordering::SeqCst) == mark {
+            if header_mark.load(Ordering::Relaxed) == mark {
                 new_large.push(block);
             }
         }

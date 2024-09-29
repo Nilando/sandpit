@@ -35,8 +35,8 @@ impl Tracer {
         //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
 
         let header = gc.get_header();
+        let alloc_ptr = gc.get_header_ptr();
         let alloc_layout = gc.get_layout();
-        let alloc_ptr = header.as_ptr();
 
         if header.get_mark() == self.mark {
             return;
@@ -46,7 +46,7 @@ impl Tracer {
 
         self.increment_mark_count();
 
-        unsafe { Allocator::mark(alloc_ptr, alloc_layout, self.mark).expect("set mark failure") };
+        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark).expect("set mark failure") };
 
         if T::IS_LEAF {
             return;

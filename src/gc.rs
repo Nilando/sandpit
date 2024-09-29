@@ -60,10 +60,10 @@ impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
 
 impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
     fn from(gc_mut: GcMut<'gc, T>) -> Self {
-        let thin = gc_mut.ptr.load(Ordering::SeqCst);
+        let thin = gc_mut.ptr.load(Ordering::Relaxed);
         
         Self {
-            ptr: <T as GcPointee>::deref(NonNull::new(thin).unwrap()) as *const T as *mut T,
+            ptr: <T as GcPointee>::as_fat(NonNull::new(thin).unwrap()) as *mut T,
             _no_send: PhantomData::<&'gc T>
         }
     }
@@ -107,6 +107,11 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         <T as GcPointee>::get_header(self.as_thin())
     }
 
+    // THIS EXIST FOR PROVENANCE DON't REMOVE
+    pub(crate) fn get_header_ptr(&self) -> *const <T as GcPointee>::GcHeader {
+        <T as GcPointee>::get_header_ptr(self.as_thin())
+    }
+
     pub(crate) fn as_thin(&self) -> NonNull<Thin<T>> {
         NonNull::new(self.ptr as *const T as *const Thin<T> as *mut Thin<T>).unwrap()
     }
@@ -144,7 +149,7 @@ impl<'gc, T: Trace + ?Sized> Deref for GcMut<'gc, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        let thin_ptr = self.ptr.load(Ordering::Acquire);
+        let thin_ptr = self.ptr.load(Ordering::Relaxed);
 
         <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
@@ -180,11 +185,11 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     pub(crate) unsafe fn set(&self, new_gc: impl Into<Gc<'gc, T>>) {
         let thin_ptr = new_gc.into().as_thin().as_ptr();
 
-        self.ptr.store(thin_ptr, Ordering::Release);
+        self.ptr.store(thin_ptr, Ordering::Relaxed);
     }
 
     pub fn scoped_deref(&self) -> &'gc T {
-        let thin_ptr = self.ptr.load(Ordering::Acquire);
+        let thin_ptr = self.ptr.load(Ordering::Relaxed);
 
         <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
@@ -241,7 +246,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
     pub(crate) unsafe fn set(&self, new: GcNullMut<'gc, T>) {
         let thin_ptr = new.ptr.load(Ordering::Relaxed);
 
-        self.ptr.store(thin_ptr, Ordering::Release);
+        self.ptr.store(thin_ptr, Ordering::Relaxed);
     }
 
     // safe because setting to null doesn't require anything to be retraced!
@@ -255,7 +260,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
         } else {
             Some(
                 GcMut {
-                    ptr: AtomicPtr::new(self.ptr.load(Ordering::SeqCst)),
+                    ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
                     scope: PhantomData::<&'gc *mut T>,
                 }
             )

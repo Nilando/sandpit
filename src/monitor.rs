@@ -44,21 +44,21 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     pub fn stop(&self) {
-        self.flag.store(false, Ordering::SeqCst);
+        self.flag.store(false, Ordering::Relaxed);
     }
 
     pub fn get_max_old_objects(&self) -> usize {
-        self.max_old_objects.load(Ordering::SeqCst)
+        self.max_old_objects.load(Ordering::Relaxed)
     }
 
     pub fn get_prev_arena_size(&self) -> usize {
-        self.prev_arena_size.load(Ordering::SeqCst)
+        self.prev_arena_size.load(Ordering::Relaxed)
     }
 
     pub fn start(self: Arc<Self>) {
         if self
             .flag
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
             return;
@@ -90,19 +90,19 @@ impl<T: Collect + 'static> Monitor<T> {
             }
 
             self.prev_arena_size
-                .store(self.collector.get_arena_size(), Ordering::SeqCst);
+                .store(self.collector.get_arena_size(), Ordering::Relaxed);
         }
     }
 
     fn major_trigger(&self) -> bool {
         let old_objects = self.collector.get_old_objects_count();
 
-        old_objects > self.max_old_objects.load(Ordering::SeqCst)
+        old_objects > self.max_old_objects.load(Ordering::Relaxed)
     }
 
     fn minor_trigger(&self) -> bool {
         let arena_size = self.collector.get_arena_size();
-        let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+        let prev_arena_size = self.prev_arena_size.load(Ordering::Relaxed);
 
         arena_size as f32 > (prev_arena_size as f32 * self.arena_size_ratio_trigger)
     }
@@ -112,12 +112,12 @@ impl<T: Collect + 'static> Monitor<T> {
 
         self.max_old_objects.store(
             (old_objects as f32 * self.max_old_growth_rate).floor() as usize,
-            Ordering::SeqCst,
+            Ordering::Relaxed,
         );
     }
 
     fn should_stop_monitoring(&self) -> bool {
-        !self.flag.load(Ordering::SeqCst)
+        !self.flag.load(Ordering::Relaxed)
     }
 
     fn sleep(&self) {

@@ -23,45 +23,45 @@ pub struct Thin<T: ?Sized> {
 pub trait GcPointee {
     type GcHeader: GcHeader;
 
-    fn deref<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self;
-    fn get_header<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self::GcHeader;
+    fn as_fat<'a>(thin_ptr: NonNull<Thin<Self>>) -> *const Self;
+    fn deref<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self {
+        unsafe { &*Self::as_fat(thin_ptr) }
+    }
+    fn get_header<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self::GcHeader {
+        unsafe { &*Self::get_header_ptr(thin_ptr) }
+    }
+    fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader;
 }
 
 impl<T: Trace> GcPointee for T {
     type GcHeader = SizedHeader<T>;
 
-    fn deref<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self {
-        // Saftey: T is sized, so derefing the thin pointer is okay
-        unsafe { &*thin_ptr.cast().as_ptr() }
+    fn as_fat<'a>(thin_ptr: NonNull<Thin<Self>>) -> *const Self {
+        thin_ptr.cast().as_ptr()
     }
 
-    fn get_header<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self::GcHeader {
+    fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
         let header_layout = Layout::new::<SizedHeader<T>>();
         let item_layout = Layout::new::<T>();
 
         // Unwrap safe b/c layout has already been validated during alloc.
         let (_, item_offset) = header_layout.extend(item_layout).unwrap();
-        // Safety:
-        unsafe {
-            let header_ptr = thin_ptr.as_ptr().byte_sub(item_offset) as *mut Self::GcHeader;
 
-            &*header_ptr
-        }
+        unsafe { thin_ptr.as_ptr().byte_sub(item_offset) as *const Self::GcHeader }
     }
 }
 
 impl<T: Trace> GcPointee for [T] {
     type GcHeader = SliceHeader<T>;
 
-    fn deref<'a>(ptr: NonNull<Thin<Self>>) -> &'a Self {
-        let header: &SliceHeader<T> = Self::get_header(ptr);
+    fn as_fat<'a>(thin_ptr: NonNull<Thin<Self>>) -> *const Self {
+        let header: &SliceHeader<T> = Self::get_header(thin_ptr);
         let len = header.len();
 
-        // SAFETY: the length of the slice is stored in the SliceHeader.
-        unsafe { &*std::ptr::slice_from_raw_parts(ptr.cast().as_ptr(), len) }
+        std::ptr::slice_from_raw_parts(thin_ptr.cast().as_ptr(), len)
     }
 
-    fn get_header<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self::GcHeader {
+    fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
         let header_layout = Layout::new::<SliceHeader<T>>();
         // note: item_layout might not be the same layout used to alloc [T], but should 
         // still be fine in calculating the offset needed to get to the header.
@@ -71,11 +71,7 @@ impl<T: Trace> GcPointee for [T] {
         let (_, item_offset) = header_layout.extend(item_layout).unwrap();
         let ptr: *mut Self::GcHeader = thin_ptr.cast().as_ptr();
 
-        unsafe {
-            let header_ptr = ptr.byte_sub(item_offset) as *mut Self::GcHeader;
-
-            &*header_ptr
-        }
+        unsafe { ptr.byte_sub(item_offset) as *const Self::GcHeader }
     }
 }
 
