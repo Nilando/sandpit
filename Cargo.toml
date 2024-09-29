@@ -33,6 +33,7 @@ higher-kinded-types = "0.1.1"
 
 [dev-dependencies]
 criterion = "0.5.1"
+rand = "0.8.4"
 
 [[bench]]
 name = "node_bench"

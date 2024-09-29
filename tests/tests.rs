@@ -7,17 +7,20 @@ use sandpit::{
     Trace,
     TraceLeaf
 };
+use rand::prelude::*;
 
-fn alloc_data(mu: &Mutator) {
-    // for a random number of times
-    // alloc a random number of usizes
-    // alloc a random number of arrays
-    // of a random size
-}
+fn alloc_rand_garbage(mu: &Mutator) {
+    let mut rng = rand::thread_rng();
+    for _ in 0..rng.gen_range(1..100) {
+        for k in 0..rng.gen_range(1..100) {
+            Gc::new(mu, k);
+        }
 
-fn alloc_rand_nested(mu: &Mutator) {
-    // flip a coin
-    //  
+        for _ in 0..rng.gen_range(1..10) {
+            let array_size = rng.gen_range(0..u16::MAX);
+            mu.alloc_array(0u8, array_size as usize);
+        }
+    }
 }
 
 #[test]
@@ -466,5 +469,62 @@ fn multi_threaded_allocating() {
 
             if mu.gc_yield() { break; }
         });
+    });
+}
+
+
+// test idea
+// for n times
+//  1. insert a node into the list
+//  2. perform a collection
+//  3. allocate random garbage
+//
+// assert the list still holds all correct values
+#[test]
+fn list_building_test() {
+    const LIST_SIZE: usize = 10;
+    // increasing list size makes this test run a  long time
+    #[derive(Trace)]
+    struct Node<'gc> {
+        ptr: GcNullMut<'gc, Node<'gc>>,
+        idx: usize
+    }
+
+    let arena: Arena<Root![Gc<'_, Node<'_>>]> = Arena::new(|mu| {
+        Gc::new(mu, Node {
+            ptr: GcNullMut::new_null(mu),
+            idx: 0,
+        })
+    });
+
+    for i in (1..LIST_SIZE).rev() {
+        println!("{i}");
+        arena.mutate(|mu, root| {
+            let new_node = GcNullMut::new(mu, Node {
+                ptr: root.ptr.clone(),
+                idx: i,
+            });
+
+            root.write_barrier(mu, |barrier| {
+                field!(barrier, Node, ptr).set(new_node)
+            });
+        });
+
+        arena.major_collect();
+
+        arena.mutate(|mu, _root| {
+            alloc_rand_garbage(mu);
+        });
+    }
+
+    arena.mutate(|mu, root| {
+        let mut node: &Node = &**root;
+        assert!(node.idx == 0);
+
+        for i in 1..LIST_SIZE {
+            let next = node.ptr.clone().as_option().unwrap();
+            node = next.scoped_deref();
+            assert!(node.idx == i);
+        }
     });
 }
