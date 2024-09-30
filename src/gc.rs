@@ -1,6 +1,6 @@
 use super::trace::Trace;
 use crate::mutator::Mutator;
-use crate::header::{GcHeader, SliceHeader, SizedHeader};
+use crate::header::GcHeader;
 use crate::barrier::WriteBarrier;
 use crate::pointee::{GcPointee, Thin};
 

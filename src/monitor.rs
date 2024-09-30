@@ -50,7 +50,7 @@ impl<T: Collect + 'static> Monitor<T> {
 
     pub fn stop(&self) {
         self.flag.store(false, Ordering::Relaxed);
-        self.monitor_lock.lock().unwrap();
+        let _lock = self.monitor_lock.lock().unwrap();
     }
 
     pub fn get_max_old_objects(&self) -> usize {

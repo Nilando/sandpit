@@ -4,7 +4,6 @@ use super::gc::Gc;
 use super::pointee::Thin;
 use super::header::{GcMark, GcHeader, SizedHeader, SliceHeader};
 use super::trace::{Trace, TraceJob, TracerController};
-use std::alloc::Layout;
 use std::cell::RefCell;
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;

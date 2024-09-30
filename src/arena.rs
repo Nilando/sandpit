@@ -17,7 +17,8 @@ where
 {
     collector: Arc<Collector<R>>,
     monitor: Arc<Monitor<Collector<R>>>,
-    config: GcConfig,
+    // In the future it would be cool to allow for editing the config
+    _config: GcConfig,
 }
 
 impl<R: ForLt> Drop for Arena<R>
@@ -87,7 +88,7 @@ where
         Self {
             collector,
             monitor,
-            config,
+            _config: config,
         }
     }
 

@@ -8,7 +8,8 @@ use std::sync::Arc;
 use crate::gc::Gc;
 
 pub struct Tracer {
-    id: usize,
+    // sometimes ID might be helpful in debugging, but currently not used anywhere
+    _id: usize,
     controller: Arc<TracerController>,
     mark: GcMark,
     mark_count: Cell<usize>,
@@ -18,7 +19,7 @@ pub struct Tracer {
 impl Tracer {
     pub fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
         Self {
-            id,
+            _id: id,
             controller,
             mark,
             mark_count: Cell::new(0),
