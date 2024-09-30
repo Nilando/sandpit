@@ -41,11 +41,7 @@ impl<T: Trace> GcPointee for T {
     }
 
     fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
-        let header_layout = Layout::new::<SizedHeader<T>>();
-        let item_layout = Layout::new::<T>();
-
-        // Unwrap safe b/c layout has already been validated during alloc.
-        let (_, item_offset) = header_layout.extend(item_layout).unwrap();
+        let (_, item_offset) = sized_alloc_layout::<T>();
 
         unsafe { thin_ptr.as_ptr().byte_sub(item_offset) as *const Self::GcHeader }
     }
@@ -62,16 +58,33 @@ impl<T: Trace> GcPointee for [T] {
     }
 
     fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
-        let header_layout = Layout::new::<SliceHeader<T>>();
-        // note: item_layout might not be the same layout used to alloc [T], but should 
-        // still be fine in calculating the offset needed to get to the header.
-        let item_layout = Layout::new::<T>();
-
-        // Unwrap safe b/c layout has already been validated during alloc.
-        let (_, item_offset) = header_layout.extend(item_layout).unwrap();
+        // we can just pretend the array has a length of 1 here, doesn't effect the offset
+        let (_, item_offset) = slice_alloc_layout::<T>(1);
+        
         let ptr: *mut Self::GcHeader = thin_ptr.cast().as_ptr();
 
         unsafe { ptr.byte_sub(item_offset) as *const Self::GcHeader }
     }
 }
 
+pub fn sized_alloc_layout<T>() -> (Layout, usize) {
+    let header_layout = Layout::new::<SizedHeader<T>>();
+    let val_layout = Layout::new::<T>();
+    let (unpadded_layout, offset) = header_layout
+        .extend(val_layout)
+        .expect("todo remove this expect");
+    let layout = unpadded_layout.pad_to_align();
+
+        (layout, offset)
+}
+
+pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
+        let header_layout = Layout::new::<SliceHeader<T>>();
+        let slice_layout = Layout::array::<T>(len).expect("todo remove this expect");
+        let (unpadded_layout, offset) = header_layout
+            .extend(slice_layout)
+            .expect("todo remove this expect");
+        let layout = unpadded_layout.pad_to_align();
+
+        (layout, offset)
+}

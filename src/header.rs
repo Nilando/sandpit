@@ -1,3 +1,4 @@
+use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::marker::PhantomData;
@@ -6,7 +7,7 @@ use std::num::NonZero;
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
 // we need to mark a layout to mark an object
-pub trait GcHeader {
+pub trait GcHeader: Sized {
     fn get_mark(&self) -> GcMark;
     fn set_mark(&self, mark: GcMark);
     fn get_alloc_layout(&self) -> Layout;
@@ -87,13 +88,9 @@ impl<T> GcHeader for SizedHeader<T> {
     }
 
     fn get_alloc_layout(&self) -> Layout {
-        let header_layout = Layout::new::<SizedHeader<T>>();
-        let val_layout = Layout::new::<T>();
-        let (alloc_layout, _) = header_layout
-            .extend(val_layout)
-            .expect("todo: remove this expect");
+        let (layout, _) = sized_alloc_layout::<T>();
 
-        alloc_layout.pad_to_align()
+        layout
     }
 }
 
@@ -128,11 +125,8 @@ impl<T> GcHeader for SliceHeader<T> {
     }
 
     fn get_alloc_layout(&self) -> Layout {
-        let header_layout = Layout::new::<SliceHeader<T>>();
-        let slice_layout = Layout::array::<T>(self.len).expect("todo remove this expect");
-        let (alloc_layout, _) = header_layout
-            .extend(slice_layout)
-            .expect("todo remove this expect");
-        alloc_layout.pad_to_align()
+        let (layout, _) = slice_alloc_layout::<T>(self.len);
+
+        layout
     }
 }

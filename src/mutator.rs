@@ -1,4 +1,5 @@
 use super::allocator::Allocator;
+use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::gc::Gc;
 use super::pointee::Thin;
 use super::header::{GcMark, GcHeader, SizedHeader, SliceHeader};
@@ -74,12 +75,7 @@ impl<'gc> Mutator<'gc> {
     /// This may panic if the allocation fails which may be because of
     /// lack of memory or object allocated is too large.
     pub fn alloc<T: Trace>(&self, value: T) -> Gc<'gc, T> {
-        let header_layout = Layout::new::<SizedHeader<T>>();
-        let val_layout = Layout::new::<T>();
-        let (alloc_layout_not_padded, val_offset) = header_layout
-            .extend(val_layout)
-            .expect("failed GC alloc: invalid layout");
-        let alloc_layout = alloc_layout_not_padded.pad_to_align();
+        let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
         unsafe {
             let ptr = self.allocator.alloc(alloc_layout);
@@ -112,8 +108,8 @@ impl<'gc> Mutator<'gc> {
     /// //let gc_array = mutator.alloc_array(value, len);
     ///
     /// ```
-    ///
     pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
+        // TODO: I think this could be done much faster
         self.alloc_array_from_fn(len, |_| value.clone())
     }
 
@@ -129,12 +125,7 @@ impl<'gc> Mutator<'gc> {
         T: Trace,
         F: FnMut(usize) -> T
     {
-        let header_layout = Layout::new::<SliceHeader<T>>();
-        let slice_layout = Layout::array::<T>(len).expect("bad GC alloc: invalid layout");
-        let (alloc_layout_not_padded, slice_offset) = header_layout
-            .extend(slice_layout)
-            .expect("bad GC alloc: invalid layout");
-        let alloc_layout = alloc_layout_not_padded.pad_to_align();
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
         unsafe {
             let ptr = self.allocator.alloc(alloc_layout);
