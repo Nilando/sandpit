@@ -72,7 +72,7 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let val_layout = Layout::new::<T>();
     let (unpadded_layout, offset) = header_layout
         .extend(val_layout)
-        .expect("todo remove this expect");
+        .expect("GC BAD LAYOUT");
     let layout = unpadded_layout.pad_to_align();
 
         (layout, offset)
@@ -80,10 +80,10 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
 
 pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
         let header_layout = Layout::new::<SliceHeader<T>>();
-        let slice_layout = Layout::array::<T>(len).expect("todo remove this expect");
+        let slice_layout = Layout::array::<T>(len).expect("GC BAD LAYOUT");
         let (unpadded_layout, offset) = header_layout
             .extend(slice_layout)
-            .expect("todo remove this expect");
+            .expect("GC BAD LAYOUT");
         let layout = unpadded_layout.pad_to_align();
 
         (layout, offset)
