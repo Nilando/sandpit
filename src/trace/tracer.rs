@@ -46,7 +46,7 @@ impl Tracer {
 
         self.increment_mark_count();
 
-        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark).expect("set mark failure") };
+        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
 
         if T::IS_LEAF {
             return;

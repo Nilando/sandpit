@@ -156,7 +156,10 @@ impl TracerController {
         trace_callback();
 
         for jh in join_handles.into_iter() {
-            jh.join().expect("Tracer Ran Successfully");
+            jh.join().unwrap_or_else(|_| {
+                println!("GC Tracer Panic");
+                std::process::abort();
+            });
         }
 
         self.clean_up();
@@ -218,7 +221,10 @@ impl TracerController {
                 let marked_objects = tracer.trace_loop();
 
                 object_count.fetch_add(marked_objects, Ordering::SeqCst);
-            }).expect("Thread Spawned Successfully");
+            }).unwrap_or_else(|_| {
+                println!("Failed to start GC Thread");
+                std::process::abort();
+            });
 
             join_handles.push(jh);
         }

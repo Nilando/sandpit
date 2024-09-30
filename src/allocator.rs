@@ -29,15 +29,13 @@ impl Allocator {
         }
     }
 
-    pub unsafe fn alloc(&self, layout: Layout) -> Result<*mut u8, AllocError> {
-        let ptr: *mut u8 = self.allocator.alloc(layout)?;
-
-        Ok(ptr)
+    pub unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.allocator.alloc(layout).expect("GC Failed Alloc") as *mut u8
     }
 
     // needs the layout in the case of large objects
-    pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) -> Result<(), AllocError> {
-        Ok(RawAllocator::mark(ptr, layout, mark.into())?.into())
+    pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) {
+        RawAllocator::mark(ptr, layout, mark.into()).expect("GC Failed Marking Obj")
     }
 
     // Anything not marked with the live mark will be freed

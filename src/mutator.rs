@@ -82,7 +82,7 @@ impl<'gc> Mutator<'gc> {
         let alloc_layout = alloc_layout_not_padded.pad_to_align();
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout).expect("failed GC alloc");
+            let ptr = self.allocator.alloc(alloc_layout);
             // SAFETY: the alloc layout was extended to have capacity
             // for the header and object to be written into. 
             
@@ -137,7 +137,7 @@ impl<'gc> Mutator<'gc> {
         let alloc_layout = alloc_layout_not_padded.pad_to_align();
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout).expect("failed GC alloc");
+            let ptr = self.allocator.alloc(alloc_layout);
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 
