@@ -25,8 +25,7 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn drop(&mut self) {
-        self.stop_monitor();
-        self.collector.wait_for_collection();
+        self.monitor.stop();
     }
 }
 
@@ -81,9 +80,9 @@ where
         let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, &config));
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
-        if config.monitor_on {
+        //if config.monitor_on {
             monitor.clone().start();
-        }
+        //}
 
         Self {
             collector,
@@ -137,9 +136,9 @@ where
     /// });
     ///
     /// ```
-    pub fn mutate<F, O>(&self, f: F) -> O
+    pub fn mutate<F>(&self, f: F)
     where
-        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>) -> O,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>),
     {
         self.collector.mutate(f)
     }
@@ -170,6 +169,7 @@ where
     /// Starts a monitor in a separate thread if it is not already started. 
     /// The monitor will automatically and concurrently trigger major and
     /// minor collections when appropriate.
+    /*
     pub fn start_monitor(&self) {
         self.monitor.clone().start();
     }
@@ -178,6 +178,7 @@ where
     pub fn stop_monitor(&self) {
         self.monitor.stop();
     }
+    */
 
     /// Returns a copy of the the GcConfig that the arena was created with.
     /// Currently there is no way to update the GcConfig after the arena

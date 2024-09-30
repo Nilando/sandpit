@@ -58,7 +58,7 @@ impl TracerController {
             work_sent: AtomicUsize::new(0),
             work_received: AtomicUsize::new(0),
             time_slice_lock: Mutex::new(()),
-            current_mark: AtomicU8::new(GcMark::Red as u8),
+            current_mark: AtomicU8::new(GcMark::Red.into()),
 
             num_tracers: config.tracer_threads,
             trace_share_min: config.trace_share_min,
@@ -165,7 +165,7 @@ impl TracerController {
     pub fn rotate_mark(&self) -> GcMark {
         let new_mark = self.get_current_mark().rotate();
 
-        self.current_mark.store(new_mark as u8, Ordering::SeqCst);
+        self.current_mark.store(new_mark.into(), Ordering::SeqCst);
 
         new_mark
     }

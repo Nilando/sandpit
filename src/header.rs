@@ -1,6 +1,7 @@
 use std::alloc::Layout;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::marker::PhantomData;
+use std::num::NonZero;
 
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
@@ -11,7 +12,6 @@ pub trait GcHeader {
     fn get_alloc_layout(&self) -> Layout;
 }
 
-#[repr(u8)]
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum GcMark {
     Red,
@@ -33,14 +33,33 @@ impl GcMark {
     }
 }
 
+impl From<GcMark> for u8 {
+    fn from(value: GcMark) -> Self {
+        match value {
+            GcMark::Red => 1,
+            GcMark::Green => 2,
+            GcMark::Blue => 3,
+        }
+    }
+}
+
 impl From<u8> for GcMark {
     fn from(value: u8) -> Self {
         match value {
-            x if x == GcMark::Red as u8 => GcMark::Red,
-            x if x == GcMark::Green as u8 => GcMark::Green,
-            x if x == GcMark::Blue as u8 => GcMark::Blue,
-            _ => panic!("Bad GC GcMark"),
+            1 => GcMark::Red,
+            2 => GcMark::Green,
+            3 => GcMark::Blue,
+            _ => {
+                println!("Bad GC Mark, aborting process!");
+                std::process::abort();
+            }
         }
+    }
+}
+
+impl From<GcMark> for NonZero<u8> {
+    fn from(value: GcMark) -> Self {
+        NonZero::new(value.into()).unwrap()
     }
 }
 
@@ -52,7 +71,7 @@ pub struct SizedHeader<T> {
 impl<T> SizedHeader<T> {
     pub fn new(mark: GcMark) -> Self {
         Self {
-            mark: AtomicU8::new(mark as u8),
+            mark: AtomicU8::new(mark.into()),
             _item_type: PhantomData::<T>
         }
     }
@@ -60,7 +79,7 @@ impl<T> SizedHeader<T> {
 
 impl<T> GcHeader for SizedHeader<T> {
     fn set_mark(&self, mark: GcMark) {
-        self.mark.store(mark as u8, Ordering::Release);
+        self.mark.store(mark.into(), Ordering::Release);
     }
 
     fn get_mark(&self) -> GcMark {
@@ -72,7 +91,7 @@ impl<T> GcHeader for SizedHeader<T> {
         let val_layout = Layout::new::<T>();
         let (alloc_layout, _) = header_layout
             .extend(val_layout)
-            .expect("remove this expect");
+            .expect("todo: remove this expect");
 
         alloc_layout.pad_to_align()
     }
@@ -88,7 +107,7 @@ pub struct SliceHeader<T> {
 impl<T> SliceHeader<T> {
     pub fn new(mark: GcMark, len: usize) -> Self {
         Self {
-            mark: AtomicU8::new(mark as u8),
+            mark: AtomicU8::new(mark.into()),
             len,
             _item_type: PhantomData::<T>
         }
@@ -101,11 +120,11 @@ impl<T> SliceHeader<T> {
 
 impl<T> GcHeader for SliceHeader<T> {
     fn set_mark(&self, mark: GcMark) {
-        self.mark.store(mark as u8, Ordering::Release);
+        self.mark.store(mark.into(), Ordering::SeqCst);
     }
 
     fn get_mark(&self) -> GcMark {
-        self.mark.load(Ordering::Acquire).into()
+        self.mark.load(Ordering::SeqCst).into()
     }
 
     fn get_alloc_layout(&self) -> Layout {

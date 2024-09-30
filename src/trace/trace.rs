@@ -46,6 +46,9 @@ pub unsafe trait Trace: GcPointee {
     }
 }
 
+// trait __TraceTypeMustNotImplDrop {}
+// impl<T: Drop> __TraceTypeMustNotImplDrop for T {}
+
 unsafe impl<'gc, T: Trace + ?Sized> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 

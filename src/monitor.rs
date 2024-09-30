@@ -1,4 +1,5 @@
 use std::sync::{
+    Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
@@ -14,7 +15,10 @@ use super::config::GcConfig;
 // which are objects that have been traced.
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
+
     flag: AtomicBool,
+    monitor_lock: Mutex<()>,
+
     prev_arena_size: AtomicUsize,
     max_old_objects: AtomicUsize,
 
@@ -34,6 +38,7 @@ impl<T: Collect + 'static> Monitor<T> {
         Self {
             collector,
             flag: AtomicBool::new(false),
+            monitor_lock: Mutex::new(()),
             prev_arena_size: AtomicUsize::new(prev_arena_size),
             // TODO make this a config var
             max_old_objects: AtomicUsize::new(0),
@@ -45,6 +50,7 @@ impl<T: Collect + 'static> Monitor<T> {
 
     pub fn stop(&self) {
         self.flag.store(false, Ordering::Relaxed);
+        self.monitor_lock.lock().unwrap();
     }
 
     pub fn get_max_old_objects(&self) -> usize {
@@ -68,6 +74,8 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     fn monitor(&self) {
+        let _lock = self.monitor_lock.lock().unwrap();
+
         loop {
             self.sleep();
 

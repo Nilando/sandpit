@@ -37,16 +37,12 @@ impl Allocator {
 
     // needs the layout in the case of large objects
     pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) -> Result<(), AllocError> {
-        Ok(RawAllocator::mark(ptr, layout, mark as u8 + 1)?)
+        Ok(RawAllocator::mark(ptr, layout, mark.into())?.into())
     }
 
     // Anything not marked with the live mark will be freed
-    pub unsafe fn sweep(&self, live_mark: GcMark) {
-        self.allocator.sweep(live_mark as u8 + 1 )
-    }
-
-    pub fn is_sweeping(&self) -> bool {
-        self.allocator.is_sweeping()
+    pub unsafe fn sweep<F: FnOnce()>(&self, live_mark: GcMark, cb: F) {
+        self.allocator.sweep(live_mark.into(), cb)
     }
 
     pub fn get_size(&self) -> usize {

@@ -4,9 +4,10 @@ use super::config::GcConfig;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::trace::{Trace, TracerController};
-use higher_kinded_types::ForLt;
-use std::time::Instant;
 
+use higher_kinded_types::ForLt;
+
+use std::time::Instant;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -20,10 +21,11 @@ pub enum GcState {
     Finishing,
 }
 
+// collect trait is nice so that monitor does not need
+// to be generic on Root type, and just needs a type that impls collect
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
-    fn wait_for_collection(&self);
 
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
@@ -44,8 +46,8 @@ where
     // this lock is held while a collection is happening.
     // It is used to ensure that we don't start a collection while a collection 
     // is happening. TODO: could we possibly start a collection while one is happening?
-    //
     collection_lock: Mutex<()>,
+    mutation_lock: Mutex<()>,
 
     root: R::Of<'static>,
     major_collections: AtomicUsize,
@@ -63,16 +65,22 @@ impl<R: ForLt> Collect for Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    fn wait_for_collection(&self) {
-        let _lock = self.collection_lock.lock().unwrap();
-    }
-
     fn major_collect(&self) {
-        let _lock = self.collection_lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
+        let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
         self.collect();
+
+        // SAFETY: at this point there are no mutators and all garbage collected
+        // values have been marked with the current_mark
+        unsafe { 
+            self.arena.sweep(self.get_current_mark(), || {
+                drop(mutation_lock);
+            }); 
+        }
+
         self.major_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
@@ -85,9 +93,19 @@ where
     }
 
     fn minor_collect(&self) {
-        let _lock = self.collection_lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
+        let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
+
+        // SAFETY: at this point there are no mutators and all garbage collected
+        // values have been marked with the current_mark
+        unsafe { 
+            self.arena.sweep(self.get_current_mark(), || {
+                drop(mutation_lock);
+            }); 
+        }
+
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
@@ -165,6 +183,7 @@ where
             tracer,
             root,
             collection_lock: Mutex::new(()),
+            mutation_lock: Mutex::new(()),
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
             major_collect_avg_time: AtomicUsize::new(0),
@@ -174,14 +193,14 @@ where
         }
     }
 
-    pub fn mutate<F, O>(&self, f: F) -> O
+    pub fn mutate<F>(&self, f: F)
     where
-        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>) -> O,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>),
     {
         let mutator = self.new_mutator();
         let root = unsafe { self.scoped_root() };
 
-        f(&mutator, root)
+        f(&mutator, root);
     }
 
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
@@ -189,7 +208,7 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        let _collection_lock = self.collection_lock.lock().unwrap();
+        let _mutation_lock = self.mutation_lock.lock().unwrap();
         let yield_lock = self.tracer.yield_lock();
 
         Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)
@@ -223,9 +242,5 @@ where
         self.tracer.clone().trace(&self.root, self.old_objects.clone(), || {
             self.time_slicer.run();
         });
-
-        // SAFETY: at this point there are no mutators and all garbage collected
-        // values have been marked with the current_mark
-        unsafe { self.arena.sweep(self.get_current_mark()); }
     }
 }

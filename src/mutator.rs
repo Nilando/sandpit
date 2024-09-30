@@ -118,6 +118,7 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
+        // TODO: this could be one single write call
         self.alloc_array_from_fn(slice.len(), |idx| {
             slice[idx].clone()
         })
@@ -164,6 +165,10 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub(crate) fn retrace<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) {
+        if gc_ptr.get_header().get_mark() != self.tracer_controller.get_current_mark() {
+            return;
+        }
+
         let ptr: NonNull<Thin<T>> = gc_ptr.as_thin();
         let trace_job = TraceJob::new(ptr);
 
@@ -173,9 +178,5 @@ impl<'gc> Mutator<'gc> {
             let work = self.rescan.take();
             self.tracer_controller.send_work(work);
         }
-    }
-
-    pub(crate) fn is_marked<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) -> bool {
-        gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
     }
 }

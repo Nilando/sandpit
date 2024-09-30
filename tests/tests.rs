@@ -61,6 +61,8 @@ fn yield_requested_after_allocating() {
     });
 }
 
+/*
+ Got rid of the start monitor option for now
 #[test]
 fn calling_start_monitor_repeatedly_is_okay() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
@@ -71,6 +73,7 @@ fn calling_start_monitor_repeatedly_is_okay() {
 
     arena.mutate(|_, root| assert!(**root == 69));
 }
+*/
 
 #[test]
 fn objects_counted_should_be_one() {
@@ -125,14 +128,6 @@ fn nested_root() {
     assert_eq!(metrics.old_objects_count, 3);
 
     arena.mutate(|_, root| assert_eq!(****root, 69));
-}
-
-#[test]
-fn mutate_output() {
-    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
-    let output = arena.mutate(|_mu, root| **root);
-
-    assert!(output == 69)
 }
 
 #[test]
@@ -403,7 +398,7 @@ fn trace_complex_enum() {
             b: u8,
             c: u8
         }
-    };
+    }
 
     let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
         Gc::new(mu, Foo::A)
@@ -498,8 +493,9 @@ fn list_building_test() {
     });
 
     for i in (1..LIST_SIZE).rev() {
-        println!("{i}");
         arena.mutate(|mu, root| {
+            println!("pushing node: {i}");
+
             let new_node = GcNullMut::new(mu, Node {
                 ptr: root.ptr.clone(),
                 idx: i,
@@ -517,7 +513,7 @@ fn list_building_test() {
         });
     }
 
-    arena.mutate(|mu, root| {
+    arena.mutate(|_mu, root| {
         let mut node: &Node = &**root;
         assert!(node.idx == 0);
 

@@ -124,9 +124,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
 
         f(&barrier);
 
-        if mu.is_marked(*self) {
-            mu.retrace(*self);
-        }
+        mu.retrace(*self);
     }
 }
 
