@@ -10,10 +10,9 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ptr::{null_mut, NonNull};
 
-
 // A Gc points to a valid T within a GC Arena which is also succeeded by its 
 // GC header which may or may not be padded.
-// This holds true for GcMut as well as GcNullMut if it is not null.
+// This holds true for GcMut as well as GcOpt if it is not null.
 //
 //                                         Gc<T>
 //                                          |
@@ -37,7 +36,7 @@ use std::ptr::{null_mut, NonNull};
 /// but means any mutation of a GC value requires some form of interior mutatbility.
 ///
 /// A [`Gc`] is itself immutable in that it's inner pointer may never be
-/// changed. The [`GcMut`] and [`GcNullMut`] types allow for updating
+/// changed. The [`GcMut`] and [`GcOpt`] types allow for updating
 /// which value it is referencing through the means of a write barrier.
 /// A [`Gc`] may also point at a garbage collected array like `Gc<'gc, [T]>`. A Gc referencing an
 /// array can be obtained via the mutator by using one of several array allocation methods
@@ -195,12 +194,12 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     }
 }
 
-pub struct GcNullMut<'gc, T: Trace + ?Sized> {
+pub struct GcOpt<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
     scope: PhantomData<&'gc *mut T>,
 }
 
-impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcNullMut<'gc, T> {
+impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcOpt<'gc, T> {
     fn from(gc: Gc<'gc, T>) -> Self {
         Self {
             ptr: AtomicPtr::new(gc.as_thin().as_ptr()),
@@ -209,7 +208,7 @@ impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcNullMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcNullMut<'gc, T> {
+impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcOpt<'gc, T> {
     fn from(gc: GcMut<'gc, T>) -> Self {
         Self {
             ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
@@ -218,7 +217,25 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcNullMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + ?Sized> Clone for GcNullMut<'gc, T> {
+impl<'gc, T: Trace + ?Sized> From<Option<GcMut<'gc, T>>> for GcOpt<'gc, T> {
+    fn from(gc: Option<GcMut<'gc, T>>) -> Self {
+        match gc {
+            Some(ptr) => {
+                Self {
+                    ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
+                    scope: PhantomData::<&'gc *mut T>,
+                }
+            }
+            None => 
+                Self {
+                    ptr: AtomicPtr::new(null_mut()),
+                    scope: PhantomData::<&'gc *mut T>,
+                }
+        }
+    }
+}
+
+impl<'gc, T: Trace + ?Sized> Clone for GcOpt<'gc, T> {
     fn clone(&self) -> Self {
         Self {
             ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
@@ -227,23 +244,27 @@ impl<'gc, T: Trace + ?Sized> Clone for GcNullMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
-    pub fn new_null(_m: &'gc Mutator<'gc>) -> Self {
+impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
+    pub fn new_none(_m: &'gc Mutator<'gc>) -> Self {
         Self {
             ptr: AtomicPtr::new(null_mut()),
             scope: PhantomData::<&'gc *mut T>,
         }
     }
 
-    pub fn is_null(&self) -> bool {
+    pub fn is_none(&self) -> bool {
         self.ptr.load(Ordering::Relaxed).is_null()
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
     }
 
     // If the tracers have already traced this pointer, than the new pointer
     // must be retraced before the end of the mutation context.
     //
     // Use a write barrier to call this method safely.
-    pub(crate) unsafe fn set(&self, new: GcNullMut<'gc, T>) {
+    pub(crate) unsafe fn set(&self, new: GcOpt<'gc, T>) {
         let thin_ptr = new.ptr.load(Ordering::Relaxed);
 
         self.ptr.store(thin_ptr, Ordering::Relaxed);
@@ -255,7 +276,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
     }
 
     pub fn as_option(&self) -> Option<GcMut<'gc, T>> {
-        if self.is_null() {
+        if self.is_none() {
             None
         } else {
             Some(
@@ -268,7 +289,7 @@ impl<'gc, T: Trace + ?Sized> GcNullMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> GcNullMut<'gc, T> {
+impl<'gc, T: Trace> GcOpt<'gc, T> {
     pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
         m.alloc(obj).into()
     }

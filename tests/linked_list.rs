@@ -1,4 +1,4 @@
-use sandpit::{field, Arena, gc::{Gc, GcMut, GcNullMut}, Mutator, Root, Trace, TraceLeaf, WriteBarrier};
+use sandpit::{field, Arena, gc::{Gc, GcMut, GcOpt}, Mutator, Root, Trace, TraceLeaf, WriteBarrier};
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::ptr::NonNull;
 
@@ -32,16 +32,16 @@ impl<'gc, T: Trace> LinkedListIter<'gc, T> {
 
 #[derive(Trace, Clone)]
 pub struct LinkedList<'gc, T: Trace> {
-    start: GcNullMut<'gc, Node<'gc, T>>,
-    end: GcNullMut<'gc, Node<'gc, T>>,
+    start: GcOpt<'gc, Node<'gc, T>>,
+    end: GcOpt<'gc, Node<'gc, T>>,
     len: Cell<usize>,
 }
 
 impl<'gc, T: Trace> LinkedList<'gc, T> {
     pub fn new(mu: &'gc Mutator<'gc>) -> Gc<'gc, Self> {
         let new = Self {
-            start: GcNullMut::new_null(mu),
-            end: GcNullMut::new_null(mu),
+            start: GcOpt::new_none(mu),
+            end: GcOpt::new_none(mu),
             len: Cell::new(0),
         };
 
@@ -171,20 +171,20 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         self.len.get()
     }
 
-    fn init_push(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, gc_node: GcNullMut<'gc, Node<'gc, T>>) {
+    fn init_push(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, gc_node: GcOpt<'gc, Node<'gc, T>>) {
         LinkedList::set_start(this, mu, gc_node.clone());
         LinkedList::set_end(this, mu, gc_node);
         this.len.set(1);
         return;
     }
 
-    fn set_start(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
+    fn set_start(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcOpt<'gc, Node<'gc, T>>) {
         this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, LinkedList, start).set(new);
         });
     }
 
-    fn set_end(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcNullMut<'gc, Node<'gc, T>>) {
+    fn set_end(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcOpt<'gc, Node<'gc, T>>) {
         this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, LinkedList, end).set(new)
         });
@@ -193,27 +193,27 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
 
 #[derive(Trace, Clone)]
 pub struct Node<'gc, T: Trace> {
-    prev: GcNullMut<'gc, Node<'gc, T>>,
-    next: GcNullMut<'gc, Node<'gc, T>>,
+    prev: GcOpt<'gc, Node<'gc, T>>,
+    next: GcOpt<'gc, Node<'gc, T>>,
     val: T,
 }
 
 impl<'gc, T: Trace> Node<'gc, T> {
     pub fn new(mu: &'gc Mutator<'gc>, val: T) -> Self {
         Self {
-            prev: GcNullMut::new_null(mu),
-            next: GcNullMut::new_null(mu),
+            prev: GcOpt::new_none(mu),
+            next: GcOpt::new_none(mu),
             val,
         }
     }
 
-    pub fn set_prev(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
+    pub fn set_prev(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcOpt<'gc, Self>) {
         this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, Node, prev).set(new)
         });
     }
 
-    pub fn set_next(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcNullMut<'gc, Self>) {
+    pub fn set_next(mu: &'gc Mutator<'gc>, this: Gc<'gc, Self>, new: GcOpt<'gc, Self>) {
         this.write_barrier(mu, |write_barrier| {
             field!(write_barrier, Node, next).set(new)
         });

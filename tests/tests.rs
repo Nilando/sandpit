@@ -1,5 +1,5 @@
 use sandpit::{
-    gc::{Gc, GcMut, GcNullMut},
+    gc::{Gc, GcMut, GcOpt},
     field, 
     Mutator,
     Arena, 
@@ -132,8 +132,8 @@ fn nested_root() {
 
 #[test]
 fn trace_gc_null_mut() {
-    let arena: Arena<Root![GcNullMut<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
-        GcNullMut::new(mu, Gc::new(mu, 69))
+    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+        GcOpt::new(mu, Gc::new(mu, 69))
     });
 
     arena.major_collect();
@@ -163,16 +163,16 @@ fn old_objects_count_stays_constant() {
 fn write_barrier() {
     #[derive(Trace)]
     struct Foo<'gc> {
-        a: GcNullMut<'gc, usize>,
-        b: GcNullMut<'gc, usize>,
-        c: GcNullMut<'gc, usize>,
+        a: GcOpt<'gc, usize>,
+        b: GcOpt<'gc, usize>,
+        c: GcOpt<'gc, usize>,
     }
 
     let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
         let foo = Foo {
-            a: GcNullMut::new_null(mu),
-            b: GcNullMut::new_null(mu),
-            c: GcNullMut::new_null(mu),
+            a: GcOpt::new_none(mu),
+            b: GcOpt::new_none(mu),
+            c: GcOpt::new_none(mu),
         };
 
         Gc::new(mu, foo)
@@ -212,7 +212,7 @@ fn yield_is_not_requested() {
 
 #[test]
 fn resets_old_object_count() {
-    let arena: Arena<Root![GcNullMut<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcNullMut::new(mu, Gc::new(mu, 3)));
+    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcOpt::new(mu, Gc::new(mu, 3)));
 
     arena.major_collect();
 
@@ -481,13 +481,13 @@ fn list_building_test() {
     // increasing list size makes this test run a  long time
     #[derive(Trace)]
     struct Node<'gc> {
-        ptr: GcNullMut<'gc, Node<'gc>>,
+        ptr: GcOpt<'gc, Node<'gc>>,
         idx: usize
     }
 
     let arena: Arena<Root![Gc<'_, Node<'_>>]> = Arena::new(|mu| {
         Gc::new(mu, Node {
-            ptr: GcNullMut::new_null(mu),
+            ptr: GcOpt::new_none(mu),
             idx: 0,
         })
     });
@@ -496,7 +496,7 @@ fn list_building_test() {
         arena.mutate(|mu, root| {
             println!("pushing node: {i}");
 
-            let new_node = GcNullMut::new(mu, Node {
+            let new_node = GcOpt::new(mu, Node {
                 ptr: root.ptr.clone(),
                 idx: i,
             });

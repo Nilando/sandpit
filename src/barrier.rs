@@ -1,4 +1,4 @@
-use super::gc::{GcMut, GcNullMut};
+use super::gc::{GcMut, GcOpt};
 use super::trace::Trace;
 
 pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
@@ -58,22 +58,22 @@ impl<'gc, T: Trace> WriteBarrier<'gc, GcMut<'gc, [T]>> {
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, [T]>> {
+impl<'gc, T: Trace> WriteBarrier<'gc, GcOpt<'gc, [T]>> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn set(&self, gc: GcNullMut<'gc, [T]>) {
+    pub fn set(&self, gc: GcOpt<'gc, [T]>) {
         unsafe {
             self.inner.set(gc);
         }
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, GcNullMut<'gc, T>> {
+impl<'gc, T: Trace> WriteBarrier<'gc, GcOpt<'gc, T>> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn set(&self, gc: GcNullMut<'gc, T>) {
+    pub fn set(&self, gc: GcOpt<'gc, T>) {
         unsafe {
             self.inner.set(gc);
         }
@@ -89,11 +89,11 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [GcMut<'gc, T>]> {
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, [GcNullMut<'gc, T>]> {
+impl<'gc, T: Trace> WriteBarrier<'gc, [GcOpt<'gc, T>]> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcNullMut<'gc, T>> {
+    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcOpt<'gc, T>> {
         WriteBarrier { inner: &self.inner[idx] }
     }
 }

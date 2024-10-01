@@ -1,5 +1,5 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcNullMut};
+use crate::gc::{Gc, GcMut, GcOpt};
 use crate::pointee::{Thin, GcPointee};
 use std::cell::*;
 use std::ptr::NonNull;
@@ -65,7 +65,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
     }
 }
 
-unsafe impl<'gc, T: Trace + ?Sized> Trace for GcNullMut<'gc, T> {
+unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
