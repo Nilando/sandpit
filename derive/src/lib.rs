@@ -119,6 +119,8 @@ pub fn trace(input: TokenStream) -> TokenStream {
                 #(#trace_body)*
             }
         }
+
+        impl #impl_generics sandpit::__MustNotDrop for #name #ty_generics #where_clause {}
     };
 
     TokenStream::from(expanded)
@@ -215,6 +217,8 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
 
             fn trace(&self, tracer: &mut sandpit::Tracer) {}
         }
+
+        impl #impl_generics sandpit::__MustNotDrop for #name #ty_generics #where_clause {}
     };
 
     TokenStream::from(expanded)

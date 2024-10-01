@@ -120,6 +120,8 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     where
         F: FnOnce(&WriteBarrier<T>)
     {
+        // SAFETY: Its safe to create a writebarrier over this pointer b/c it is guaranteed
+        // to be retraced after the closure ends.
         let barrier = unsafe { WriteBarrier::new(&**self) };
 
         f(&barrier);

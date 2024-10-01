@@ -1,29 +1,29 @@
 use super::tracer::Tracer;
 use crate::gc::{Gc, GcMut, GcNullMut};
-use crate::pointee::GcPointee;
+use crate::pointee::{Thin, GcPointee};
 use std::cell::*;
 use std::ptr::NonNull;
 use std::sync::atomic::*;
 
 /// Indicates a type contains no Gc references internally.
 ///
+/// Unsafe to impl b/c if the trait does have internal GcPtr's 
+/// then referenced memory may be freed.
+///
 /// Allows for this type to be put into the std `Cell` types, as `Cell<T>` only impls
 /// `Trace` if its inner type if TraceLeaf. This is because interior mutability requires
 /// careful consideration so that the tracers correctly mark all GC references reachable from
 /// the root. If a type 
-///
-///
-///
-/// TraceLeaf is a sub-trait of Trace which indicates its implementor does not
-/// contain any GcPtr's. Unsafe to impl b/c if the trait does have internal GcPtr's 
-/// then referenced memory may be freed.
 pub unsafe trait TraceLeaf: Trace {
     // used by the traceleaf derive to statically assert that all inner types also impl TraceLeaf
     #[doc(hidden)]
     fn __assert_trace_leaf() {}
 }
 
-use crate::pointee::Thin;
+#[doc(hidden)]
+pub trait __MustNotDrop {}
+#[doc(hidden)]
+impl<T: Drop> __MustNotDrop for T {}
 
 /// Allows tracer to find all Gc references stored in a type.
 ///

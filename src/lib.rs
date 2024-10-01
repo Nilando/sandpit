@@ -61,4 +61,4 @@ pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
-pub use trace::{Tracer, Trace, TraceLeaf};
+pub use trace::{Tracer, Trace, TraceLeaf, __MustNotDrop};
