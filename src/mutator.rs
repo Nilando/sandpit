@@ -1,15 +1,15 @@
 use super::allocator::Allocator;
-use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::gc::Gc;
+use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
-use super::header::{GcMark, GcHeader, SizedHeader, SliceHeader};
+use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::trace::{Trace, TraceJob, TracerController};
 use std::cell::RefCell;
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
 /// The mutator allows allocation into the Gc arena, as well as the
-/// mutating of existing Gc pointer types. 
+/// mutating of existing Gc pointer types.
 ///
 /// A mutator is acquired through a the mutation callback on [`crate::arena::Arena::mutate`].
 ///
@@ -18,14 +18,14 @@ use std::sync::RwLockReadGuard;
 /// In order for the GC to efficiently free memory any long lasting mutation
 /// which is allocating memory must periodically call [`Mutator::gc_yield`].
 ///
-/// `gc_yield` fulfills 2 operations 
+/// `gc_yield` fulfills 2 operations
 /// - it will block the mutator if tracers are currently struggling to complete a trace.
 /// - if gc_yield returns true it signals that memory is ready to be freed and the mutation callbacks must be exited in order to do so.
 ///
 ///
 /// While the GC is concurrent, meaning that the tracer may perform a trace
 /// while mutation is happening, the GC is unable to actually free
-/// any memory while mutation is occuring. This is because the Gc needs to be certain 
+/// any memory while mutation is occuring. This is because the Gc needs to be certain
 /// that when it frees memory it has traced all existing references into
 /// the arena. Unfortunately it is quite difficult to account for
 /// references to GC values which exist on the stack within a mutation context.
@@ -79,8 +79,8 @@ impl<'gc> Mutator<'gc> {
         unsafe {
             let ptr = self.allocator.alloc(alloc_layout);
             // SAFETY: the alloc layout was extended to have capacity
-            // for the header and object to be written into. 
-            
+            // for the header and object to be written into.
+
             // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
             // the Gc invariant that a Gc<T> points to a T with a padded header.
             let val_ptr = ptr.add(val_offset).cast();
@@ -93,7 +93,7 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    /// Alloc a gc array with specified length with each index set to value 
+    /// Alloc a gc array with specified length with each index set to value
     ///
     /// Due to the reference restraints of Gc<T>, this is only really
     /// useful if T has some form of interior mutability, for example,
@@ -114,15 +114,13 @@ impl<'gc> Mutator<'gc> {
 
     pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
         // TODO: this could be one single write call
-        self.alloc_array_from_fn(slice.len(), |idx| {
-            slice[idx].clone()
-        })
+        self.alloc_array_from_fn(slice.len(), |idx| slice[idx].clone())
     }
 
-    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<'gc, [T]> 
+    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<'gc, [T]>
     where
         T: Trace,
-        F: FnMut(usize) -> T
+        F: FnMut(usize) -> T,
     {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 

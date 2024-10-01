@@ -14,8 +14,8 @@ fn balanced_binary_trees() {
 
     arena.major_collect();
 
-    arena.mutate(|mu, _root| { 
-        Node::create_balanced_tree(mu, TREE_LAYERS); 
+    arena.mutate(|mu, _root| {
+        Node::create_balanced_tree(mu, TREE_LAYERS);
     });
 
     arena.major_collect();
@@ -28,7 +28,6 @@ fn balanced_binary_trees() {
     });
     */
 }
-
 
 fn node_group(c: &mut Criterion) {
     c.bench_function("sync_trees", |b| b.iter(balanced_binary_trees));

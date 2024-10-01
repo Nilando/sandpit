@@ -148,7 +148,7 @@ impl TracerController {
         self: Arc<Self>,
         root: &T,
         old_object_count: Arc<AtomicUsize>,
-        trace_callback: F
+        trace_callback: F,
     ) {
         self.clone().trace_root(root, old_object_count.clone());
         let join_handles = self.clone().spawn_tracers(old_object_count);
@@ -216,15 +216,17 @@ impl TracerController {
             let thread = std::thread::Builder::new().name(thread_name);
             let object_count = old_object_count.clone();
             let controller = self.clone();
-            let jh = thread.spawn(move || {
-                let mut tracer = controller.clone().new_tracer(i);
-                let marked_objects = tracer.trace_loop();
+            let jh = thread
+                .spawn(move || {
+                    let mut tracer = controller.clone().new_tracer(i);
+                    let marked_objects = tracer.trace_loop();
 
-                object_count.fetch_add(marked_objects, Ordering::SeqCst);
-            }).unwrap_or_else(|_| {
-                println!("Failed to start GC Thread");
-                std::process::abort();
-            });
+                    object_count.fetch_add(marked_objects, Ordering::SeqCst);
+                })
+                .unwrap_or_else(|_| {
+                    println!("Failed to start GC Thread");
+                    std::process::abort();
+                });
 
             join_handles.push(jh);
         }

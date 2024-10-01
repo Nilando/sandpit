@@ -1,17 +1,17 @@
 use super::allocator::Allocator;
-use super::time_slicer::TimeSlicer;
 use super::config::GcConfig;
 use super::header::GcMark;
 use super::mutator::Mutator;
+use super::time_slicer::TimeSlicer;
 use super::trace::{Trace, TracerController};
 
 use higher_kinded_types::ForLt;
 
-use std::time::Instant;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
+use std::time::Instant;
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ where
     tracer: Arc<TracerController>,
 
     // this lock is held while a collection is happening.
-    // It is used to ensure that we don't start a collection while a collection 
+    // It is used to ensure that we don't start a collection while a collection
     // is happening. TODO: could we possibly start a collection while one is happening?
     collection_lock: Mutex<()>,
     mutation_lock: Mutex<()>,
@@ -58,7 +58,7 @@ where
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
 
-    time_slicer: TimeSlicer
+    time_slicer: TimeSlicer,
 }
 
 impl<R: ForLt> Collect for Collector<R>
@@ -75,10 +75,10 @@ where
 
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
-        unsafe { 
+        unsafe {
             self.arena.sweep(self.get_current_mark(), || {
                 drop(mutation_lock);
-            }); 
+            });
         }
 
         self.major_collections.fetch_add(1, Ordering::Relaxed);
@@ -100,10 +100,10 @@ where
 
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
-        unsafe { 
+        unsafe {
             self.arena.sweep(self.get_current_mark(), || {
                 drop(mutation_lock);
-            }); 
+            });
         }
 
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
@@ -162,7 +162,8 @@ where
     {
         let arena = Allocator::new();
         let tracer = Arc::new(TracerController::new(config));
-        let tracer_ref: &'static TracerController = unsafe { &*(&*tracer as *const TracerController) };
+        let tracer_ref: &'static TracerController =
+            unsafe { &*(&*tracer as *const TracerController) };
         let lock = tracer_ref.yield_lock();
         let mutator = Mutator::new(arena.clone(), tracer_ref, lock);
         let mutator_ref: &'static Mutator<'static> =
@@ -189,7 +190,7 @@ where
             major_collect_avg_time: AtomicUsize::new(0),
             minor_collect_avg_time: AtomicUsize::new(0),
             old_objects: Arc::new(AtomicUsize::new(0)),
-            time_slicer
+            time_slicer,
         }
     }
 
@@ -239,8 +240,10 @@ where
     }
 
     fn collect(&self) {
-        self.tracer.clone().trace(&self.root, self.old_objects.clone(), || {
-            self.time_slicer.run();
-        });
+        self.tracer
+            .clone()
+            .trace(&self.root, self.old_objects.clone(), || {
+                self.time_slicer.run();
+            });
     }
 }

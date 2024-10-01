@@ -1,13 +1,9 @@
-use sandpit::{
-    gc::{Gc, GcMut, GcOpt},
-    field, 
-    Mutator,
-    Arena, 
-    Root,
-    Trace,
-    TraceLeaf
-};
 use rand::prelude::*;
+use sandpit::{
+    field,
+    gc::{Gc, GcMut, GcOpt},
+    Arena, Mutator, Root, Trace, TraceLeaf,
+};
 
 fn alloc_rand_garbage(mu: &Mutator) {
     let mut rng = rand::thread_rng();
@@ -39,9 +35,7 @@ fn new_arena() {
 
 #[test]
 fn arena_allocating_and_collecting() {
-    let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
-        Gc::new(mu, Gc::new(mu, 123))
-    });
+    let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| Gc::new(mu, Gc::new(mu, 123)));
 
     arena.major_collect();
 
@@ -57,7 +51,9 @@ fn yield_requested_after_allocating() {
     arena.mutate(|mu, _| loop {
         Gc::new(mu, 42);
 
-        if mu.gc_yield() { break; }
+        if mu.gc_yield() {
+            break;
+        }
     });
 }
 
@@ -132,9 +128,8 @@ fn nested_root() {
 
 #[test]
 fn trace_gc_null_mut() {
-    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
-        GcOpt::new(mu, Gc::new(mu, 69))
-    });
+    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> =
+        Arena::new(|mu| GcOpt::new(mu, Gc::new(mu, 69)));
 
     arena.major_collect();
 
@@ -212,13 +207,14 @@ fn yield_is_not_requested() {
 
 #[test]
 fn resets_old_object_count() {
-    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcOpt::new(mu, Gc::new(mu, 3)));
+    let arena: Arena<Root![GcOpt<'_, Gc<'_, usize>>]> =
+        Arena::new(|mu| GcOpt::new(mu, Gc::new(mu, 3)));
 
     arena.major_collect();
 
     assert_eq!(arena.metrics().old_objects_count, 2);
 
-    arena.mutate(|_mu, root| root.set_null() );
+    arena.mutate(|_mu, root| root.set_null());
 
     arena.major_collect();
 
@@ -227,9 +223,7 @@ fn resets_old_object_count() {
 
 #[test]
 fn alloc_array() {
-    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
-        mu.alloc_array(69, 420)
-    });
+    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| mu.alloc_array(69, 420));
 
     arena.major_collect();
 
@@ -250,11 +244,8 @@ fn alloc_array() {
 
 #[test]
 fn alloc_array_from_fn() {
-    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |idx| {
-            idx
-        })
-    });
+    let arena: Arena<Root![Gc<'_, [usize]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| idx));
 
     arena.major_collect();
 
@@ -271,11 +262,8 @@ fn alloc_array_from_fn() {
 
 #[test]
 fn alloc_array_from_slice() {
-    let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |idx| {
-            idx
-        })
-    });
+    let arena: Arena<Root![Gc<'_, [usize]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| idx));
 
     arena.major_collect();
 
@@ -290,11 +278,8 @@ fn alloc_array_from_slice() {
 
 #[test]
 fn alloc_array_of_gc() {
-    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |idx| {
-            Gc::new(mu, idx)
-        })
-    });
+    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)));
 
     arena.major_collect();
 
@@ -309,11 +294,8 @@ fn alloc_array_of_gc() {
 
 #[test]
 fn alloc_array_of_gc_mut() {
-    let arena: Arena<Root![Gc<'_, [GcMut<'_, usize>]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |idx| {
-            GcMut::new(mu, idx)
-        })
-    });
+    let arena: Arena<Root![Gc<'_, [GcMut<'_, usize>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| GcMut::new(mu, idx)));
 
     arena.major_collect();
     assert_eq!(arena.metrics().old_objects_count, 101);
@@ -342,11 +324,7 @@ fn alloc_array_of_gc_mut() {
 #[test]
 fn two_dimensional_array() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, [Gc<'_, usize>]>]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |i| {
-            mu.alloc_array_from_fn(100, |k| {
-                Gc::new(mu, i + k)
-            })
-        })
+        mu.alloc_array_from_fn(100, |i| mu.alloc_array_from_fn(100, |k| Gc::new(mu, i + k)))
     });
 
     arena.mutate(|_mu, root| {
@@ -360,16 +338,13 @@ fn two_dimensional_array() {
 
 #[test]
 fn change_array_size() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, [usize]>>]> = Arena::new(|mu| {
-        Gc::new(mu, mu.alloc_array_from_fn(100, |i| i).into())
-    });
+    let arena: Arena<Root![Gc<'_, GcMut<'_, [usize]>>]> =
+        Arena::new(|mu| Gc::new(mu, mu.alloc_array_from_fn(100, |i| i).into()));
 
     arena.mutate(|mu, root| {
         let new = mu.alloc_array_from_fn(10, |_| 69);
 
-        root.write_barrier(mu, |barrier| {
-            barrier.set(new.into())
-        });
+        root.write_barrier(mu, |barrier| barrier.set(new.into()));
 
         assert!(root.len() == 10);
     });
@@ -380,9 +355,7 @@ fn derive_trace_unit_struct() {
     #[derive(Trace)]
     struct Foo;
 
-    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
-        Gc::new(mu, Foo)
-    });
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo));
 
     arena.major_collect();
 }
@@ -393,16 +366,10 @@ fn trace_complex_enum() {
     enum Foo {
         A,
         B(u8, u8),
-        C {
-            a: u8,
-            b: u8,
-            c: u8
-        }
+        C { a: u8, b: u8, c: u8 },
     }
 
-    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
-        Gc::new(mu, Foo::A)
-    });
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo::A));
 
     arena.major_collect();
 }
@@ -425,9 +392,7 @@ fn traceleaf_tuple_struct() {
     #[derive(TraceLeaf)]
     struct Foo(u8, u8);
 
-    let arena: Arena<Root![Gc<'_, Cell<Foo>>]> = Arena::new(|mu| {
-        Gc::new(mu, Cell::new(Foo(0, 1)))
-    });
+    let arena: Arena<Root![Gc<'_, Cell<Foo>>]> = Arena::new(|mu| Gc::new(mu, Cell::new(Foo(0, 1))));
 
     arena.major_collect();
 }
@@ -437,9 +402,7 @@ fn trace_tuple_struct() {
     #[derive(Trace)]
     struct Foo(u8, u8);
 
-    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
-        Gc::new(mu, Foo(0, 1))
-    });
+    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo(0, 1)));
 
     arena.major_collect();
 }
@@ -454,7 +417,9 @@ fn multi_threaded_allocating() {
         arena.mutate(|mu, _| loop {
             Gc::new(mu, 42);
 
-            if mu.gc_yield() { break; }
+            if mu.gc_yield() {
+                break;
+            }
         });
     });
 
@@ -462,11 +427,12 @@ fn multi_threaded_allocating() {
         arena_copy.mutate(|mu, _| loop {
             Gc::new(mu, 42);
 
-            if mu.gc_yield() { break; }
+            if mu.gc_yield() {
+                break;
+            }
         });
     });
 }
-
 
 // test idea
 // for n times
@@ -482,28 +448,32 @@ fn list_building_test() {
     #[derive(Trace)]
     struct Node<'gc> {
         ptr: GcOpt<'gc, Node<'gc>>,
-        idx: usize
+        idx: usize,
     }
 
     let arena: Arena<Root![Gc<'_, Node<'_>>]> = Arena::new(|mu| {
-        Gc::new(mu, Node {
-            ptr: GcOpt::new_none(mu),
-            idx: 0,
-        })
+        Gc::new(
+            mu,
+            Node {
+                ptr: GcOpt::new_none(mu),
+                idx: 0,
+            },
+        )
     });
 
     for i in (1..LIST_SIZE).rev() {
         arena.mutate(|mu, root| {
             println!("pushing node: {i}");
 
-            let new_node = GcOpt::new(mu, Node {
-                ptr: root.ptr.clone(),
-                idx: i,
-            });
+            let new_node = GcOpt::new(
+                mu,
+                Node {
+                    ptr: root.ptr.clone(),
+                    idx: i,
+                },
+            );
 
-            root.write_barrier(mu, |barrier| {
-                field!(barrier, Node, ptr).set(new_node)
-            });
+            root.write_barrier(mu, |barrier| field!(barrier, Node, ptr).set(new_node));
         });
 
         arena.major_collect();

@@ -29,7 +29,7 @@ pub struct GcConfig {
     /// be traced.
     pub mutator_share_min: usize,
 
-    /// The headroom is the maximum amount of memory that can be allocated, 
+    /// The headroom is the maximum amount of memory that can be allocated,
     /// during a collection, before a yield is requested.
     /// The headroom is calculated by multiplying the previous arena size by
     /// the headroom ratio.

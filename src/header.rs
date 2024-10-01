@@ -1,8 +1,8 @@
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use std::alloc::Layout;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::marker::PhantomData;
 use std::num::NonZero;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
@@ -23,9 +23,9 @@ pub enum GcMark {
 impl GcMark {
     pub fn rotate(&self) -> Self {
         match self {
-            GcMark::Red   => GcMark::Green,
+            GcMark::Red => GcMark::Green,
             GcMark::Green => GcMark::Blue,
-            GcMark::Blue  => GcMark::Red,
+            GcMark::Blue => GcMark::Red,
         }
     }
 
@@ -66,14 +66,14 @@ impl From<GcMark> for NonZero<u8> {
 
 pub struct SizedHeader<T> {
     mark: AtomicU8,
-    _item_type: PhantomData<T>
+    _item_type: PhantomData<T>,
 }
 
 impl<T> SizedHeader<T> {
     pub fn new(mark: GcMark) -> Self {
         Self {
             mark: AtomicU8::new(mark.into()),
-            _item_type: PhantomData::<T>
+            _item_type: PhantomData::<T>,
         }
     }
 }
@@ -98,7 +98,7 @@ impl<T> GcHeader for SizedHeader<T> {
 pub struct SliceHeader<T> {
     mark: AtomicU8,
     len: usize,
-    _item_type: PhantomData<T>
+    _item_type: PhantomData<T>,
 }
 
 impl<T> SliceHeader<T> {
@@ -106,7 +106,7 @@ impl<T> SliceHeader<T> {
         Self {
             mark: AtomicU8::new(mark.into()),
             len,
-            _item_type: PhantomData::<T>
+            _item_type: PhantomData::<T>,
         }
     }
 

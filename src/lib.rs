@@ -41,8 +41,8 @@ extern crate self as sandpit;
 
 pub mod gc;
 
-mod arena;
 mod allocator;
+mod arena;
 mod barrier;
 mod collector;
 mod config;
@@ -50,9 +50,9 @@ mod header;
 mod metrics;
 mod monitor;
 mod mutator;
-mod trace;
-mod time_slicer;
 mod pointee;
+mod time_slicer;
+mod trace;
 
 pub use arena::Arena;
 pub use barrier::WriteBarrier;
@@ -61,4 +61,4 @@ pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
-pub use trace::{Tracer, Trace, TraceLeaf, __MustNotDrop};
+pub use trace::{Trace, TraceLeaf, Tracer, __MustNotDrop};

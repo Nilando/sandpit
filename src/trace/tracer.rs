@@ -2,10 +2,10 @@ use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use crate::allocator::Allocator;
+use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
 use std::cell::Cell;
 use std::sync::Arc;
-use crate::gc::Gc;
 
 pub struct Tracer {
     // sometimes ID might be helpful in debugging, but currently not used anywhere

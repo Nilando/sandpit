@@ -1,5 +1,5 @@
 use super::trace::Trace;
-use crate::header::{GcHeader, SliceHeader, SizedHeader};
+use crate::header::{GcHeader, SizedHeader, SliceHeader};
 
 use std::alloc::Layout;
 use std::marker::PhantomData;
@@ -60,7 +60,7 @@ impl<T: Trace> GcPointee for [T] {
     fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
         // we can just pretend the array has a length of 1 here, doesn't effect the offset
         let (_, item_offset) = slice_alloc_layout::<T>(1);
-        
+
         let ptr: *mut Self::GcHeader = thin_ptr.cast().as_ptr();
 
         unsafe { ptr.byte_sub(item_offset) as *const Self::GcHeader }
@@ -70,21 +70,17 @@ impl<T: Trace> GcPointee for [T] {
 pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let header_layout = Layout::new::<SizedHeader<T>>();
     let val_layout = Layout::new::<T>();
-    let (unpadded_layout, offset) = header_layout
-        .extend(val_layout)
-        .expect("GC BAD LAYOUT");
+    let (unpadded_layout, offset) = header_layout.extend(val_layout).expect("GC BAD LAYOUT");
     let layout = unpadded_layout.pad_to_align();
 
-        (layout, offset)
+    (layout, offset)
 }
 
 pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
-        let header_layout = Layout::new::<SliceHeader<T>>();
-        let slice_layout = Layout::array::<T>(len).expect("GC BAD LAYOUT");
-        let (unpadded_layout, offset) = header_layout
-            .extend(slice_layout)
-            .expect("GC BAD LAYOUT");
-        let layout = unpadded_layout.pad_to_align();
+    let header_layout = Layout::new::<SliceHeader<T>>();
+    let slice_layout = Layout::array::<T>(len).expect("GC BAD LAYOUT");
+    let (unpadded_layout, offset) = header_layout.extend(slice_layout).expect("GC BAD LAYOUT");
+    let layout = unpadded_layout.pad_to_align();
 
-        (layout, offset)
+    (layout, offset)
 }

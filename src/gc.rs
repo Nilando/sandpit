@@ -1,16 +1,16 @@
 use super::trace::Trace;
-use crate::mutator::Mutator;
-use crate::header::GcHeader;
 use crate::barrier::WriteBarrier;
+use crate::header::GcHeader;
+use crate::mutator::Mutator;
 use crate::pointee::{GcPointee, Thin};
 
 use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ptr::{null_mut, NonNull};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
-// A Gc points to a valid T within a GC Arena which is also succeeded by its 
+// A Gc points to a valid T within a GC Arena which is also succeeded by its
 // GC header which may or may not be padded.
 // This holds true for GcMut as well as GcOpt if it is not null.
 //
@@ -19,16 +19,15 @@ use std::ptr::{null_mut, NonNull};
 //                                          V
 // [ <T as GcPointee>::GcHeader ][ padding ][ T value ]
 //
-// Since Gc cannot be mutated and therefore has no need to be atomic, 
+// Since Gc cannot be mutated and therefore has no need to be atomic,
 // it is able to be a wide pointer.
 
-
-/// A shared reference to generic garbage collected value that is branded with 
-/// a mutation context lifetime. 
+/// A shared reference to generic garbage collected value that is branded with
+/// a mutation context lifetime.
 ///
 /// An object may only be referenced by a [`Gc`] if it implements `Trace` see [`crate::trace::Trace`] for more details.
 ///
-/// A [`Gc`] can safely dereference into 
+/// A [`Gc`] can safely dereference into
 /// a `&'gc T`, but provides no option to obtain mutable references to it's
 /// inner value. Due to all GC values sharing the same 'gc lifetime,
 /// any number of GC values are allowed to reference each other at anytime. This
@@ -43,16 +42,16 @@ use std::ptr::{null_mut, NonNull};
 /// including [`crate::mutator::Mutator::alloc_array`].
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: *mut T,
-    _no_send: PhantomData<&'gc T>
+    _no_send: PhantomData<&'gc T>,
 }
 
 impl<'gc, T: Trace + ?Sized> Copy for Gc<'gc, T> {}
 
 impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
     fn clone(&self) -> Self {
-        Self { 
+        Self {
             ptr: self.ptr,
-            _no_send: PhantomData::<&'gc T>
+            _no_send: PhantomData::<&'gc T>,
         }
     }
 }
@@ -60,10 +59,10 @@ impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
 impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for Gc<'gc, T> {
     fn from(gc_mut: GcMut<'gc, T>) -> Self {
         let thin = gc_mut.ptr.load(Ordering::Relaxed);
-        
+
         Self {
             ptr: <T as GcPointee>::as_fat(NonNull::new(thin).unwrap()) as *mut T,
-            _no_send: PhantomData::<&'gc T>
+            _no_send: PhantomData::<&'gc T>,
         }
     }
 }
@@ -76,7 +75,7 @@ impl<'gc, T: Trace + ?Sized> Deref for Gc<'gc, T> {
     /// but the by using [`crate::gc::Gc::scoped_deref`] the lifetime of the reference can be
     /// extended to be that of the entire mutation context.
     ///
-    /// May either dereference into a `&'gc [T]` or a sized `&'gc T`. 
+    /// May either dereference into a `&'gc [T]` or a sized `&'gc T`.
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.ptr }
     }
@@ -96,9 +95,9 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     // SAFETY: the pointer must have a valid GcHeader for T, and be allocated
     // within a GC Arena
     pub(crate) unsafe fn from_ptr(ptr: *const T) -> Self {
-        Self { 
+        Self {
             ptr: ptr as *mut T,
-            _no_send: PhantomData::<&'gc T>
+            _no_send: PhantomData::<&'gc T>,
         }
     }
 
@@ -115,9 +114,9 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         NonNull::new(self.ptr as *const T as *const Thin<T> as *mut Thin<T>).unwrap()
     }
 
-    pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F) 
+    pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F)
     where
-        F: FnOnce(&WriteBarrier<T>)
+        F: FnOnce(&WriteBarrier<T>),
     {
         // SAFETY: Its safe to create a writebarrier over this pointer b/c it is guaranteed
         // to be retraced after the closure ends.
@@ -137,7 +136,7 @@ impl<'gc, T: Trace> Gc<'gc, T> {
     }
 }
 
-// GcMut may be updated to point somewhere else which requires it to be atomic 
+// GcMut may be updated to point somewhere else which requires it to be atomic
 // in order to sync with the tracing threads.
 pub struct GcMut<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
@@ -158,7 +157,7 @@ impl<'gc, T: Trace + ?Sized> From<Gc<'gc, T>> for GcMut<'gc, T> {
     fn from(gc: Gc<'gc, T>) -> Self {
         Self {
             ptr: AtomicPtr::new(gc.as_thin().as_ptr()),
-            scope: PhantomData::<&'gc *mut T>
+            scope: PhantomData::<&'gc *mut T>,
         }
     }
 }
@@ -220,17 +219,14 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcOpt<'gc, T> {
 impl<'gc, T: Trace + ?Sized> From<Option<GcMut<'gc, T>>> for GcOpt<'gc, T> {
     fn from(opt_gc: Option<GcMut<'gc, T>>) -> Self {
         match opt_gc {
-            Some(gc) => {
-                Self {
-                    ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
-                    scope: PhantomData::<&'gc *mut T>,
-                }
-            }
-            None => 
-                Self {
-                    ptr: AtomicPtr::new(null_mut()),
-                    scope: PhantomData::<&'gc *mut T>,
-                }
+            Some(gc) => Self {
+                ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
+                scope: PhantomData::<&'gc *mut T>,
+            },
+            None => Self {
+                ptr: AtomicPtr::new(null_mut()),
+                scope: PhantomData::<&'gc *mut T>,
+            },
         }
     }
 }
@@ -279,12 +275,10 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
         if self.is_none() {
             None
         } else {
-            Some(
-                GcMut {
-                    ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
-                    scope: PhantomData::<&'gc *mut T>,
-                }
-            )
+            Some(GcMut {
+                ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
+                scope: PhantomData::<&'gc *mut T>,
+            })
         }
     }
 }
@@ -298,13 +292,13 @@ impl<'gc, T: Trace> GcOpt<'gc, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Arena, Root};
     use crate::header::GcMark;
+    use crate::{Arena, Root};
 
     #[test]
     fn valid_sized_header() {
         let _: Arena<Root![_]> = Arena::new(|mu| {
-            let gc = Gc::new(mu, 69); 
+            let gc = Gc::new(mu, 69);
             let header = gc.get_header();
 
             assert!(*gc == 69);
@@ -318,7 +312,7 @@ mod tests {
     #[test]
     fn gc_from_gcmut() {
         let _: Arena<Root![_]> = Arena::new(|mu| {
-            let gc = Gc::new(mu, 69); 
+            let gc = Gc::new(mu, 69);
             let gc_mut = GcMut::from(gc);
             let gc = Gc::from(gc_mut);
             let header = gc.get_header();

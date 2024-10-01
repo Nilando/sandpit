@@ -7,7 +7,7 @@ pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
 
 impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     // WriteBarriers are unsafe to create, as they themselves don't ensure
-    // anything is retraced, they only communicate that they should have been 
+    // anything is retraced, they only communicate that they should have been
     // created in some context where retracing will happen after the barrier
     // goes out of context.
     pub(crate) unsafe fn new(gc: &'gc T) -> Self {
@@ -85,7 +85,9 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [GcMut<'gc, T>]> {
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
     pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcMut<'gc, T>> {
-        WriteBarrier { inner: &self.inner[idx] }
+        WriteBarrier {
+            inner: &self.inner[idx],
+        }
     }
 }
 
@@ -94,7 +96,9 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [GcOpt<'gc, T>]> {
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
     pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcOpt<'gc, T>> {
-        WriteBarrier { inner: &self.inner[idx] }
+        WriteBarrier {
+            inner: &self.inner[idx],
+        }
     }
 }
 

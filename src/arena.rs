@@ -30,14 +30,8 @@ where
     }
 }
 
-unsafe impl<R: ForLt + Send + 'static> Send for Arena<R> 
-where
-    for<'a> <R as ForLt>::Of<'a>: Trace
-{}
-unsafe impl<R: ForLt + Sync + 'static> Sync for Arena<R>
-where
-    for<'a> <R as ForLt>::Of<'a>: Trace
-{}
+unsafe impl<R: ForLt + Send + 'static> Send for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
+unsafe impl<R: ForLt + Sync + 'static> Sync for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
 
 impl<R: ForLt + 'static> Arena<R>
 where
@@ -45,7 +39,7 @@ where
 {
     /// Creates a new Arena via a callback which provides a mutator for the
     /// ability of allocating the root of the arena.
-    /// 
+    ///
     /// # Examples
     ///
     /// ```
@@ -61,7 +55,7 @@ where
     /// generic which itself holds a generic lifetime. This is so because the
     /// Root needs to simultaneously have a lifetime that is of the Arena it is
     /// contained in, and also so that it can be branded with the lifetime of a
-    /// mutation context. In order to ease the creation of HKT Root there is the 
+    /// mutation context. In order to ease the creation of HKT Root there is the
     /// [`crate::Root!`] macro, which can take a type and convert it into an HTK.
     ///
     pub fn new<F>(f: F) -> Self
@@ -82,7 +76,7 @@ where
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
         //if config.monitor_on {
-            monitor.clone().start();
+        monitor.clone().start();
         //}
 
         Self {
@@ -92,9 +86,9 @@ where
         }
     }
 
-    /// Provides a [`crate::mutator::Mutator`] and the arena's root within a 
-    /// mutation context which allows for the allocation and mutation of values 
-    /// within the arena. 
+    /// Provides a [`crate::mutator::Mutator`] and the arena's root within a
+    /// mutation context which allows for the allocation and mutation of values
+    /// within the arena.
     ///
     ///
     /// # Examples
@@ -148,7 +142,7 @@ where
     /// the trace will trace *ALL* objects reachable from the root. This will free
     /// as much memory as possible but may take longer than a minor collection
     ///
-    /// The operation will block for any ongoing collections and mutations to 
+    /// The operation will block for any ongoing collections and mutations to
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn major_collect(&self) {
@@ -160,14 +154,14 @@ where
     /// the last collection. It will likely take less time than a major collection,
     /// but free less memory.
     ///
-    /// The operation will block for any ongoing collections and mutations to 
+    /// The operation will block for any ongoing collections and mutations to
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn minor_collect(&self) {
         self.collector.minor_collect();
     }
 
-    /// Starts a monitor in a separate thread if it is not already started. 
+    /// Starts a monitor in a separate thread if it is not already started.
     /// The monitor will automatically and concurrently trigger major and
     /// minor collections when appropriate.
     /*

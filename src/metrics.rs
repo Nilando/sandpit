@@ -20,7 +20,7 @@ pub struct GcMetrics {
     /// be triggered
     pub max_old_objects: usize,
 
-    /// Running total of object that have been traced since the last major 
+    /// Running total of object that have been traced since the last major
     /// collection and all succeeding minor collections.
     pub old_objects_count: usize,
 
