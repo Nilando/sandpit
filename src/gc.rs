@@ -218,9 +218,9 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcOpt<'gc, T> {
 }
 
 impl<'gc, T: Trace + ?Sized> From<Option<GcMut<'gc, T>>> for GcOpt<'gc, T> {
-    fn from(gc: Option<GcMut<'gc, T>>) -> Self {
-        match gc {
-            Some(ptr) => {
+    fn from(opt_gc: Option<GcMut<'gc, T>>) -> Self {
+        match opt_gc {
+            Some(gc) => {
                 Self {
                     ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
                     scope: PhantomData::<&'gc *mut T>,
