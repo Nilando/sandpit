@@ -5,7 +5,6 @@ use sandpit::{
 };
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::ptr::NonNull;
-
 pub struct LinkedListIter<'gc, T: Trace> {
     next: Option<&'gc Node<'gc, T>>,
 }
@@ -398,37 +397,23 @@ fn push_until_yield() {
         }
     });
 }
-/*
 
 #[test]
 fn objects_marked_metric() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+        Arena::new(|mu| LinkedList::new(mu));
 
-    gc.mutate((), |root, mu, _| {
-        for i in 0..99 {
-            Node::insert(root, mu, i);
-        }
-
-        assert_eq!(Node::collect(root).len(), 100);
-    });
-
-    gc.major_collect();
-    assert_eq!(gc.metrics().old_objects_count, 100);
-
-    gc.mutate((), |root, _, _| {
-        let node = Node::find(root, 48).unwrap();
-        Node::kill_children(&node);
-
-        assert_eq!(Node::collect(root).len(), 50);
-        assert!(Node::find(root, 49).is_none());
-        assert!(Node::find(root, 99).is_none());
-    });
-
-    gc.major_collect();
-
-    assert_eq!(gc.metrics().old_objects_count, 50);
+    for i in 0..100 {
+        arena.major_collect();
+        arena.major_collect(); // TODO: why isn't old_objects count being set right
+        assert_eq!(arena.metrics().old_objects_count, (i + 1));
+        arena.mutate(|mu, root| {
+            LinkedList::push_back(root.clone(), mu, i);
+        });
+    }
 }
 
+/*
 #[test]
 fn cyclic_graph() {
     let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());

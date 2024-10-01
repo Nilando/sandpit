@@ -434,6 +434,54 @@ fn multi_threaded_allocating() {
     });
 }
 
+#[test]
+fn cyclic_graph() {
+    #[derive(Trace)]
+    struct Node<'gc> {
+        ptr: GcOpt<'gc, Node<'gc>>
+    }
+
+    impl<'gc> Node<'gc> {
+        fn new(mu: &'gc Mutator) -> Self {
+            Self {
+                ptr: GcOpt::new_none(mu)
+            }
+        }
+    }
+
+    let arena: Arena<Root![Gc<'_, Node<'_>>]>
+        = Arena::new(|mu| Gc::new(mu, Node::new(mu)));
+
+    arena.mutate(|mu, root| {
+        let a = Gc::new(mu, Node::new(mu));
+        let b = Gc::new(mu, Node::new(mu));
+        let c = Gc::new(mu, Node::new(mu));
+        let d = Gc::new(mu, Node::new(mu));
+
+        a.write_barrier(mu, |barrier| {
+            field!(barrier, Node, ptr).set(b.into());
+        });
+        b.write_barrier(mu, |barrier| {
+            field!(barrier, Node, ptr).set(c.into());
+        });
+        c.write_barrier(mu, |barrier| {
+            field!(barrier, Node, ptr).set(d.into());
+        });
+        d.write_barrier(mu, |barrier| {
+            field!(barrier, Node, ptr).set(a.into());
+        });
+        root.write_barrier(mu, |barrier| {
+            field!(barrier, Node, ptr).set(a.into());
+        });
+
+    });
+
+    arena.major_collect();
+    arena.major_collect();
+                           
+    assert_eq!(arena.metrics().old_objects_count, 5);
+}
+
 // test idea
 // for n times
 //  1. insert a node into the list

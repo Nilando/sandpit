@@ -35,7 +35,8 @@ pub fn trace(input: TokenStream) -> TokenStream {
             .unnamed
             .iter()
             .enumerate()
-            .map(|(idx, _)| {
+            .map(|(i, _)| {
+                let idx = syn::Index::from(i);
                 quote! {
                     sandpit::Trace::trace(&self.#idx, tracer);
                 }
