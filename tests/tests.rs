@@ -28,9 +28,7 @@ fn new_arena() {
         root
     });
 
-    arena.mutate(|_mu, root| {
-        assert_eq!(**root, 69);
-    });
+    arena.mutate(|_mu, root| assert_eq!(**root, 69));
 }
 
 #[test]
