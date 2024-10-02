@@ -80,22 +80,11 @@ impl<'gc, T: Trace> WriteBarrier<'gc, GcOpt<'gc, T>> {
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, [GcMut<'gc, T>]> {
+impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcMut<'gc, T>> {
-        WriteBarrier {
-            inner: &self.inner[idx],
-        }
-    }
-}
-
-impl<'gc, T: Trace> WriteBarrier<'gc, [GcOpt<'gc, T>]> {
-    // SAFETY: A write barrier can only be safely obtained through
-    // the callback passed to `fn write_barrier` in which the object
-    // containing this pointer will be retraced
-    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, GcOpt<'gc, T>> {
+    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, T> {
         WriteBarrier {
             inner: &self.inner[idx],
         }
