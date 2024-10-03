@@ -24,7 +24,7 @@ In order for the tracers to be able to accurately mark all objects, objects allo
 struct Foo {
     // There are 3 types of pointers to GC'ed values.
     a: Gc<'gc, A>, // Immutable pointer, essentially a &'gc T.
-    b: GcMut<'gc, B> // Mutable pointer, can be updated to point at something else via a write barrier.
+    b: GcMut<'gc, B>, // Mutable pointer, can be updated to point at something else via a write barrier.
     c: GcOpt<'gc, C>, // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
 
     // All inner values must be trace, therfore types A, B, and T must impl Trace as well!
