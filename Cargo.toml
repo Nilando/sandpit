@@ -36,5 +36,8 @@ criterion = "0.5.1"
 rand = "0.8.4"
 
 [[bench]]
-name = "node_bench"
+name = "linked_list_bench"
 harness = false
+
+[profile.bench]
+debug = true

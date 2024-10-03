@@ -90,11 +90,11 @@ impl TracerController {
     }
 
     pub fn incr_recv(&self) {
-        self.work_received.fetch_add(1, Ordering::SeqCst);
+        self.work_received.fetch_add(1, Ordering::Release);
     }
 
     pub fn send_work(&self, work: Vec<TraceJob>) {
-        self.work_sent.fetch_add(1, Ordering::SeqCst);
+        self.work_sent.fetch_add(1, Ordering::Release);
         self.sender.send(work).unwrap();
     }
 
@@ -231,23 +231,23 @@ impl TracerController {
     }
 
     fn tracers_waiting(&self) -> usize {
-        self.tracers_waiting.load(Ordering::SeqCst)
+        self.tracers_waiting.load(Ordering::Acquire)
     }
 
     fn start_waiting(&self) -> usize {
-        self.tracers_waiting.fetch_add(1, Ordering::SeqCst)
+        self.tracers_waiting.fetch_add(1, Ordering::Acquire)
     }
 
     fn stop_waiting(&self) {
-        self.tracers_waiting.fetch_sub(1, Ordering::SeqCst);
+        self.tracers_waiting.fetch_sub(1, Ordering::Release);
     }
 
     fn sent(&self) -> usize {
-        self.work_sent.load(Ordering::SeqCst)
+        self.work_sent.load(Ordering::Acquire)
     }
 
     fn received(&self) -> usize {
-        self.work_received.load(Ordering::SeqCst)
+        self.work_received.load(Ordering::Acquire)
     }
 
     fn mutators_stopped(&self) -> bool {

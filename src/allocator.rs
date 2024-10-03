@@ -1,31 +1,16 @@
 use super::header::GcMark;
-use nimix::{AllocError as RawAllocError, Allocator as RawAllocator};
+use nimix::Allocator as Nimix;
 use std::alloc::Layout;
-
-#[derive(Debug)]
-pub enum AllocError {
-    OOM,
-    AllocOverflow,
-}
-
-impl From<RawAllocError> for AllocError {
-    fn from(value: RawAllocError) -> Self {
-        match value {
-            RawAllocError::OOM => AllocError::OOM,
-            RawAllocError::AllocOverflow => AllocError::AllocOverflow,
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct Allocator {
-    allocator: RawAllocator,
+    allocator: Nimix,
 }
 
 impl Allocator {
     pub fn new() -> Self {
         Self {
-            allocator: RawAllocator::new(),
+            allocator: Nimix::new(),
         }
     }
 
@@ -35,7 +20,7 @@ impl Allocator {
 
     // needs the layout in the case of large objects
     pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) {
-        RawAllocator::mark(ptr, layout, mark.into()).expect("GC Failed Marking Obj")
+        Nimix::mark(ptr, layout, mark.into()).expect("GC Failed Marking Obj")
     }
 
     // Anything not marked with the live mark will be freed

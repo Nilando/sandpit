@@ -92,17 +92,16 @@ impl Tracer {
     }
 
     fn share_work(&mut self) {
-        if self.work.len() < self.controller.trace_share_min || self.controller.has_work() {
+        if self.controller.trace_share_min >= self.work.len() || self.controller.has_work() {
             return;
         }
 
-        let mut share_work = vec![];
-        for _ in 0..(self.work.len() as f32 * self.controller.trace_share_ratio).floor() as usize {
-            let job = self.work.pop().unwrap();
-            share_work.push(job);
-        }
+        let split_at = (self.work.len() as f64 * 0.5f64).floor() as usize;
+        let share_work = self.work.split_off(split_at);
 
-        self.controller.send_work(share_work);
+        if !share_work.is_empty() {
+            self.controller.send_work(share_work);
+        }
     }
 
     fn increment_mark_count(&self) {

@@ -322,7 +322,7 @@ fn alloc_array_of_gc_mut() {
 #[test]
 fn two_dimensional_array() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, [Gc<'_, usize>]>]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(100, |i| mu.alloc_array_from_fn(100, |k| Gc::new(mu, i + k)))
+        mu.alloc_array_from_fn(1000, |i| mu.alloc_array_from_fn(1000, |k| Gc::new(mu, i + k)))
     });
 
     arena.mutate(|_mu, root| {
@@ -332,6 +332,8 @@ fn two_dimensional_array() {
             }
         }
     });
+
+    arena.major_collect();
 }
 
 #[test]
@@ -488,7 +490,7 @@ fn cyclic_graph() {
 //
 // assert the list still holds all correct values
 #[test]
-fn list_building_test() {
+fn alloc_after_collect_test() {
     const LIST_SIZE: usize = 10;
     // increasing list size makes this test run a  long time
     #[derive(Trace)]

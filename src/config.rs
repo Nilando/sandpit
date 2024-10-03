@@ -50,8 +50,8 @@ pub struct GcConfig {
 }
 
 pub const GC_CONFIG_DEFAULT_TRACE_THREADS: usize = 2;
-pub const GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE: usize = 500;
-pub const GC_CONFIG_DEFAULT_TRACE_SHARE_MIN: usize = 1_000;
+pub const GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE: usize = 100;
+pub const GC_CONFIG_DEFAULT_TRACE_SHARE_MIN: usize = 50;
 pub const GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO: f32 = 0.5;
 pub const GC_CONFIG_DEFAULT_TRACE_WAIT_TIME: u64 = 1;
 

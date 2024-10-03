@@ -285,7 +285,7 @@ checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
 [[package]]
 name = "nimix"
 version = "0.1.0"
-source = "git+https://github.com/Nilando/nimix?branch=main#17b3a1c8a8d808519508ab7bc0310d5a3d839502"
+source = "git+https://github.com/Nilando/nimix?branch=main#28286057070f0a50b159510f3de86b6bb7d369f0"
 
 [[package]]
 name = "num-traits"
