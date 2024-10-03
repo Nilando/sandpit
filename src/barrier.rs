@@ -1,30 +1,33 @@
-use crate::{Gc, Trace};
+use super::gc::{GcMut, GcOpt};
+use super::trace::Trace;
 
-#[repr(transparent)]
-pub struct WriteBarrier<'gc, T: Trace> {
+pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
     inner: &'gc T,
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, T> {
-    pub(crate) fn new(gc: &'barrier T) -> Self {
-        WriteBarrier {
-            inner: &gc
-        }
+impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
+    // WriteBarriers are unsafe to create, as they themselves don't ensure
+    // anything is retraced, they only communicate that they should have been
+    // created in some context where retracing will happen after the barrier
+    // goes out of context.
+    pub(crate) unsafe fn new(gc: &'gc T) -> Self {
+        WriteBarrier { inner: &gc }
     }
 
-    pub fn inner(&self) -> &'barrier T {
+    pub fn inner(&self) -> &'gc T {
         self.inner
     }
 
-    /// Implementation detail of `write_field!`; same safety requirements as `assume`.
+    // SAFETY: this can only be safely called via the field! macro
+    // which ensures that the inner value is within an existing write barrier
+    // needs to be pub so that the field! macro can work
     #[doc(hidden)]
-    pub unsafe fn __from_ref_and_ptr(v: &T, _: *const T) -> &Self {
-        // SAFETY: `Self` is `repr(transparent)`.
-        std::mem::transmute(v)
+    pub unsafe fn __from_field(inner: &'gc T, _: *const T) -> Self {
+        Self { inner }
     }
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, Option<T>> {
+impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
     pub fn into(&self) -> Option<WriteBarrier<T>> {
         match self.inner {
             Some(ref inner) => Some(WriteBarrier { inner }),
@@ -33,10 +36,57 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Option<T>> {
     }
 }
 
-impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
-    pub fn set(&mut self, new_ptr: Gc<'barrier, T>) {
+impl<'gc, T: Trace> WriteBarrier<'gc, GcMut<'gc, T>> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn set(&self, gc: GcMut<'gc, T>) {
         unsafe {
-            self.inner.set(new_ptr);
+            self.inner.set(gc);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, GcMut<'gc, [T]>> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn set(&self, gc: GcMut<'gc, [T]>) {
+        unsafe {
+            self.inner.set(gc);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, GcOpt<'gc, [T]>> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn set(&self, gc: GcOpt<'gc, [T]>) {
+        unsafe {
+            self.inner.set(gc);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, GcOpt<'gc, T>> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn set(&self, gc: GcOpt<'gc, T>) {
+        unsafe {
+            self.inner.set(gc);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
+    // SAFETY: A write barrier can only be safely obtained through
+    // the callback passed to `fn write_barrier` in which the object
+    // containing this pointer will be retraced
+    pub fn at(&self, idx: usize) -> WriteBarrier<'gc, T> {
+        WriteBarrier {
+            inner: &self.inner[idx],
         }
     }
 }
@@ -44,13 +94,13 @@ impl<'barrier, T: Trace> WriteBarrier<'barrier, Gc<'barrier, T>> {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! field {
-    ($value:expr, $type:path, $field:ident) => {
-        {
-            let _: &$crate::WriteBarrier<_> = $value;
+    ($value:expr, $type:path, $field:ident) => {{
+        let _: &$crate::WriteBarrier<_> = $value;
 
-            match $value.inner() {
-                $type { ref $field, .. } => unsafe { $crate::WriteBarrier::__from_ref_and_ptr($field, $field as *const _) },
-            }
+        match $value.inner() {
+            $type { ref $field, .. } => unsafe {
+                $crate::WriteBarrier::__from_field($field, $field as *const _)
+            },
         }
-    };
+    }};
 }

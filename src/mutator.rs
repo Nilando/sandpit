@@ -1,125 +1,170 @@
-use super::allocator::{Allocate, GenerationalArena, Marker};
+use super::allocator::Allocator;
 use super::gc::Gc;
-use super::trace::{Trace, TraceJob, TraceMarker, TracerController};
-
-use std::alloc::Layout;
+use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
+use super::pointee::Thin;
+use super::pointee::{sized_alloc_layout, slice_alloc_layout};
+use super::trace::{Trace, TraceJob, TracerController};
 use std::cell::RefCell;
-use std::mem::{align_of, size_of};
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
-/// An interface for the mutator type which allows for interaction with the
-/// Gc inside a `gc.mutate(...)` context.
-pub trait Mutator<'scope>: SealedMutator<'scope> {
-    // Signal that GC is ready to free memory and the current mutation
-    // callback should be exited.
-    fn yield_requested(&self) -> bool;
-
-    // Useful for implementing write barriers.
-    fn retrace<T: Trace>(&'scope self, ptr: Gc<'scope, T>);
-    fn is_marked<T: Trace>(&'scope self, ptr: Gc<'scope, T>) -> bool;
+/// The mutator allows allocation into the Gc arena, as well as the
+/// mutating of existing Gc pointer types.
+///
+/// A mutator is acquired through a the mutation callback on [`crate::arena::Arena::mutate`].
+///
+/// # Calling `gc_yield` is Critical!
+///
+/// In order for the GC to efficiently free memory any long lasting mutation
+/// which is allocating memory must periodically call [`Mutator::gc_yield`].
+///
+/// `gc_yield` fulfills 2 operations
+/// - it will block the mutator if tracers are currently struggling to complete a trace.
+/// - if gc_yield returns true it signals that memory is ready to be freed and the mutation callbacks must be exited in order to do so.
+///
+///
+/// While the GC is concurrent, meaning that the tracer may perform a trace
+/// while mutation is happening, the GC is unable to actually free
+/// any memory while mutation is occuring. This is because the Gc needs to be certain
+/// that when it frees memory it has traced all existing references into
+/// the arena. Unfortunately it is quite difficult to account for
+/// references to GC values which exist on the stack within a mutation context.
+///
+/// So in order to ensure that all references are traced, the GC requires
+/// all mutation contexts to exit, guaranteeing that the only Gc reference to exist(outside of the tracer threads)
+/// is the singular arena root.
+///
+/// The mutator therefore holds a lock, that the tracer threads use
+/// to be able to identify if the mutation contexts have all exited at
+/// which point the Gc will free memory and then allow for mutation to resume.
+pub struct Mutator<'gc> {
+    tracer_controller: &'gc TracerController,
+    allocator: Allocator,
+    rescan: RefCell<Vec<TraceJob>>,
+    _lock: RwLockReadGuard<'gc, ()>,
+    mark: GcMark,
 }
 
-pub trait SealedMutator<'scope> {
-    fn alloc<T: Trace>(&'scope self, obj: T) -> NonNull<T>;
-    fn alloc_array<T: Trace>(&'scope self, size: usize) -> NonNull<T>;
-}
-
-pub struct MutatorScope<'scope, A: Allocate> {
-    allocator: A,
-    tracer_controller: &'scope TracerController<TraceMarker<A>>,
-    rescan: RefCell<Vec<TraceJob<TraceMarker<A>>>>,
-    _lock: RwLockReadGuard<'scope, ()>,
-}
-
-impl<'scope, A: Allocate> MutatorScope<'scope, A> {
-    pub fn new(
-        arena: &A::Arena,
-        tracer_controller: &'scope TracerController<TraceMarker<A>>,
-        _lock: RwLockReadGuard<'scope, ()>,
-    ) -> Self {
-        let allocator = A::new(arena);
-
-        Self {
-            allocator,
-            tracer_controller,
-            rescan: RefCell::new(vec![]),
-            _lock,
-        }
-    }
-}
-
-impl<'scope, A: Allocate> Drop for MutatorScope<'scope, A> {
+impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
         self.tracer_controller.send_work(work);
     }
 }
 
-impl<'scope, A: Allocate> SealedMutator<'scope> for MutatorScope<'scope, A> {
-    fn alloc<T: Trace>(&self, obj: T) -> NonNull<T> {
-        if self.tracer_controller.is_alloc_lock() {
-            drop(self.tracer_controller.get_alloc_lock());
+impl<'gc> Mutator<'gc> {
+    pub(crate) fn new(
+        allocator: Allocator,
+        tracer_controller: &'gc TracerController,
+        _lock: RwLockReadGuard<'gc, ()>,
+    ) -> Self {
+        let mark = tracer_controller.prev_mark();
+
+        Self {
+            allocator,
+            tracer_controller,
+            rescan: RefCell::new(vec![]),
+            mark,
+            _lock,
         }
+    }
 
-        let layout = Layout::new::<T>();
-        match self.allocator.alloc(layout) {
-            Ok(ptr) => {
-                unsafe { write(ptr.as_ptr().cast(), obj) }
+    /// The underlying method to [`crate::gc::Gc::new`] which allocates into the arena.
+    ///
+    /// This may panic if the allocation fails which may be because of
+    /// lack of memory or object allocated is too large.
+    pub fn alloc<T: Trace>(&self, value: T) -> Gc<'gc, T> {
+        let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
-                ptr.cast()
-            }
-            Err(()) => panic!("failed to allocate"),
+        unsafe {
+            let ptr = self.allocator.alloc(alloc_layout);
+            // SAFETY: the alloc layout was extended to have capacity
+            // for the header and object to be written into.
+
+            // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
+            // the Gc invariant that a Gc<T> points to a T with a padded header.
+            let val_ptr = ptr.add(val_offset).cast();
+            let header_ptr = ptr.cast();
+
+            write(val_ptr, value);
+            write(header_ptr, SizedHeader::<T>::new(self.mark));
+
+            Gc::from_ptr(val_ptr)
         }
     }
 
-    fn alloc_array<T: Trace>(&self, size: usize) -> NonNull<T> {
-        if self.tracer_controller.is_alloc_lock() {
-            drop(self.tracer_controller.get_alloc_lock());
-        }
+    /// Alloc a gc array with specified length with each index set to value
+    ///
+    /// Due to the reference restraints of Gc<T>, this is only really
+    /// useful if T has some form of interior mutability, for example,
+    /// Cell<usize>
+    ///
+    /// Also
+    /// ```
+    /// // let value = GcNullMut::new_null();
+    /// // creates an array of null pointers which may be updated to
+    /// // point somewhere else
+    /// //let gc_array = mutator.alloc_array(value, len);
+    ///
+    /// ```
+    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
+        // TODO: I think this could be done much faster
+        self.alloc_array_from_fn(len, |_| value.clone())
+    }
 
-        let layout = Layout::from_size_align(size_of::<T>() * size, align_of::<T>()).unwrap();
-        match self.allocator.alloc(layout) {
-            Ok(ptr) => {
-                let byte_ptr = ptr.as_ptr();
+    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
+        // TODO: this could be one single write call
+        self.alloc_array_from_fn(slice.len(), |idx| slice[idx].clone())
+    }
 
-                for i in 0..layout.size() {
-                    unsafe {
-                        *byte_ptr.add(i) = 0;
-                    }
-                }
+    pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<'gc, [T]>
+    where
+        T: Trace,
+        F: FnMut(usize) -> T,
+    {
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
-                ptr.cast()
+        unsafe {
+            let ptr = self.allocator.alloc(alloc_layout);
+            let header_ptr = ptr.cast();
+            let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+            for i in 0..len {
+                let item = cb(i);
+                write(slice_ptr.add(i), item);
             }
-            Err(()) => panic!("failed to allocate"),
+
+            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
+            write(header_ptr, SliceHeader::<T>::new(self.mark, len));
+
+            Gc::from_ptr(slice)
         }
     }
-}
 
-impl<'scope, A: Allocate> Mutator<'scope> for MutatorScope<'scope, A> {
-    /// This flag will be set to true when a trace is near completion.
+    /// This fn will return true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
-    fn yield_requested(&self) -> bool {
-        self.tracer_controller.yield_flag()
+    pub fn gc_yield(&self) -> bool {
+        if self.tracer_controller.yield_flag() {
+            return true;
+        } else {
+            let _lock = self.tracer_controller.get_time_slice_lock();
+            self.tracer_controller.yield_flag()
+        }
     }
 
-    fn retrace<T: Trace>(&self, gc_ptr: Gc<T>) {
-        let ptr = unsafe { gc_ptr.as_nonnull() };
-
-        let new = <<A as Allocate>::Arena as GenerationalArena>::Mark::new();
-        A::set_mark(ptr, new);
-
-        if !T::IS_LEAF {
-            self.rescan.borrow_mut().push(TraceJob::new(ptr));
+    pub(crate) fn retrace<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) {
+        if gc_ptr.get_header().get_mark() != self.tracer_controller.get_current_mark() {
+            return;
         }
+
+        let ptr: NonNull<Thin<T>> = gc_ptr.as_thin();
+        let trace_job = TraceJob::new(ptr);
+
+        self.rescan.borrow_mut().push(trace_job);
 
         if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
             let work = self.rescan.take();
             self.tracer_controller.send_work(work);
         }
-    }
-
-    fn is_marked<T: Trace>(&self, ptr: Gc<T>) -> bool {
-        self.allocator.is_old(unsafe { ptr.as_nonnull() })
     }
 }

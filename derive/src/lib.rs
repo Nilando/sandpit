@@ -10,7 +10,7 @@ use syn::{
 pub fn trace(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let generics = add_leaf(add_trace(input.generics));
+    let generics = add_trace(input.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let trace_body = match input.data {
@@ -35,7 +35,8 @@ pub fn trace(input: TokenStream) -> TokenStream {
             .unnamed
             .iter()
             .enumerate()
-            .map(|(idx, _)| {
+            .map(|(i, _)| {
+                let idx = syn::Index::from(i);
                 quote! {
                     sandpit::Trace::trace(&self.#idx, tracer);
                 }
@@ -115,10 +116,12 @@ pub fn trace(input: TokenStream) -> TokenStream {
         unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
             const IS_LEAF: bool = false;
 
-            fn trace<GC_DERIVE_INTERNAL_TRACER_TYPE: sandpit::Tracer>(&self, tracer: &mut GC_DERIVE_INTERNAL_TRACER_TYPE) {
+            fn trace(&self, tracer: &mut sandpit::Tracer) {
                 #(#trace_body)*
             }
         }
+
+        impl #impl_generics sandpit::__MustNotDrop for #name #ty_generics #where_clause {}
     };
 
     TokenStream::from(expanded)
@@ -210,7 +213,13 @@ pub fn traceleaf(input: TokenStream) -> TokenStream {
                 #(#trace_body)*
             }
         }
-        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {}
+        unsafe impl #impl_generics sandpit::Trace for #name #ty_generics #where_clause {
+            const IS_LEAF: bool = false;
+
+            fn trace(&self, tracer: &mut sandpit::Tracer) {}
+        }
+
+        impl #impl_generics sandpit::__MustNotDrop for #name #ty_generics #where_clause {}
     };
 
     TokenStream::from(expanded)

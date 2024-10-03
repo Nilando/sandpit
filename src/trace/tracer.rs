@@ -1,49 +1,70 @@
-use super::marker::Marker;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
-use std::ptr::NonNull;
+use crate::allocator::Allocator;
+use crate::gc::Gc;
+use crate::header::{GcHeader, GcMark};
+use std::cell::Cell;
 use std::sync::Arc;
 
-pub trait Tracer {
-    fn trace<T: Trace>(&mut self, ptr: NonNull<T>);
-    //fn mark<T: Trace>(&mut self, ptr: NonNull<T>);
+pub struct Tracer {
+    // sometimes ID might be helpful in debugging, but currently not used anywhere
+    _id: usize,
+    controller: Arc<TracerController>,
+    mark: GcMark,
+    mark_count: Cell<usize>,
+    work: Vec<TraceJob>,
 }
 
-pub struct TraceWorker<M: Marker> {
-    controller: Arc<TracerController<M>>,
-    marker: Arc<M>,
-    work: Vec<TraceJob<M>>,
-}
+impl Tracer {
+    pub fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
+        Self {
+            _id: id,
+            controller,
+            mark,
+            mark_count: Cell::new(0),
+            work: vec![],
+        }
+    }
 
-impl<M: Marker> Tracer for TraceWorker<M> {
-    fn trace<T: Trace>(&mut self, ptr: NonNull<T>) {
-        if !self.marker.set_mark(ptr) {
+    pub fn get_mark_count(&self) -> usize {
+        self.mark_count.get()
+    }
+
+    // doesn't work for pointer to dynamically sized types
+    pub fn mark_and_trace<'gc, T: Trace + ?Sized>(&mut self, gc: Gc<'gc, T>) {
+        //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
+
+        let header = gc.get_header();
+        let alloc_ptr = gc.get_header_ptr();
+        let alloc_layout = gc.get_layout();
+
+        if header.get_mark() == self.mark {
             return;
         }
+
+        header.set_mark(self.mark);
+
+        self.increment_mark_count();
+
+        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
 
         if T::IS_LEAF {
             return;
         }
 
-        self.work.push(TraceJob::new(ptr));
-    }
-}
-
-impl<M: Marker> TraceWorker<M> {
-    pub fn new(controller: Arc<TracerController<M>>, marker: Arc<M>) -> Self {
-        Self {
-            controller,
-            marker,
-            work: vec![],
-        }
+        self.work.push(TraceJob::new(gc.as_thin()));
     }
 
     pub fn flush_work(&mut self) {
-        self.controller.send_work(self.work.clone());
+        let mut work = vec![];
+
+        std::mem::swap(&mut work, &mut self.work);
+
+        self.controller.send_work(work);
     }
 
-    pub fn trace_loop(&mut self) {
+    pub fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
                 match self.controller.recv_work() {
@@ -57,6 +78,8 @@ impl<M: Marker> TraceWorker<M> {
         }
 
         debug_assert_eq!(self.work.len(), 0);
+
+        self.mark_count.get()
     }
 
     fn do_work(&mut self) {
@@ -69,16 +92,19 @@ impl<M: Marker> TraceWorker<M> {
     }
 
     fn share_work(&mut self) {
-        if self.work.len() < self.controller.trace_share_min || self.controller.has_work() {
+        if self.controller.trace_share_min >= self.work.len() || self.controller.has_work() {
             return;
         }
 
-        let mut share_work = vec![];
-        for _ in 0..(self.work.len() as f32 * self.controller.trace_share_ratio).floor() as usize {
-            let job = self.work.pop().unwrap();
-            share_work.push(job);
-        }
+        let split_at = (self.work.len() as f64 * 0.5f64).floor() as usize;
+        let share_work = self.work.split_off(split_at);
 
-        self.controller.send_work(share_work);
+        if !share_work.is_empty() {
+            self.controller.send_work(share_work);
+        }
+    }
+
+    fn increment_mark_count(&self) {
+        self.mark_count.set(self.mark_count.get() + 1);
     }
 }

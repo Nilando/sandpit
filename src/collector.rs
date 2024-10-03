@@ -1,14 +1,17 @@
-use super::allocator::{Allocate, GenerationalArena};
+use super::allocator::Allocator;
 use super::config::GcConfig;
-use super::mutator::MutatorScope;
-use super::trace::{Marker, Trace, TraceLeaf, TraceMarker, TracerController};
+use super::header::GcMark;
+use super::mutator::Mutator;
+use super::time_slicer::TimeSlicer;
+use super::trace::{Trace, TracerController};
+
 use higher_kinded_types::ForLt;
-use std::time::{Duration, Instant};
 
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
+use std::time::Instant;
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
@@ -18,10 +21,11 @@ pub enum GcState {
     Finishing,
 }
 
+// collect trait is nice so that monitor does not need
+// to be generic on Root type, and just needs a type that impls collect
 pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
-    fn wait_for_collection(&self);
 
     fn get_old_objects_count(&self) -> usize;
     fn get_arena_size(&self) -> usize;
@@ -32,42 +36,52 @@ pub trait Collect {
     fn get_state(&self) -> GcState;
 }
 
-pub struct Collector<A: Allocate, R: ForLt>
+pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    arena: A::Arena,
-    tracer: Arc<TracerController<TraceMarker<A>>>,
-    lock: Mutex<()>,
+    arena: Allocator,
+    tracer: Arc<TracerController>,
+
+    // this lock is held while a collection is happening.
+    // It is used to ensure that we don't start a collection while a collection
+    // is happening. TODO: could we possibly start a collection while one is happening?
+    collection_lock: Mutex<()>,
+    mutation_lock: Mutex<()>,
+
     root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
-    old_objects: AtomicUsize,
+    old_objects: Arc<AtomicUsize>,
+
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
 
-    //config vars
-    arena_size_ratio_trigger: f32,
-    max_headroom_ratio: f32,
-    timeslice_size: f32,
-    slice_min: f32,
+    time_slicer: TimeSlicer,
 }
 
-impl<A: Allocate, R: ForLt> Collect for Collector<A, R>
+impl<R: ForLt> Collect for Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    fn wait_for_collection(&self) {
-        let _lock = self.lock.lock().unwrap();
-    }
-
     fn major_collect(&self) {
-        let _lock = self.lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
+        let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
-        self.old_objects.store(0, Ordering::SeqCst);
-        self.collect(TraceMarker::new(self.arena.rotate_mark()).into());
-        self.major_collections.fetch_add(1, Ordering::SeqCst);
+        self.old_objects.store(0, Ordering::Relaxed);
+        self.rotate_mark(); // major collection rotates the mark!
+        self.collect();
+
+        // SAFETY: at this point there are no mutators and all garbage collected
+        // values have been marked with the current_mark
+        unsafe {
+            self.arena.sweep(self.get_current_mark(), || {
+                drop(mutation_lock);
+            });
+        }
+
+        self.major_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -79,10 +93,20 @@ where
     }
 
     fn minor_collect(&self) {
-        let _lock = self.lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
+        let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
-        self.collect(TraceMarker::new(self.arena.current_mark()).into());
-        self.minor_collections.fetch_add(1, Ordering::SeqCst);
+        self.collect();
+
+        // SAFETY: at this point there are no mutators and all garbage collected
+        // values have been marked with the current_mark
+        unsafe {
+            self.arena.sweep(self.get_current_mark(), || {
+                drop(mutation_lock);
+            });
+        }
+
+        self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis() as usize;
@@ -94,11 +118,11 @@ where
     }
 
     fn get_major_collections(&self) -> usize {
-        self.major_collections.load(Ordering::SeqCst)
+        self.major_collections.load(Ordering::Relaxed)
     }
 
     fn get_minor_collections(&self) -> usize {
-        self.minor_collections.load(Ordering::SeqCst)
+        self.minor_collections.load(Ordering::Relaxed)
     }
 
     fn get_arena_size(&self) -> usize {
@@ -106,19 +130,19 @@ where
     }
 
     fn get_old_objects_count(&self) -> usize {
-        self.old_objects.load(Ordering::SeqCst)
+        self.old_objects.load(Ordering::Relaxed)
     }
 
     fn get_major_collect_avg_time(&self) -> usize {
-        self.major_collect_avg_time.load(Ordering::SeqCst)
+        self.major_collect_avg_time.load(Ordering::Relaxed)
     }
 
     fn get_minor_collect_avg_time(&self) -> usize {
-        self.minor_collect_avg_time.load(Ordering::SeqCst)
+        self.minor_collect_avg_time.load(Ordering::Relaxed)
     }
 
     fn get_state(&self) -> GcState {
-        if self.lock.try_lock().is_ok() {
+        if self.collection_lock.try_lock().is_ok() {
             GcState::Waiting
         } else if self.tracer.yield_flag() {
             GcState::Finishing
@@ -128,64 +152,67 @@ where
     }
 }
 
-impl<A: Allocate, R: ForLt> Collector<A, R>
+impl<R: ForLt> Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     pub fn new<F>(f: F, config: &GcConfig) -> Self
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>) -> R::Of<'gc>,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        unsafe {
-            let arena = A::Arena::new();
-            let tracer = Arc::new(TracerController::new(config));
-            let tracer_ref: &'static TracerController<_> =
-                &*(&*tracer as *const TracerController<_>);
-            let lock = tracer_ref.yield_lock();
-            let mutator: &'static MutatorScope<'static, A> =
-                &*(&MutatorScope::new(&arena, tracer_ref, lock)
-                    as *const MutatorScope<'static, A>);
-            let root: R::Of<'static> = f(mutator);
+        let arena = Allocator::new();
+        let tracer = Arc::new(TracerController::new(config));
+        let tracer_ref: &'static TracerController =
+            unsafe { &*(&*tracer as *const TracerController) };
+        let lock = tracer_ref.yield_lock();
+        let mutator = Mutator::new(arena.clone(), tracer_ref, lock);
+        let mutator_ref: &'static Mutator<'static> =
+            unsafe { &*(&mutator as *const Mutator<'static>) };
 
-            Self {
-                arena,
-                tracer,
-                root,
-                lock: Mutex::new(()),
-                major_collections: AtomicUsize::new(0),
-                minor_collections: AtomicUsize::new(0),
-                major_collect_avg_time: AtomicUsize::new(0),
-                minor_collect_avg_time: AtomicUsize::new(0),
-                old_objects: AtomicUsize::new(0),
-                arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
-                max_headroom_ratio: config.collector_max_headroom_ratio,
-                timeslice_size: config.collector_timeslize,
-                slice_min: config.collector_slice_min,
-            }
+        let root: R::Of<'static> = f(mutator_ref);
+        let time_slicer = TimeSlicer::new(
+            tracer.clone(),
+            arena.clone(),
+            config.monitor_arena_size_ratio_trigger,
+            config.collector_max_headroom_ratio,
+            config.collector_timeslice_size,
+            config.collector_slice_min,
+        );
+
+        Self {
+            arena,
+            tracer,
+            root,
+            collection_lock: Mutex::new(()),
+            mutation_lock: Mutex::new(()),
+            major_collections: AtomicUsize::new(0),
+            minor_collections: AtomicUsize::new(0),
+            major_collect_avg_time: AtomicUsize::new(0),
+            minor_collect_avg_time: AtomicUsize::new(0),
+            old_objects: Arc::new(AtomicUsize::new(0)),
+            time_slicer,
         }
     }
 
-    pub fn mutate<F, O>(&self, f: F) -> O
+    pub fn mutate<F>(&self, f: F)
     where
-        F: for<'gc> FnOnce(&'gc MutatorScope<'gc, A>, &'gc R::Of<'gc>) -> O,
+        F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>),
     {
-        unsafe {
-            let mutator = self.new_mutator();
-            let root = self.scoped_root();
+        let mutator = self.new_mutator();
+        let root = unsafe { self.scoped_root() };
 
-            f(&mutator, root)
-        }
+        f(&mutator, root);
     }
 
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
         std::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
     }
 
-    fn new_mutator(&self) -> MutatorScope<A> {
-        let _collection_lock = self.lock.lock().unwrap();
-        let lock = self.tracer.yield_lock();
+    fn new_mutator(&self) -> Mutator {
+        let _mutation_lock = self.mutation_lock.lock().unwrap();
+        let yield_lock = self.tracer.yield_lock();
 
-        MutatorScope::new(&self.arena, self.tracer.as_ref(), lock)
+        Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)
     }
 
     fn update_collection_time(
@@ -194,77 +221,29 @@ where
         elapsed_time: usize,
         num_collections: usize,
     ) {
-        let avg = average.load(Ordering::SeqCst);
+        let avg = average.load(Ordering::Relaxed);
         let update = elapsed_time.abs_diff(avg) / num_collections;
 
         if avg > elapsed_time {
-            average.fetch_sub(update, Ordering::SeqCst);
+            average.fetch_sub(update, Ordering::Relaxed);
         } else {
-            average.fetch_add(update, Ordering::SeqCst);
+            average.fetch_add(update, Ordering::Relaxed);
         }
     }
 
-    fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
-        // Algorithm inspired from webkit riptide collector:
-        let one_mili_in_nanos = 1_000_000.0;
-        let available_headroom = (max_headroom + prev_size) - self.arena.get_size();
-        let headroom_ratio = available_headroom as f32 / max_headroom as f32;
-        let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
-        let mutator_nanos = (one_mili_in_nanos * m) as u64;
-        let collector_nanos = (self.timeslice_size * one_mili_in_nanos) as u64 - mutator_nanos;
-        let mutator_duration = Duration::from_nanos(mutator_nanos);
-        let collector_duration = Duration::from_nanos(collector_nanos);
-
-        debug_assert_eq!(
-            collector_nanos + mutator_nanos,
-            (one_mili_in_nanos * self.timeslice_size) as u64
-        );
-
-        (mutator_duration, collector_duration)
+    fn rotate_mark(&self) -> GcMark {
+        self.tracer.rotate_mark()
     }
 
-    fn run_space_time_manager(&self) {
-        let prev_size = self.arena.get_size();
-        let max_headroom =
-            ((prev_size as f32 / self.arena_size_ratio_trigger) * self.max_headroom_ratio) as usize;
-
-        loop {
-            // we've ran out of headroom, stop the mutators
-            if self.arena.get_size() >= (max_headroom + prev_size) {
-                self.tracer.raise_yield_flag();
-                break;
-            }
-
-            let (mutator_duration, collector_duration) =
-                self.split_timeslice(max_headroom, prev_size);
-
-            std::thread::sleep(mutator_duration);
-
-            if !self.tracer.is_tracing() {
-                break;
-            }
-
-            // TODO: rename this from write_barrier_lock, to like space_time_lock ormaybe
-            // maybe mutator lock
-            let _lock = self.tracer.get_alloc_lock();
-            std::thread::sleep(collector_duration);
-
-            if !self.tracer.is_tracing() {
-                break;
-            }
-        }
+    fn get_current_mark(&self) -> GcMark {
+        self.tracer.get_current_mark()
     }
 
-    // TODO: differentiate sync and concurrent collections
-    // sync collections need not track headroom
-    fn collect(&self, marker: Arc<TraceMarker<A>>) {
-        self.tracer.clone().trace(&self.root, marker.clone());
-        // TODO: should space & time managing be done in a separate thread? otherwise a collection is guaranteed
-        // to take 1.4ms
-        self.run_space_time_manager();
-        self.tracer.wait_for_trace_completion();
-        self.old_objects
-            .fetch_add(marker.get_mark_count(), Ordering::SeqCst);
-        self.arena.refresh();
+    fn collect(&self) {
+        self.tracer
+            .clone()
+            .trace(&self.root, self.old_objects.clone(), || {
+                self.time_slicer.run();
+            });
     }
 }

@@ -1,17 +1,23 @@
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::thread;
 use std::time;
 
 use super::collector::Collect;
 use super::config::GcConfig;
-use super::metrics::GcMetrics;
 
+// The monitor is responsible for automatically triggering garbage collections.
+// It determines when to make a major and or minor collection by considering,
+// the current and past size of the arena, as well as the number of "old objects"
+// which are objects that have been traced.
 pub struct Monitor<T: Collect + 'static> {
     collector: Arc<T>,
+
     flag: AtomicBool,
+    monitor_lock: Mutex<()>,
+
     prev_arena_size: AtomicUsize,
     max_old_objects: AtomicUsize,
 
@@ -31,6 +37,7 @@ impl<T: Collect + 'static> Monitor<T> {
         Self {
             collector,
             flag: AtomicBool::new(false),
+            monitor_lock: Mutex::new(()),
             prev_arena_size: AtomicUsize::new(prev_arena_size),
             // TODO make this a config var
             max_old_objects: AtomicUsize::new(0),
@@ -41,21 +48,22 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     pub fn stop(&self) {
-        self.flag.store(false, Ordering::SeqCst);
+        self.flag.store(false, Ordering::Relaxed);
+        let _lock = self.monitor_lock.lock().unwrap();
     }
 
     pub fn get_max_old_objects(&self) -> usize {
-        self.max_old_objects.load(Ordering::SeqCst)
+        self.max_old_objects.load(Ordering::Relaxed)
     }
 
     pub fn get_prev_arena_size(&self) -> usize {
-        self.prev_arena_size.load(Ordering::SeqCst)
+        self.prev_arena_size.load(Ordering::Relaxed)
     }
 
     pub fn start(self: Arc<Self>) {
         if self
             .flag
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
             return;
@@ -65,6 +73,8 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     fn monitor(&self) {
+        let _lock = self.monitor_lock.lock().unwrap();
+
         loop {
             self.sleep();
 
@@ -87,19 +97,19 @@ impl<T: Collect + 'static> Monitor<T> {
             }
 
             self.prev_arena_size
-                .store(self.collector.get_arena_size(), Ordering::SeqCst);
+                .store(self.collector.get_arena_size(), Ordering::Relaxed);
         }
     }
 
     fn major_trigger(&self) -> bool {
         let old_objects = self.collector.get_old_objects_count();
 
-        old_objects > self.max_old_objects.load(Ordering::SeqCst)
+        old_objects > self.max_old_objects.load(Ordering::Relaxed)
     }
 
     fn minor_trigger(&self) -> bool {
         let arena_size = self.collector.get_arena_size();
-        let prev_arena_size = self.prev_arena_size.load(Ordering::SeqCst);
+        let prev_arena_size = self.prev_arena_size.load(Ordering::Relaxed);
 
         arena_size as f32 > (prev_arena_size as f32 * self.arena_size_ratio_trigger)
     }
@@ -109,46 +119,17 @@ impl<T: Collect + 'static> Monitor<T> {
 
         self.max_old_objects.store(
             (old_objects as f32 * self.max_old_growth_rate).floor() as usize,
-            Ordering::SeqCst,
+            Ordering::Relaxed,
         );
     }
 
     fn should_stop_monitoring(&self) -> bool {
-        !self.flag.load(Ordering::SeqCst)
+        !self.flag.load(Ordering::Relaxed)
     }
 
     fn sleep(&self) {
         let duration = time::Duration::from_millis(self.wait_duration);
 
         thread::sleep(duration);
-    }
-
-    pub fn metrics(&self) -> GcMetrics {
-        GcMetrics {
-            state: self.collector.get_state(),
-            // Collector Metrics:
-
-            // Running count of how many times major/minor collections have happend.
-            major_collections: self.collector.get_major_collections(),
-            minor_collections: self.collector.get_minor_collections(),
-
-            //average collect times in millis
-            major_collect_avg_time: self.collector.get_major_collect_avg_time(),
-            minor_collect_avg_time: self.collector.get_minor_collect_avg_time(),
-
-            // How many old objects there were as per the last trace.
-            old_objects_count: self.collector.get_old_objects_count(),
-            // The current size of the arena including large objects and blocks.
-            arena_size: self.collector.get_arena_size(),
-
-            // Monitor Metrics:
-
-            // How many old objects must exist before a major collection is triggered.
-            // If you divide this number by the monitor's 'MAX_OLD_GROWTH_RATE, you get the number
-            // of old objects at the end of the last major collection
-            max_old_objects: self.get_max_old_objects(),
-            // The size of the arena at the end of the last collection.
-            prev_arena_size: self.get_prev_arena_size(),
-        }
     }
 }
