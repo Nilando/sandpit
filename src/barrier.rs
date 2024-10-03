@@ -20,6 +20,22 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
         WriteBarrier { inner: &gc }
     }
 
+    /// Get a reference to the value behind barrier
+    ///
+    /// ## Example
+    /// ```rust
+    /// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    ///
+    /// let arena: Arena<Root![Gc<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, GcMut::new(mu, 69))
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         assert!(**barrier.inner() == 69);
+    ///     })
+    /// });
+    ///```
     pub fn inner(&self) -> &'gc T {
         self.inner
     }
@@ -33,16 +49,26 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
-    pub fn into(&self) -> Option<WriteBarrier<T>> {
-        match self.inner {
-            Some(ref inner) => Some(WriteBarrier { inner }),
-            None => None,
-        }
-    }
-}
-
 impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcMut<'gc, T>> {
+    /// Update a [`GcMut`] that is within a write barrier to point at a new value.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    ///
+    /// let arena: Arena<Root![Gc<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, GcMut::new(mu, 69))
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         let new_value = GcMut::new(mu, 420);
+    ///         barrier.set(new_value);
+    ///
+    ///         assert!(**barrier.inner() == 420);
+    ///     })
+    /// });
+    ///```
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
@@ -54,6 +80,26 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcMut<'gc, T>> {
 }
 
 impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcOpt<'gc, T>> {
+    /// Update a [`GcOpt`] that is within a write barrier to point at a new value.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    ///
+    /// let arena: Arena<Root![Gc<'_, GcOpt<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, GcOpt::new_none(mu))
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         let new_value = GcOpt::new(mu, 420);
+    ///
+    ///         barrier.set(new_value);
+    ///
+    ///         assert!(*barrier.inner().as_option().unwrap() == 420);
+    ///     })
+    /// });
+    ///```
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
@@ -65,6 +111,24 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcOpt<'gc, T>> {
 }
 
 impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
+    /// Get a writer barrier to a index of a slice behind write barrier.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    ///
+    /// let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
+    ///    mu.alloc_array_from_fn(10, |i| i)
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         let inner_barrier = barrier.at(3);
+    ///
+    ///         assert_eq!(*inner_barrier.inner(), 3);
+    ///     })
+    /// });
+    ///```
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
@@ -75,8 +139,19 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
     }
 }
 
+impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
+    pub fn into(&self) -> Option<WriteBarrier<T>> {
+        match self.inner {
+            Some(ref inner) => Some(WriteBarrier { inner }),
+            None => None,
+        }
+    }
+}
+
+/// Exists to allow getting a write barrier to an inner field.
+///
+/// It would be unsafe to allow for creating a write barrier around
 #[macro_export]
-#[doc(hidden)]
 macro_rules! field {
     ($value:expr, $type:path, $field:ident) => {{
         let _: &$crate::WriteBarrier<_> = $value;
