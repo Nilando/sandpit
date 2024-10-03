@@ -386,7 +386,7 @@ fn push_until_yield() {
     let mut i = 0;
 
     arena.mutate(|mu, root| {
-        while !mu.gc_yield() {
+        while !mu.yield_requested() {
             LinkedList::push_back(root.clone(), mu, i);
             i += 1;
         }

@@ -1,42 +1,137 @@
-//! A generational, concurrent, and parallel garbage collected arena that is
-//! still under development.
+//! A concurrent, generational, trace and sweep garbage collected arena.
 //!
-//! A Arena holds a single generic Root object which must implement the Trace trait.
-//! When the Arena peforms a collection, all memory that is unreachable from the root
-//! will be freed.
-//! To build a Arena, you must pass a callback to the Arena::build method which must return the arena's root object. The Arena::build method also provides a mutator as an argument to allow for the option of allocating the root object within the Arena.
+//! ## High Level Example
+//!
+//! ## Creating An Arena
+//!
+//! All garbage collection in Sandpit happens within an arena. Therefore, to
+//! be begin we can start with creating a new arena. 
+//!
+//! This can be done like so..
 //! ```rust
-//! use sandpit::{Arena, Mutator, gc::Gc, Root};
+//! use sandpit::{Arena, Root};
+//! # use sandpit::{Trace, Mutator};
+//! # #[derive(Trace)]
+//! # struct MyRoot;
+//! # impl MyRoot { 
+//! #   fn new(mutator: &Mutator) -> Self { Self }
+//! # }
 //!
-//! // This creates an arena with a Gc<usize> as the root.
-//! let gc: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
-//!     Gc::new(mu, 123)
-//! });
-//!
-//! gc.mutate(|mu, root| {
-//!     assert_eq!(**root, 123)
+//! // This creates an arena with a `MyRoot` as the root.
+//! let gc: Arena<Root![MyRoot]> = Arena::new(|mutator| {
+//!     MyRoot::new(mutator)
 //! });
 //! ```
+//! There are two big things to unpack here:
+//! * An `Arena` is generic on its single Root value which it holds.
+//! * The Root of an `Arena` must be a Higher Kinded Type(HKT).
 //!
-//! To allocate a type in a Arena it must meet a few guarantees. First, the type must
-//! not impl Drop. This is because the trace and sweep collector by design only keeps track of what
-//! is still reachable from the root, and implicitly frees what is not.
-//! ```
-//! use sandpit::{Arena, Trace, gc::Gc, Root};
+//! This is explained in much further depth in [`sandpit::Arena`].
+//!
+//! ## Trace Trait
+//! For a type to be GC'ed it is required to impl [`Trace`]
+//! which can be safely derived as long as all inner types also impl [`Trace`].
+//!
+//! ```rust
+//! use sandpit::{Trace, gc::{Gc, GcMut, GcOpt}};
+//! # #[derive(Trace)]
+//! # struct A;
+//! # #[derive(Trace)]
+//! # struct B;
+//! # #[derive(Trace)]
+//! # struct C;
 //!
 //! #[derive(Trace)]
-//! struct Foo {
-//!     foo: usize
+//! enum Value<'gc> {
+//!     // There are 3 types of pointers to GC'ed values.
+//!     A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
+//!     B(GcMut<'gc, B>), // Mutable pointer, can be updated to point at something else via a write barrier.
+//!     C(GcOpt<'gc, C>), // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
 //! }
+//! // All inner values must be trace, therefore types A, B, and T must impl Trace as well!
+//! ```
+//! Essentially when a value is traced the tracer will mark the value as live,
+//! and call trace on all its inner pointers to GC values.
 //!
-//! let gc: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| {
-//!     Gc::new(mu, Foo { foo: 69 })
-//! });
+//! There are 3 types of GC pointers:
+//! * [`gc::Gc`]
+//! * [`gc::GcMut`]
+//! * [`gc::GcOpt`]
 //!
-//! gc.mutate(|mu, root| {
-//!     assert_eq!(root.foo, 69)
+//! A type may also derive [`TraceLeaf`], if it contains no GC pointers. 
+//! [`TraceLeaf`] allows for easier interior mutability.
+//!
+//! ## Mutating the Arena
+//! Once you have your arena and your traceable types, you can begin allocating
+//! them in the arena by calling [`crate::arena::Arena::mutate`]. Within a mutation 
+//! we can essentially do 3 important things:
+//! * Access all data reaachable from the root.
+//! * Create new garbage collected values.
+//! * Update Gc pointers to point to new values via a [`barrier`].
+//! ```rust
+//! use sandpit::{Trace, gc::GcMut};
+//!
+//! # use sandpit::{Arena, Root, Mutator, WriteBarrier};
+//!
+//! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
+//! #     GcMut::new(mutator, 0usize)
+//! # });
+//! # fn traverse(root: &usize) {}
+//!
+//! arena.mutate(|mutator, root| {
+//!     // We can access everything reachable from the root.
+//!     traverse(root); 
+//!
+//!     // We can allocate new Gc values.
+//!     // Here is a pointer, to a pointer, to a bool!
+//!     let gc_mut = GcMut::new(mutator, 
+//!         GcMut::new(mutator, true)
+//!     ); 
+//! 
+//!     // We can mutate existing inner GcMut and GcOpt pointers.
+//!     gc_mut.write_barrier(mutator, |barrier| {
+//!         barrier.set(GcMut::new(mutator, false));
+//!     })
 //! });
 //! ```
+//!
+//! ## Collection and Yielding
+//!
+//! In order for the Gc to free memory, and do so safely, all mutations must
+//! exit. Therefore, if a mutation involves a continuous loop of instructions,
+//! it must exit it's mutation every so often to allow the GC to free memory.
+//!
+//! The mutator exposes a signal([`Mutator::gc_yield`]) which indicates if it is ready to free memory,
+//! and that the mutation should end.
+//!
+//! ```rust
+//! # use sandpit::{Arena, Root, Mutator, WriteBarrier, gc::GcMut};
+//!
+//! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
+//! #     GcMut::new(mutator, 0usize)
+//! # });
+//! # fn allocate_a_whole_bunch_of_garbage(mutator: &Mutator, root: &usize) {
+//! #   for i in 0..100 {
+//! #       GcMut::new(mutator, 0);
+//! #   }
+//! # }
+//! arena.mutate(|mutator, root| loop {
+//!     // during this function it is likely the the GC will concurrently begin tracing!
+//!     allocate_a_whole_bunch_of_garbage(mutator, root);
+//! 
+//!     if mutator.yield_requested() {
+//!         // the mutator is signaling to us that memory is ready to be freed so we should leave the mutation context
+//!         break;
+//!     } else {
+//!         // if the mutator isn't signaling for us to yield then we
+//!         // are fine to go on allocating more garbage
+//!     }
+//! });
+//! ```
+//!
+//! ***WARNING:*** If a mutation continously runs without occasionally checking
+//! the yield signal, memory cannot be freed!
+//!
 extern crate self as sandpit;
 
 pub mod gc;
@@ -61,4 +156,11 @@ pub use higher_kinded_types::ForLt as Root;
 pub use metrics::GcMetrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
-pub use trace::{Trace, TraceLeaf, Tracer, __MustNotDrop};
+pub use trace::{
+    Trace, 
+    TraceLeaf, 
+    Tracer, 
+};
+
+#[doc(hidden)]
+pub use trace::__MustNotDrop;

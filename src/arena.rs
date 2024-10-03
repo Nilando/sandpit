@@ -107,8 +107,8 @@ where
     /// });
     ///
     /// ```
-    ///
     /// ## Mutator 'gc Lifetime
+    ///
     /// References to values stored in the arena are not allowed to escape the
     /// mutation context. Doing so would be unsafe, as any value that is not
     /// traced may be freed by the GC outside of a mutation context.

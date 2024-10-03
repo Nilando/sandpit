@@ -143,7 +143,7 @@ impl<'gc> Mutator<'gc> {
 
     /// This fn will return true when a trace is near completion.
     /// The mutation callback should be exited if yield_requested returns true.
-    pub fn gc_yield(&self) -> bool {
+    pub fn yield_requested(&self) -> bool {
         if self.tracer_controller.yield_flag() {
             return true;
         } else {

@@ -191,6 +191,19 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
 
         <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
+
+    pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F)
+    where
+        F: FnOnce(&WriteBarrier<T>),
+    {
+        // SAFETY: Its safe to create a writebarrier over this pointer b/c it is guaranteed
+        // to be retraced after the closure ends.
+        let barrier = unsafe { WriteBarrier::new(&**self) };
+
+        f(&barrier);
+
+        mu.retrace(Gc::from(self.clone()));
+    }
 }
 
 pub struct GcOpt<'gc, T: Trace + ?Sized> {

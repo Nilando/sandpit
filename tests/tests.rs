@@ -49,7 +49,7 @@ fn yield_requested_after_allocating() {
     arena.mutate(|mu, _| loop {
         Gc::new(mu, 42);
 
-        if mu.gc_yield() {
+        if mu.yield_requested() {
             break;
         }
     });
@@ -198,7 +198,7 @@ fn yield_is_not_requested() {
 
     arena.mutate(|mu, _root| {
         for _ in 0..1000 {
-            assert!(mu.gc_yield() == false);
+            assert!(mu.yield_requested() == false);
         }
     });
 }
@@ -417,7 +417,7 @@ fn multi_threaded_allocating() {
         arena.mutate(|mu, _| loop {
             Gc::new(mu, 42);
 
-            if mu.gc_yield() {
+            if mu.yield_requested() {
                 break;
             }
         });
@@ -427,7 +427,7 @@ fn multi_threaded_allocating() {
         arena_copy.mutate(|mu, _| loop {
             Gc::new(mu, 42);
 
-            if mu.gc_yield() {
+            if mu.yield_requested() {
                 break;
             }
         });

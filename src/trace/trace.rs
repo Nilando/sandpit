@@ -26,13 +26,25 @@ pub trait __MustNotDrop {}
 #[allow(drop_bounds)]
 impl<T: Drop> __MustNotDrop for T {}
 
-/// Allows tracer to find all Gc references stored in a type.
+/// Allows tracer to find all GC references stored in a type.
 ///
-/// Types allocated in a Gc are required to implement this trait so that tracing reaches all
+/// ## Overview
+///
+/// Types allocated in a GC are required to implement this trait so that tracing reaches all
 /// objects. It is unsafe to implement b/c if a Gc reference is not traced, it could result
 /// in a Gc value being freed with the reference still existing.
 ///
-/// Can safely be implemented using `#[derive(Trace)]`.
+/// [`TraceLeaf`] is closely related to [`Trace`] but conveys that a type
+/// contains no inner GC values.
+///
+/// ## Safety: 
+/// Can safely be implemented using `#[derive(Trace)]`. Implmenting
+/// this trait by hand is unsafe as not tracing a GC reference could lead to
+/// dangling pointers after the GC frees memory.
+///
+/// ## Example
+///
+///
 pub unsafe trait Trace: GcPointee {
     #[doc(hidden)]
     const IS_LEAF: bool;
