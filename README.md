@@ -1,6 +1,13 @@
 # Sandpit [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)
 Sandpit exposes a safe API for multi-threaded, generational, trace and sweep garbage collection.
 
+## Contents
+* [Trace And Sweep GC](#toc-trace-and-sweep-gc)
+* [Mutation Context](#toc-mutation-context)
+* [Safepoints](#toc-safepoint)
+* [Write Barriers](#toc-write-barriers)
+
+<a name="toc-trace-and-sweep-gc"></a>
 ## Trace and Sweep Garbage Collection (GC)
 Trace and sweep GC is a memory management technique used to reclaim unused memory in programs. It works by first performing a "trace" phase, where the GC starts from a set of root references (e.g., global variables or the execution stack) and recursively follows all reachable objects, marking them as live. In Sandpit the set of root references are declared on the `Arena<R>` where R represents the root type.
 ```rust
@@ -32,11 +39,11 @@ In the subsequent "sweep" phase, the collector scans through memory, identifying
     // Everything reachable from the root stays put.
     arena.mutate(|mutator, root| assert_eq!(**root, 69));
 ```
-
+<a name="toc-mutation-context"></a>
 ## The Mutation Context
 A mutation context refers to the scenario in a program where the state of the heap (memory) is being modified, typically by altering object references or allocating new objects. This is significant for garbage collectors because mutations can create new references or break old ones, which must be tracked accurately to ensure that the garbage collection process does not mistakenly collect live objects or leave unreachable objects in memory. In the context of write barriers, the mutation context often triggers the need to record or account for such changes.
 ```rust
-    // enter a mutation which has access to the root of the arena and a mutator
+    // enter a mutation context which has access to the root of the arena and a mutator
     arena.mutate(|mutator, root| {
         let garbage = Gc::new(mutator, 123); // we can allocate new things!
 
@@ -47,9 +54,9 @@ A mutation context refers to the scenario in a program where the state of the he
         })
     });
 ```
-
+<a name="toc-safepoints"></a>
 ## Safepoints
-Safepoints are specific points during program execution where the program can safely pause to allow the garbage collector or other runtime system tasks (like thread suspension) to occur without corrupting the program’s state. At a safepoint, all threads in a program are either stopped or synchronized, ensuring that memory management tasks like garbage collection can be performed without the risk of the program altering the state of memory during the process. Safepoints are strategically placed, often at the beginning or end of method calls, loops, or certain instructions, to minimize performance impact while ensuring the program can be paused safely when needed.
+Safepoints are specific points during program execution where the program can safely pause to allow the garbage collector or other runtime system tasks (like thread suspension) to occur without corrupting the program’s state. 
 
 In Sandpit, memory cannot be freed while a mutation is happening. The mutators will recieve a signal from the GC letting the user know that memory is ready to be freed, and that the mutation should exit.
 ```rust
@@ -85,6 +92,7 @@ context
     });
 ```
 
+<a name="toc-write-barriers"></a>
 ## Write Barriers
 Write barriers are mechanisms used in garbage collection to track changes to memory that could affect the state of the heap, particularly in generational or incremental garbage collectors. Since such collectors often divide the heap into different regions (e.g., young and old generations), write barriers help ensure that when objects in one region reference objects in another, these references are correctly noted. This ensures that the garbage collector can handle intergenerational pointers and other memory interactions without missing any references during its collection process, maintaining program correctness.
 
