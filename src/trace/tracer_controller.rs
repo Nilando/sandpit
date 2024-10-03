@@ -85,10 +85,6 @@ impl TracerController {
         self.time_slice_lock.lock().unwrap()
     }
 
-    pub fn is_time_slice_lock(&self) -> bool {
-        self.time_slice_lock.try_lock().is_ok()
-    }
-
     pub fn has_work(&self) -> bool {
         !self.receiver.is_empty()
     }
