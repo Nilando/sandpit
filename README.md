@@ -16,19 +16,21 @@ This document provides a high level overview of Sandpit and garbage collection i
 Trace and sweep GC is a memory management technique used to reclaim unused memory in programs. It works by first performing a "trace" phase, where the GC starts from a set of root references (e.g., global variables or the execution stack) and recursively follows all reachable objects, marking them as live. In Sandpit the set of root references are declared on the `Arena<R>` where R represents the root type.
 ```rust
     // Create an arena with a single garbage collected Foo type as the root.
-    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mutator| Gc::new(mutator, Foo::new(mutator)));
+    let arena: Arena<Root![Gc<'_, VM<'_>>]> = Arena::new(|mutator| {
+        Gc::new(mutator, VM::new(mutator)));
+    })
 ```
 In order for the tracers to be able to accurately mark all objects, objects allocated in the GC arena must implement the `Trace` trait. This trait can safely be derived by a macro which creates a method `trace` which recursively calls trace on all its inner values. There are 3 types that represent edges within the GC arena `Gc<'gc, T`, `GcMut<'gc, T>` and `GcOpt<'gc, T>`.
 ```rust
-#[derive(Trace)]
-struct Foo {
-    // There are 3 types of pointers to GC'ed values.
-    a: Gc<'gc, A>, // Immutable pointer, essentially a &'gc T.
-    b: GcMut<'gc, B>, // Mutable pointer, can be updated to point at something else via a write barrier.
-    c: GcOpt<'gc, C>, // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
+    #[derive(Trace)]
+    enum Value {
+        // There are 3 types of pointers to GC'ed values.
+        A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
+        B(GcMut<'gc, B>), // Mutable pointer, can be updated to point at something else via a write barrier.
+        C(GcOpt<'gc, C>), // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
 
-    // All inner values must be trace, therfore types A, B, and T must impl Trace as well!
-}
+        // All inner values must be trace, therfore types A, B, and T must impl Trace as well!
+    }
 ```
 In the subsequent "sweep" phase, the collector scans through memory, identifying unmarked objects as unreachable (garbage) and reclaiming their memory for future use. This method ensures that only actively used objects remain in memory, reducing fragmentation and memory leaks. 
 ```rust
