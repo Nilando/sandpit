@@ -8,8 +8,7 @@ use std::cell::RefCell;
 use std::ptr::{write, NonNull};
 use std::sync::RwLockReadGuard;
 
-/// The mutator allows allocation into the Gc arena, as well as the
-/// mutating of existing Gc pointer types.
+/// Allows for allocation and mutation within the GC arena.
 ///
 /// A mutator is acquired through a the mutation callback on [`crate::Arena::mutate`].
 ///

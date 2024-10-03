@@ -1,6 +1,12 @@
 use super::gc::{GcMut, GcOpt};
 use super::trace::Trace;
 
+/// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.
+///
+/// A write barrier can only be obtained initially by calling [`GcMut::write_barrier`]
+/// or [`crate::gc::Gc::write_barrier`]. The barrier is given out in a callback, in whcih afterwards,
+/// the initial GC pointer will be retraced. This ensure any updates made by the
+/// barrier will be caught by the tracers.
 pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
     inner: &'gc T,
 }

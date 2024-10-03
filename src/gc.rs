@@ -47,7 +47,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// which value it is referencing through the means of a write barrier.
 /// A [`Gc`] may also point at a garbage collected array like `Gc<'gc, [T]>`. A Gc referencing an
 /// array can be obtained via the mutator by using one of several array allocation methods
-/// including [`crate::mutator::Mutator::alloc_array`].
+/// including [`Mutator::alloc_array`].
 pub struct Gc<'gc, T: Trace + ?Sized> {
     ptr: *mut T,
     _no_send: PhantomData<&'gc T>,
@@ -113,7 +113,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         <T as GcPointee>::get_header(self.as_thin())
     }
 
-    // THIS EXIST FOR PROVENANCE DON't REMOVE
+    // HACK: THIS EXIST FOR PROVENANCE
     pub(crate) fn get_header_ptr(&self) -> *const <T as GcPointee>::GcHeader {
         <T as GcPointee>::get_header_ptr(self.as_thin())
     }

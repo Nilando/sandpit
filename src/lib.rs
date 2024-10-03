@@ -150,7 +150,10 @@ mod trace;
 pub use arena::Arena;
 pub use barrier::WriteBarrier;
 pub use config::Config;
+
+/// Rexported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
+
 pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
