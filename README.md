@@ -6,7 +6,7 @@ Sandpit exposes a safe API for multi-threaded, generational, trace and sweep gar
 sandpit = "0.3.0"
 ```
 
-This document provides a high level overview of Sandpit and GC in general, see the documentation for more detail.
+This document provides a high level overview of Sandpit and GC in general, see the [documentation](https://docs.rs/sandpit) for more detail.
 
 ***WARNING:*** This crate is an educational project and is not "production" ready, use at your own risk.
 
