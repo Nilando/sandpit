@@ -8,8 +8,7 @@ sandpit = "0.3.0"
 
 This document provides a high level overview of Sandpit and GC in general, see the documentation for more detail.
 
-### *WARNING* 
-This crate is an educational project and is not "production" ready, use at your own risk.
+***WARNING:*** This crate is an educational project and is not "production" ready, use at your own risk.
 
 ## Contents
 * [Trace And Sweep GC](#toc-trace-and-sweep-gc)
