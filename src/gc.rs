@@ -1,3 +1,11 @@
+//! Module containing the three types of GC pointers.
+//!
+//! ## Overview
+//! * An object may only be referenced by a GC pointer if it implements [`crate::Trace`].
+//! * Any object capable of containing a GC pointer may not impl [`crate::TraceLeaf`].
+//!
+//! [`GcMut`] and [`GcOpt`] may be updated via a [`crate::WriteBarrier`] to point
+//! at different values.
 use super::trace::Trace;
 use crate::barrier::WriteBarrier;
 use crate::header::GcHeader;
@@ -9,6 +17,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::{null_mut, NonNull};
 use std::sync::atomic::{AtomicPtr, Ordering};
+
 
 // A Gc points to a valid T within a GC Arena which is also succeeded by its
 // GC header which may or may not be padded.
@@ -22,10 +31,9 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 // Since Gc cannot be mutated and therefore has no need to be atomic,
 // it is able to be a wide pointer.
 
-/// A shared reference to generic garbage collected value that is branded with
-/// a mutation context lifetime.
+/// Immutable Gc pointer, meaning a write barrier cannot be used to update this pointer.
 ///
-/// An object may only be referenced by a [`Gc`] if it implements `Trace` see [`crate::trace::Trace`] for more details.
+/// It's inner value can still be mutated.
 ///
 /// A [`Gc`] can safely dereference into
 /// a `&'gc T`, but provides no option to obtain mutable references to it's
@@ -138,6 +146,7 @@ impl<'gc, T: Trace> Gc<'gc, T> {
 
 // GcMut may be updated to point somewhere else which requires it to be atomic
 // in order to sync with the tracing threads.
+/// Mutable GC pointer, meaning a write barrier *can* be used to update this pointer.
 pub struct GcMut<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
     scope: PhantomData<&'gc *mut T>,
@@ -206,6 +215,7 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     }
 }
 
+/// A GC pointer which is able of pointing to null, can be unwrapped into a GcMut.
 pub struct GcOpt<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
     scope: PhantomData<&'gc *mut T>,

@@ -68,7 +68,7 @@
 //! we can essentially do 3 important things:
 //! * Access all data reaachable from the root.
 //! * Create new garbage collected values.
-//! * Update Gc pointers to point to new values via a [`barrier`].
+//! * Update Gc pointers to point to new values via a [`WriteBarrier`].
 //! ```rust
 //! use sandpit::{Trace, gc::GcMut};
 //!

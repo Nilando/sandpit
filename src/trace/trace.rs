@@ -37,7 +37,11 @@ impl<T: Drop> __MustNotDrop for T {}
 /// [`TraceLeaf`] is closely related to [`Trace`] but conveys that a type
 /// contains no inner GC values.
 ///
-/// ## Safety: 
+/// Types implementing [`Trace`] may not impl Drop, as this GC does not
+/// support dropping freed values. This is prevented via a conflicting Drop 
+/// impl that will occur when attempting to impl Trace on a type that impls Drop.
+///
+/// ## Safety:
 /// Can safely be implemented using `#[derive(Trace)]`. Implmenting
 /// this trait by hand is unsafe as not tracing a GC reference could lead to
 /// dangling pointers after the GC frees memory.

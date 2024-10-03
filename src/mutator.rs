@@ -11,17 +11,16 @@ use std::sync::RwLockReadGuard;
 /// The mutator allows allocation into the Gc arena, as well as the
 /// mutating of existing Gc pointer types.
 ///
-/// A mutator is acquired through a the mutation callback on [`crate::arena::Arena::mutate`].
+/// A mutator is acquired through a the mutation callback on [`crate::Arena::mutate`].
 ///
 /// # Calling `gc_yield` is Critical!
 ///
 /// In order for the GC to efficiently free memory any long lasting mutation
 /// which is allocating memory must periodically call [`Mutator::gc_yield`].
 ///
-/// `gc_yield` fulfills 2 operations
+/// `yield_requested` fulfills 2 operations
 /// - it will block the mutator if tracers are currently struggling to complete a trace.
 /// - if gc_yield returns true it signals that memory is ready to be freed and the mutation callbacks must be exited in order to do so.
-///
 ///
 /// While the GC is concurrent, meaning that the tracer may perform a trace
 /// while mutation is happening, the GC is unable to actually free

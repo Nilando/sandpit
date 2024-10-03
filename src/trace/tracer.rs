@@ -17,7 +17,7 @@ pub struct Tracer {
 }
 
 impl Tracer {
-    pub fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
+    pub(crate) fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
         Self {
             _id: id,
             controller,
@@ -27,12 +27,12 @@ impl Tracer {
         }
     }
 
-    pub fn get_mark_count(&self) -> usize {
+    pub(crate) fn get_mark_count(&self) -> usize {
         self.mark_count.get()
     }
 
     // doesn't work for pointer to dynamically sized types
-    pub fn mark_and_trace<'gc, T: Trace + ?Sized>(&mut self, gc: Gc<'gc, T>) {
+    pub(crate) fn mark_and_trace<'gc, T: Trace + ?Sized>(&mut self, gc: Gc<'gc, T>) {
         //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
 
         let header = gc.get_header();
@@ -56,7 +56,7 @@ impl Tracer {
         self.work.push(TraceJob::new(gc.as_thin()));
     }
 
-    pub fn flush_work(&mut self) {
+    pub(crate) fn flush_work(&mut self) {
         let mut work = vec![];
 
         std::mem::swap(&mut work, &mut self.work);
@@ -64,7 +64,7 @@ impl Tracer {
         self.controller.send_work(work);
     }
 
-    pub fn trace_loop(&mut self) -> usize {
+    pub(crate) fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
                 match self.controller.recv_work() {
