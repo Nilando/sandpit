@@ -42,8 +42,9 @@
 //! # struct C;
 //!
 //! #[derive(Trace)]
-//! enum Value<'gc> {
-//!     // There are 3 types of pointers to GC'ed values.
+//! enum Value<'gc> { 
+//!     // GC values must be branded with a mutation lifetime
+//!     // to ensure freeing memory can happen safely.
 //!     A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
 //!     B(GcMut<'gc, B>), // Mutable pointer, can be updated to point at something else via a write barrier.
 //!     C(GcOpt<'gc, C>), // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
@@ -63,7 +64,7 @@
 //!
 //! ## Mutating the Arena
 //! Once you have your arena and your traceable types, you can begin allocating
-//! them in the arena by calling [`crate::arena::Arena::mutate`]. Within a mutation 
+//! them in the arena by calling [`Arena::mutate`]. Within a mutation 
 //! we can essentially do 3 important things:
 //! * Access all data reaachable from the root.
 //! * Create new garbage collected values.
@@ -72,12 +73,10 @@
 //! use sandpit::{Trace, gc::GcMut};
 //!
 //! # use sandpit::{Arena, Root, Mutator, WriteBarrier};
-//!
 //! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
 //! #     GcMut::new(mutator, 0usize)
 //! # });
 //! # fn traverse(root: &usize) {}
-//!
 //! arena.mutate(|mutator, root| {
 //!     // We can access everything reachable from the root.
 //!     traverse(root); 
@@ -101,23 +100,22 @@
 //! exit. Therefore, if a mutation involves a continuous loop of instructions,
 //! it must exit it's mutation every so often to allow the GC to free memory.
 //!
-//! The mutator exposes a signal([`Mutator::gc_yield`]) which indicates if it is ready to free memory,
+//! The mutator exposes a signal([`Mutator::yield_requested`]) which indicates if it is ready to free memory,
 //! and that the mutation should end.
 //!
 //! ```rust
 //! # use sandpit::{Arena, Root, Mutator, WriteBarrier, gc::GcMut};
-//!
 //! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
 //! #     GcMut::new(mutator, 0usize)
 //! # });
-//! # fn allocate_a_whole_bunch_of_garbage(mutator: &Mutator, root: &usize) {
+//! # fn allocate_stuff(mutator: &Mutator, root: &usize) {
 //! #   for i in 0..100 {
 //! #       GcMut::new(mutator, 0);
 //! #   }
 //! # }
 //! arena.mutate(|mutator, root| loop {
 //!     // during this function it is likely the the GC will concurrently begin tracing!
-//!     allocate_a_whole_bunch_of_garbage(mutator, root);
+//!     allocate_stuff(mutator, root);
 //! 
 //!     if mutator.yield_requested() {
 //!         // the mutator is signaling to us that memory is ready to be freed so we should leave the mutation context
@@ -151,9 +149,9 @@ mod trace;
 
 pub use arena::Arena;
 pub use barrier::WriteBarrier;
-pub use config::GcConfig;
+pub use config::Config;
 pub use higher_kinded_types::ForLt as Root;
-pub use metrics::GcMetrics;
+pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{

@@ -1,5 +1,5 @@
 use super::allocator::Allocator;
-use super::config::GcConfig;
+use super::config::Config;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::time_slicer::TimeSlicer;
@@ -156,7 +156,7 @@ impl<R: ForLt> Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    pub fn new<F>(f: F, config: &GcConfig) -> Self
+    pub fn new<F>(f: F, config: &Config) -> Self
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {

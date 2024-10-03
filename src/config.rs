@@ -1,6 +1,6 @@
 /// This structure contains the configuration settings for a garbage collector.
 #[derive(Copy, Clone, Debug)]
-pub struct GcConfig {
+pub struct Config {
     /// The number of tracer threads, not including the thread that is used for
     /// monitoring.
     pub tracer_threads: usize,
@@ -59,12 +59,12 @@ pub const GC_CONFIG_DEFAULT_TRACE_WAIT_TIME: u64 = 1;
 // not necessarily a good idea to change any of these, but collecting them all here
 // at least makes it clear what values are "arbitrary"
 //
-// The GcConfig can be updated after the Gc is created, but the update will only take place
+// The Config can be updated after the Gc is created, but the update will only take place
 // until tracing has completed.
-impl GcConfig {
-    /// Creates a default GcConfig. Good for most use cases.
+impl Config {
+    /// Creates a default Config. Good for most use cases.
     pub fn default() -> Self {
-        GcConfig {
+        Config {
             tracer_threads: GC_CONFIG_DEFAULT_TRACE_THREADS,
             trace_chunk_size: GC_CONFIG_DEFAULT_TRACE_CHUNK_SIZE,
             trace_share_min: GC_CONFIG_DEFAULT_TRACE_SHARE_MIN,

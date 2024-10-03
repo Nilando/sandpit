@@ -1,9 +1,9 @@
 use super::collector::GcState;
 /// A 'snapshot' of the metrics relevant to the GC's internal triggers.
 ///
-/// Obtained by calling [`crate::arena::Arena::metrics`].
+/// Obtained by calling [`crate::Arena::metrics`].
 #[derive(Clone, Debug)]
-pub struct GcMetrics {
+pub struct Metrics {
     /// Number of major collections that have occured.
     pub major_collections: usize,
 

@@ -6,7 +6,7 @@ use std::thread;
 use std::time;
 
 use super::collector::Collect;
-use super::config::GcConfig;
+use super::config::Config;
 
 // The monitor is responsible for automatically triggering garbage collections.
 // It determines when to make a major and or minor collection by considering,
@@ -31,7 +31,7 @@ unsafe impl<T: Collect + 'static> Send for Monitor<T> {}
 unsafe impl<T: Collect + 'static> Sync for Monitor<T> {}
 
 impl<T: Collect + 'static> Monitor<T> {
-    pub fn new(collector: Arc<T>, config: &GcConfig) -> Self {
+    pub fn new(collector: Arc<T>, config: &Config) -> Self {
         let prev_arena_size = collector.get_arena_size();
 
         Self {

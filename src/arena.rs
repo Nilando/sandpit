@@ -1,6 +1,6 @@
 use super::collector::{Collect, Collector};
-use super::config::GcConfig;
-use super::metrics::GcMetrics;
+use super::config::Config;
+use super::metrics::Metrics;
 use super::monitor::Monitor;
 use super::mutator::Mutator;
 use super::trace::Trace;
@@ -18,7 +18,7 @@ where
     collector: Arc<Collector<R>>,
     monitor: Arc<Monitor<Collector<R>>>,
     // In the future it would be cool to allow for editing the config
-    _config: GcConfig,
+    _config: Config,
 }
 
 impl<R: ForLt> Drop for Arena<R>
@@ -62,13 +62,13 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        let config = GcConfig::default();
+        let config = Config::default();
 
         Self::new_with_config(config, f)
     }
 
     // eventually it would be cool to allow the user to pass in their own config
-    fn new_with_config<F>(config: GcConfig, f: F) -> Self
+    fn new_with_config<F>(config: Config, f: F) -> Self
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
@@ -175,19 +175,19 @@ where
     }
     */
 
-    /// Returns a copy of the the GcConfig that the arena was created with.
-    /// Currently there is no way to update the GcConfig after the arena
+    /// Returns a copy of the the Config that the arena was created with.
+    /// Currently there is no way to update the Config after the arena
     /// has been created.
     /*
-    fn get_config(&self) -> GcConfig {
+    fn get_config(&self) -> Config {
         self.config
     }
     */
 
     /// Returns a snap short of the GC's current metrics that provide information
     /// about how the GC is running.
-    pub fn metrics(&self) -> GcMetrics {
-        GcMetrics {
+    pub fn metrics(&self) -> Metrics {
+        Metrics {
             //
             state: self.collector.get_state(),
 

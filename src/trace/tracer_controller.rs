@@ -1,7 +1,7 @@
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::Tracer;
-use crate::config::GcConfig;
+use crate::config::Config;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
@@ -44,7 +44,7 @@ pub struct TracerController {
 }
 
 impl TracerController {
-    pub fn new(config: &GcConfig) -> Self {
+    pub fn new(config: &Config) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
 
         Self {
