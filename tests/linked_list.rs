@@ -158,6 +158,10 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         result
     }
 
+    pub fn len(&self) -> usize {
+        self.len.get()
+    }
+
     fn node_at(&self, index: usize) -> Option<Gc<'gc, Node<'gc, T>>> {
         let mut node = self.start.clone();
         for _ in 0..index {
@@ -170,9 +174,6 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         node.as_option().map(|gc_node| gc_node.into())
     }
 
-    fn len(&self) -> usize {
-        self.len.get()
-    }
 
     fn init_push(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, gc_node: GcOpt<'gc, Node<'gc, T>>) {
         LinkedList::set_start(this, mu, gc_node.clone());
@@ -412,152 +413,3 @@ fn objects_marked_metric() {
         });
     }
 }
-
-/*
-#[test]
-fn cyclic_graph() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    gc.mutate((), |root, mu, _| {
-        Node::set_right(root.clone(), mu, root.clone());
-        Node::set_left(root.clone(), mu, root.clone());
-
-        assert!(Node::right_val(root) == 0);
-        assert!(Node::left_val(root) == 0);
-    });
-
-    gc.major_collect();
-}
-
-#[test]
-fn build_and_collect_balanced_tree_sync() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    for _ in 0..2 {
-        gc.major_collect();
-        gc.minor_collect();
-    }
-
-    assert_eq!(gc.metrics().old_objects_count, 1);
-
-    gc.mutate((), |root, mu, _| {
-        Node::create_balanced_tree(root, mu, 100);
-    });
-
-    for _ in 0..2 {
-        gc.major_collect();
-        gc.minor_collect();
-    }
-
-    // at this major collect should set objects count to 0
-    // then do a full trace of the tree... marking all
-    assert_eq!(gc.metrics().old_objects_count, 100);
-
-    gc.mutate((), |root, _, _| {
-        let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..100).collect();
-        assert_eq!(actual, expected)
-    });
-}
-
-#[test]
-fn build_and_collect_balanced_tree_concurrent() {
-    let gc = GcArena::build((), |mu, _| Node::alloc(mu, 0).unwrap());
-
-    gc.mutate((), |root, mu, _| {
-        for _ in 0..100 {
-            Node::create_balanced_tree(root, mu, 100);
-        }
-    });
-
-    gc.major_collect();
-
-    assert_eq!(gc.metrics().old_objects_count, 100);
-
-    gc.mutate((), |root, _, _| {
-        let actual: Vec<usize> = Node::collect(root);
-        let expected: Vec<usize> = (0..100).collect();
-        assert!(actual == expected)
-    });
-}
-
-#[test]
-fn multi_threaded_tree_building() {
-    let gc: GcArena<()> = GcArena::build((), |_, _| ());
-
-    fn tree_builder(gc: &GcArena<()>) {
-        gc.mutate((), |_, mu, _| {
-            let root = Node::alloc(mu, 0).unwrap();
-
-            loop {
-                Node::create_balanced_tree(&root, mu, 100);
-
-                let actual: Vec<usize> = Node::collect(&root);
-                let expected: Vec<usize> = (0..100).collect();
-                assert!(actual == expected);
-
-                if mu.yield_requested() {
-                    break;
-                }
-            }
-        });
-    }
-
-    std::thread::scope(|scope| {
-        for _ in 0..100 {
-            scope.spawn(|| tree_builder(&gc));
-        }
-    });
-}
-
-unsafe impl Send for Root {}
-unsafe impl Sync for Root {}
-
-#[derive(Trace)]
-struct Root {
-    n1: Gc<Node>,
-    n2: Gc<Node>,
-    n3: Gc<Node>,
-    n4: Gc<Node>,
-}
-
-#[test]
-fn multi_threaded_root_mutation() {
-    let gc = GcArena::build((), |mu, _| {
-        let n1 = Node::alloc(mu, 0).unwrap();
-        let n2 = Node::alloc(mu, 0).unwrap();
-        let n3 = Node::alloc(mu, 0).unwrap();
-        let n4 = Node::alloc(mu, 0).unwrap();
-
-        Root { n1, n2, n3, n4 }
-    });
-
-    fn grow_forest<M: Mutator>(node: &Gc<Node>, mu: &M) {
-        loop {
-            Node::create_balanced_tree(node, mu, 100);
-
-            if mu.yield_requested() {
-                break;
-            }
-        }
-    }
-
-    std::thread::scope(|scope| {
-        scope.spawn(|| {
-            gc.mutate((), |root, mu, _| grow_forest(&root.n1, mu));
-        });
-
-        scope.spawn(|| {
-            gc.mutate((), |root, mu, _| grow_forest(&root.n2, mu));
-        });
-
-        scope.spawn(|| {
-            gc.mutate((), |root, mu, _| grow_forest(&root.n3, mu));
-        });
-
-        scope.spawn(|| {
-            gc.mutate((), |root, mu, _| grow_forest(&root.n4, mu));
-        });
-    });
-}
-*/
