@@ -1,10 +1,10 @@
-use super::gc::{GcMut, GcOpt};
+use super::gc::{GcMut, GcOpt, Gc};
 use super::trace::Trace;
 
 /// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.
 ///
 /// A write barrier can only be obtained initially by calling [`GcMut::write_barrier`]
-/// or [`crate::gc::Gc::write_barrier`]. The barrier is given out in a callback, in whcih afterwards,
+/// or [`Gc::write_barrier`]. The barrier is given out in a callback, in whcih afterwards,
 /// the initial GC pointer will be retraced. This ensure any updates made by the
 /// barrier will be caught by the tracers.
 pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
@@ -46,9 +46,9 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcMut<'gc, T>> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn set(&self, gc: GcMut<'gc, T>) {
+    pub fn set(&self, gc: impl Into<GcMut<'gc, T>>) {
         unsafe {
-            self.inner.set(gc);
+            self.inner.set(gc.into());
         }
     }
 }
@@ -57,9 +57,9 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcOpt<'gc, T>> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn set(&self, gc: GcOpt<'gc, T>) {
+    pub fn set(&self, gc: impl Into<GcOpt<'gc, T>>) {
         unsafe {
-            self.inner.set(gc);
+            self.inner.set(gc.into());
         }
     }
 }

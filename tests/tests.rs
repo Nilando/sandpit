@@ -179,9 +179,9 @@ fn write_barrier() {
         let new = Gc::new(mu, 420);
 
         root.write_barrier(mu, |write_barrier| {
-            field!(write_barrier, Foo, a).set(new.into());
-            field!(write_barrier, Foo, b).set(new.into());
-            field!(write_barrier, Foo, c).set(new.into());
+            field!(write_barrier, Foo, a).set(new);
+            field!(write_barrier, Foo, b).set(new);
+            field!(write_barrier, Foo, c).set(new);
         });
     });
 
@@ -344,7 +344,7 @@ fn change_array_size() {
     arena.mutate(|mu, root| {
         let new = mu.alloc_array_from_fn(10, |_| 69);
 
-        root.write_barrier(mu, |barrier| barrier.set(new.into()));
+        root.write_barrier(mu, |barrier| barrier.set(new));
 
         assert!(root.len() == 10);
     });
@@ -459,19 +459,19 @@ fn cyclic_graph() {
         let d = Gc::new(mu, Node::new(mu));
 
         a.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(b.into());
+            field!(barrier, Node, ptr).set(b);
         });
         b.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(c.into());
+            field!(barrier, Node, ptr).set(c);
         });
         c.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(d.into());
+            field!(barrier, Node, ptr).set(d);
         });
         d.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a.into());
+            field!(barrier, Node, ptr).set(a);
         });
         root.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a.into());
+            field!(barrier, Node, ptr).set(a);
         });
 
     });
@@ -513,7 +513,7 @@ fn alloc_after_collect_test() {
         arena.mutate(|mu, root| {
             println!("pushing node: {i}");
 
-            let new_node = GcOpt::new(
+            let new_node = Gc::new(
                 mu,
                 Node {
                     ptr: root.ptr.clone(),
