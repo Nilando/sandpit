@@ -1,11 +1,15 @@
 # Sandpit [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)
 Sandpit exposes a safe API for multi-threaded, generational, trace and sweep garbage collection.
 
+This document provides a high level overview, for a more detailed explanation see the documentation.
+
 ## Contents
 * [Trace And Sweep GC](#toc-trace-and-sweep-gc)
 * [Mutation Context](#toc-mutation-context)
-* [Safepoints](#toc-safepoint)
+* [Safepoints](#toc-safepoints)
 * [Write Barriers](#toc-write-barriers)
+* [Credits](#toc-credits)
+* [License](#toc-license)
 
 <a name="toc-trace-and-sweep-gc"></a>
 ## Trace and Sweep Garbage Collection (GC)
@@ -98,11 +102,13 @@ Write barriers are mechanisms used in garbage collection to track changes to mem
 
 TODO
 
+<a name="toc-credits"></a>
 ## Credits
 This project was originally inspired from [Writing Interpreters in Rust: a guide](https://rust-hosted-langs.github.io/book/) by Peter Liniker. After initially following the guide,
 I branched off to start working on Sandpit by closely following the code in Katherine West's [gc-arena crate](https://github.com/kyren/gc-arena). I would not have been able to compelte this project
 without Peter and Katherine's work. I am deeply grateful for their well documented, and insightful open source contributions.
 
+<a name="toc-license"></a>
 ## License
 Everything in this repository is licensed under either of:
 - MIT license LICENSE-MIT or http://opensource.org/licenses/MIT
