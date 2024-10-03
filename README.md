@@ -1,7 +1,7 @@
 # Sandpit [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)
 Sandpit exposes a safe API for multi-threaded, generational, trace and sweep garbage collection.
 
-This document provides a high level overview, for a more detailed explanation see the documentation.
+This document provides a high level overview of Sandpit and garbage collection in general, for a more detailed explanation see the documentation.
 
 ## Contents
 * [Trace And Sweep GC](#toc-trace-and-sweep-gc)
@@ -16,14 +16,18 @@ This document provides a high level overview, for a more detailed explanation se
 Trace and sweep GC is a memory management technique used to reclaim unused memory in programs. It works by first performing a "trace" phase, where the GC starts from a set of root references (e.g., global variables or the execution stack) and recursively follows all reachable objects, marking them as live. In Sandpit the set of root references are declared on the `Arena<R>` where R represents the root type.
 ```rust
     // Create an arena with a single garbage collected Foo type as the root.
-    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| Gc::new(mu, Foo::new()));
+    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mutator| Gc::new(mutator, Foo::new(mutator)));
 ```
-In order for the tracers to be able to accurately mark all objects, objects allocated in the GC arena must implement the `Trace` trait. This trait can safely be derived by a macro which creates a method `trace` which recursively calls trace on all its inner values. 
+In order for the tracers to be able to accurately mark all objects, objects allocated in the GC arena must implement the `Trace` trait. This trait can safely be derived by a macro which creates a method `trace` which recursively calls trace on all its inner values. There are 3 types that represent edges within the GC arena `Gc<'gc, T`, `GcMut<'gc, T>` and `GcOpt<'gc, T>`.
 ```rust
 #[derive(Trace)]
 struct Foo {
-    important_data: usize,
-    bar: Bar // Bar must be Trace too!
+    // There are 3 types of pointers to GC'ed values.
+    a: Gc<'gc, A>, // Immutable pointer, essentially a &'gc T.
+    b: GcMut<'gc, B> // Mutable pointer, can be updated to point at something else via a write barrier.
+    c: GcOpt<'gc, C>, // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
+
+    // All inner values must be trace, therfore types A, B, and T must impl Trace as well!
 }
 ```
 In the subsequent "sweep" phase, the collector scans through memory, identifying unmarked objects as unreachable (garbage) and reclaiming their memory for future use. This method ensures that only actively used objects remain in memory, reducing fragmentation and memory leaks. 
@@ -85,22 +89,35 @@ In Sandpit, memory cannot be freed while a mutation is happening. The mutators w
 
 Because memory can be freed outisde of a mutation context, it is critical that references into the GC arena cannot be held outside of a mutation context. If they were, the GC may free their underlying memory, leading to dangling pointers. This is instead prevented by branding all GC values with a lifetime of `'gc`, which is that of the mutation context.
 ```rust
-    let mut bad_thief: &usize = ... ;
+    let mut thief: &usize = ... ;
 
     arena.mutate(|mutator, root| {
-        let no_escaping = Gc::new(mutator, 69);
+        let gc_data = Gc::new(mutator, 69);
 
-        // this will error due to lifetime scope of 'gc being that of the mutation
-context
-        thief = *no_escaping;
+        // this will error due to lifetime scope of 'gc being that of the mutation context
+        thief = *gc_data;
     });
 ```
 
 <a name="toc-write-barriers"></a>
 ## Write Barriers
-Write barriers are mechanisms used in garbage collection to track changes to memory that could affect the state of the heap, particularly in generational or incremental garbage collectors. Since such collectors often divide the heap into different regions (e.g., young and old generations), write barriers help ensure that when objects in one region reference objects in another, these references are correctly noted. This ensures that the garbage collector can handle intergenerational pointers and other memory interactions without missing any references during its collection process, maintaining program correctness.
+Write barriers are mechanisms used in garbage collection to track changes to memory that could affect the state of the heap, particularly in generational and concurrent garbage collectors. Since such collectors often divide the heap into different regions (e.g., young and old generations), write barriers help ensure that when objects in one region reference objects in another, these references are correctly noted. This ensures that the garbage collector can handle intergenerational pointers and other memory interactions without missing any references during its collection process, maintaining program correctness.
 
-TODO
+In Sandpit write barriers can be obtained via the `GcMut<'gc, T>` and `GcOpt<'gc, T>` types.
+```rust
+    arena.mutate(|mutator, root| {
+        let gc_mut = GcMut::new(mutator, true);
+
+        // The fn write_barrier takes a callback which accepts a barrier type
+        // that wraps the GcMut allowing it to be updated.
+        root.write_barrier(mutator, |barrier| {
+            barrier.set(GcMut::new(mutator, false));
+        })
+        // When the callback exits, the mutator will ensure that any updates to the root GcMut
+        // will be tracked.
+    });
+```
+
 
 <a name="toc-credits"></a>
 ## Credits
