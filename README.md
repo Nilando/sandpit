@@ -120,12 +120,13 @@ In Sandpit write barriers can be obtained via the `GcMut<'gc, T>` and `GcOpt<'gc
     });
 ```
 
-
 <a name="toc-credits"></a>
 ## Credits
 This project was originally inspired from [Writing Interpreters in Rust: a guide](https://rust-hosted-langs.github.io/book/) by Peter Liniker. After initially following the guide,
 I branched off to start working on Sandpit by closely following the code in Katherine West's [gc-arena crate](https://github.com/kyren/gc-arena). I would not have been able to compelte this project
 without Peter and Katherine's work. I am deeply grateful for their well documented, and insightful open source contributions.
+
+Also a major shoutout to the amazing Rust Discord community who expertly answered(and put up with) my countless questions.
 
 <a name="toc-license"></a>
 ## License
