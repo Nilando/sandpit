@@ -23,6 +23,7 @@ pub unsafe trait TraceLeaf: Trace {
 #[doc(hidden)]
 pub trait __MustNotDrop {}
 #[doc(hidden)]
+#[allow(drop_bounds)]
 impl<T: Drop> __MustNotDrop for T {}
 
 /// Allows tracer to find all Gc references stored in a type.
