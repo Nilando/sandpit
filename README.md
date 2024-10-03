@@ -1,4 +1,4 @@
-# Sandpit [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)  [![crates.io](https://docs.rs/sandpit/badge.svg)](https://docs.rs/sandpit)
+# Sandpit [![Tests](https://github.com/Nilando/sandpit/actions/workflows/rust.yml/badge.svg)](https://github.com/Nilando/sandpit/actions/workflows/rust.yml)  [![crates.io](https://docs.rs/sandpit/badge.svg)](https://docs.rs/sandpit) [![crates.io](https://img.shields.io/crates/v/sandpit.svg)](https://crates.io/crates/sandpit) [![License](https://img.shields.io/crates/l/sandpit.svg)](https://github.com/Nilando/sandpit)
 Sandpit exposes a safe API for multi-threaded, generational, trace and sweep garbage collection.
 
 ```toml
