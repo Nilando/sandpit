@@ -157,8 +157,7 @@ pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{
     Trace, 
     TraceLeaf, 
-    Tracer, 
 };
 
 #[doc(hidden)]
-pub use trace::__MustNotDrop;
+pub use trace::{__MustNotDrop, Tracer};
