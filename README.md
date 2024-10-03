@@ -3,6 +3,9 @@ Sandpit exposes a safe API for multi-threaded, generational, trace and sweep gar
 
 This document provides a high level overview of Sandpit and garbage collection in general, for a more detailed explanation see the documentation.
 
+### *WARNING* 
+This crate is an educational project and is not "production" ready, use at your own risk.
+
 ## Contents
 * [Trace And Sweep GC](#toc-trace-and-sweep-gc)
 * [Mutation Context](#toc-mutation-context)
@@ -119,6 +122,12 @@ In Sandpit write barriers can be obtained via the `GcMut<'gc, T>` and `GcOpt<'gc
         // will be tracked.
     });
 ```
+
+## TODO
+* Defragmentation
+* Grow/Shrink Arrays
+* Editable Config
+* Swap Root Type
 
 <a name="toc-credits"></a>
 ## Credits
