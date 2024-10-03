@@ -7,6 +7,7 @@ use crate::header::{GcHeader, GcMark};
 use std::cell::Cell;
 use std::sync::Arc;
 
+/// Internal type used by the GC to perform tracing.
 pub struct Tracer {
     // sometimes ID might be helpful in debugging, but currently not used anywhere
     _id: usize,
