@@ -69,7 +69,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(self.clone());
+        tracer.mark_and_trace(*self);
     }
 }
 
@@ -85,10 +85,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        match self.as_option() {
-            Some(gc_mut) => gc_mut.trace(tracer),
-            None => {}
-        }
+        if let Some(gc_mut) = self.as_option() { gc_mut.trace(tracer) }
     }
 }
 

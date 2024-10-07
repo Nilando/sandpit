@@ -1,4 +1,4 @@
-use super::gc::{Gc, GcMut, GcOpt};
+use super::gc::{GcMut, GcOpt};
 use super::trace::Trace;
 
 /// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.
@@ -17,7 +17,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     // created in some context where retracing will happen after the barrier
     // goes out of context.
     pub(crate) unsafe fn new(gc: &'gc T) -> Self {
-        WriteBarrier { inner: &gc }
+        WriteBarrier { inner: gc }
     }
 
     /// Get a reference to the value behind barrier
@@ -141,10 +141,7 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
 
 impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
     pub fn into(&self) -> Option<WriteBarrier<T>> {
-        match self.inner {
-            Some(ref inner) => Some(WriteBarrier { inner }),
-            None => None,
-        }
+        self.inner.as_ref().map(|inner| WriteBarrier { inner })
     }
 }
 

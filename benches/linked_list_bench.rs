@@ -14,7 +14,7 @@ fn major_collect_list() {
 
     arena.mutate(|mu, root| {
         for i in 0..LIST_SIZE {
-            LinkedList::push_back(root.clone(), mu, i);
+            LinkedList::push_back(*root, mu, i);
         }
 
         assert!(root.len() == LIST_SIZE);
@@ -30,7 +30,7 @@ fn minor_collect_list() {
 
     arena.mutate(|mu, root| {
         for i in 0..LIST_SIZE {
-            LinkedList::push_back(root.clone(), mu, i);
+            LinkedList::push_back(*root, mu, i);
         }
 
         assert!(root.len() == LIST_SIZE);

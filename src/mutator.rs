@@ -143,7 +143,7 @@ impl<'gc> Mutator<'gc> {
     /// The mutation callback should be exited if yield_requested returns true.
     pub fn yield_requested(&self) -> bool {
         if self.tracer_controller.yield_flag() {
-            return true;
+            true
         } else {
             let _lock = self.tracer_controller.get_time_slice_lock();
             self.tracer_controller.yield_flag()

@@ -198,7 +198,7 @@ fn yield_is_not_requested() {
 
     arena.mutate(|mu, _root| {
         for _ in 0..1000 {
-            assert!(mu.yield_requested() == false);
+            assert!(!mu.yield_requested());
         }
     });
 }
@@ -532,7 +532,7 @@ fn alloc_after_collect_test() {
     }
 
     arena.mutate(|_mu, root| {
-        let mut node: &Node = &**root;
+        let mut node: &Node = root;
         assert!(node.idx == 0);
 
         for i in 1..LIST_SIZE {

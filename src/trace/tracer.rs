@@ -33,7 +33,7 @@ impl Tracer {
     }
 
     // doesn't work for pointer to dynamically sized types
-    pub(crate) fn mark_and_trace<'gc, T: Trace + ?Sized>(&mut self, gc: Gc<'gc, T>) {
+    pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
         //debug!("(TRACER: {}) OBJ = {}, ADDR = {:?}", self.id, std::any::type_name::<T>(), &*gc as *const T as usize);
 
         let header = gc.get_header();

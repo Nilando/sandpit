@@ -140,7 +140,7 @@ impl TracerController {
         false
     }
 
-    pub fn trace<T: Trace, F: FnOnce() -> ()>(
+    pub fn trace<T: Trace, F: FnOnce()>(
         self: Arc<Self>,
         root: &T,
         old_object_count: Arc<AtomicUsize>,

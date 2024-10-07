@@ -1,10 +1,10 @@
 use sandpit::{
     field,
-    gc::{Gc, GcMut, GcOpt},
-    Arena, Mutator, Root, Trace, TraceLeaf, WriteBarrier,
+    Arena, 
+    Root,
+    gc::{Gc, GcMut, GcOpt}, Mutator, Trace,
 };
-use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::ptr::NonNull;
+use std::cell::Cell;
 pub struct LinkedListIter<'gc, T: Trace> {
     next: Option<&'gc Node<'gc, T>>,
 }
@@ -178,7 +178,6 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         LinkedList::set_start(this, mu, gc_node.clone());
         LinkedList::set_end(this, mu, gc_node);
         this.len.set(1);
-        return;
     }
 
     fn set_start(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, new: GcOpt<'gc, Node<'gc, T>>) {
