@@ -30,7 +30,7 @@ let arena: Arena<Root![Gc<'_, VM<'_>>]> = Arena::new(|mutator| {
 In order for the tracers to be able to accurately mark all objects, objects allocated in the GC arena must implement the `Trace` trait. This trait can safely be derived by a macro which creates a method `trace` which recursively calls trace on all its inner values. There are 3 types that represent edges within the GC arena `Gc<'gc, T`, `GcMut<'gc, T>` and `GcOpt<'gc, T>`.
 ```rust
 #[derive(Trace)]
-enum Value {
+enum Value<'gc> {
     // There are 3 types of pointers to GC'ed values.
     A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
     B(GcMut<'gc, B>), // Mutable pointer, can be updated to point at something else via a write barrier.
@@ -92,10 +92,10 @@ arena.major_collect(); // or manually freed
 
 Because memory can be freed outisde of a mutation context, it is critical that references into the GC arena cannot be held outside of a mutation context. If they were, the GC may free their underlying memory, leading to dangling pointers. This is instead prevented by branding all GC values with a lifetime of `'gc`, which is that of the mutation context.
 ```rust
-let mut thief: &usize = ... ;
+let mut thief: &Data;
 
 arena.mutate(|mutator, root| {
-    let gc_data = Gc::new(mutator, 69);
+    let gc_data = Gc::new(mutator, Data);
 
     // this will error due to lifetime scope of 'gc being that of the mutation context
     thief = *gc_data;
@@ -126,6 +126,7 @@ arena.mutate(|mutator, root| {
 * Grow/Shrink Arrays
 * Editable Config
 * Swap Root Type
+* Add Examples
 
 <a name="toc-credits"></a>
 ## Credits

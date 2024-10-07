@@ -174,7 +174,6 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
         node.as_option().map(|gc_node| gc_node.into())
     }
 
-
     fn init_push(this: Gc<'gc, Self>, mu: &'gc Mutator<'gc>, gc_node: GcOpt<'gc, Node<'gc, T>>) {
         LinkedList::set_start(this, mu, gc_node.clone());
         LinkedList::set_end(this, mu, gc_node);
@@ -401,8 +400,7 @@ fn push_until_yield() {
 
 #[test]
 fn objects_marked_metric() {
-    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
-        Arena::new(|mu| LinkedList::new(mu));
+    let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     for i in 0..100 {
         arena.major_collect();

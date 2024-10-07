@@ -38,7 +38,7 @@ impl<T: Drop> __MustNotDrop for T {}
 /// contains no inner GC values.
 ///
 /// Types implementing [`Trace`] may not impl Drop, as this GC does not
-/// support dropping freed values. This is prevented via a conflicting Drop 
+/// support dropping freed values. This is prevented via a conflicting Drop
 /// impl that will occur when attempting to impl Trace on a type that impls Drop.
 ///
 /// ## Safety:

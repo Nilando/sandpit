@@ -4,7 +4,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 mod linked_list;
 
 use linked_list::LinkedList;
-use sandpit::{Arena, Root, gc::Gc};
+use sandpit::{gc::Gc, Arena, Root};
 
 const LIST_SIZE: usize = 10_000;
 const COLLECT_COUNT: usize = 20;

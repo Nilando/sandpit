@@ -5,7 +5,7 @@
 //! ## Creating An Arena
 //!
 //! All garbage collection in Sandpit happens within an arena. Therefore, to
-//! be begin we can start with creating a new arena. 
+//! be begin we can start with creating a new arena.
 //!
 //! This can be done like so..
 //! ```rust
@@ -13,7 +13,7 @@
 //! # use sandpit::{Trace, Mutator};
 //! # #[derive(Trace)]
 //! # struct MyRoot;
-//! # impl MyRoot { 
+//! # impl MyRoot {
 //! #   fn new(mutator: &Mutator) -> Self { Self }
 //! # }
 //!
@@ -42,7 +42,7 @@
 //! # struct C;
 //!
 //! #[derive(Trace)]
-//! enum Value<'gc> { 
+//! enum Value<'gc> {
 //!     // GC values must be branded with a mutation lifetime
 //!     // to ensure freeing memory can happen safely.
 //!     A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
@@ -59,12 +59,12 @@
 //! * [`gc::GcMut`]
 //! * [`gc::GcOpt`]
 //!
-//! A type may also derive [`TraceLeaf`], if it contains no GC pointers. 
+//! A type may also derive [`TraceLeaf`], if it contains no GC pointers.
 //! [`TraceLeaf`] allows for easier interior mutability.
 //!
 //! ## Mutating the Arena
 //! Once you have your arena and your traceable types, you can begin allocating
-//! them in the arena by calling [`Arena::mutate`]. Within a mutation 
+//! them in the arena by calling [`Arena::mutate`]. Within a mutation
 //! we can essentially do 3 important things:
 //! * Access all data reaachable from the root.
 //! * Create new garbage collected values.
@@ -79,14 +79,14 @@
 //! # fn traverse(root: &usize) {}
 //! arena.mutate(|mutator, root| {
 //!     // We can access everything reachable from the root.
-//!     traverse(root); 
+//!     traverse(root);
 //!
 //!     // We can allocate new Gc values.
 //!     // Here is a pointer, to a pointer, to a bool!
-//!     let gc_mut = GcMut::new(mutator, 
+//!     let gc_mut = GcMut::new(mutator,
 //!         GcMut::new(mutator, true)
-//!     ); 
-//! 
+//!     );
+//!
 //!     // We can mutate existing inner GcMut and GcOpt pointers.
 //!     gc_mut.write_barrier(mutator, |barrier| {
 //!         barrier.set(GcMut::new(mutator, false));
@@ -116,7 +116,7 @@
 //! arena.mutate(|mutator, root| loop {
 //!     // during this function it is likely the the GC will concurrently begin tracing!
 //!     allocate_stuff(mutator, root);
-//! 
+//!
 //!     if mutator.yield_requested() {
 //!         // the mutator is signaling to us that memory is ready to be freed so we should leave the mutation context
 //!         break;
@@ -151,16 +151,13 @@ pub use arena::Arena;
 pub use barrier::WriteBarrier;
 pub use config::Config;
 
-/// Rexported from ForLt. Used in making the root of an arena.
+/// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
 
 pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
-pub use trace::{
-    Trace, 
-    TraceLeaf, 
-};
+pub use trace::{Trace, TraceLeaf};
 
 #[doc(hidden)]
-pub use trace::{__MustNotDrop, Tracer};
+pub use trace::{Tracer, __MustNotDrop};

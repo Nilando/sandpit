@@ -322,7 +322,9 @@ fn alloc_array_of_gc_mut() {
 #[test]
 fn two_dimensional_array() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, [Gc<'_, usize>]>]>]> = Arena::new(|mu| {
-        mu.alloc_array_from_fn(1000, |i| mu.alloc_array_from_fn(1000, |k| Gc::new(mu, i + k)))
+        mu.alloc_array_from_fn(1000, |i| {
+            mu.alloc_array_from_fn(1000, |k| Gc::new(mu, i + k))
+        })
     });
 
     arena.mutate(|_mu, root| {
@@ -438,19 +440,18 @@ fn multi_threaded_allocating() {
 fn cyclic_graph() {
     #[derive(Trace)]
     struct Node<'gc> {
-        ptr: GcOpt<'gc, Node<'gc>>
+        ptr: GcOpt<'gc, Node<'gc>>,
     }
 
     impl<'gc> Node<'gc> {
         fn new(mu: &'gc Mutator) -> Self {
             Self {
-                ptr: GcOpt::new_none(mu)
+                ptr: GcOpt::new_none(mu),
             }
         }
     }
 
-    let arena: Arena<Root![Gc<'_, Node<'_>>]>
-        = Arena::new(|mu| Gc::new(mu, Node::new(mu)));
+    let arena: Arena<Root![Gc<'_, Node<'_>>]> = Arena::new(|mu| Gc::new(mu, Node::new(mu)));
 
     arena.mutate(|mu, root| {
         let a = Gc::new(mu, Node::new(mu));
@@ -473,12 +474,11 @@ fn cyclic_graph() {
         root.write_barrier(mu, |barrier| {
             field!(barrier, Node, ptr).set(a);
         });
-
     });
 
     arena.major_collect();
     arena.major_collect();
-                           
+
     assert_eq!(arena.metrics().old_objects_count, 5);
 }
 

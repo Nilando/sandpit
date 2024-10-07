@@ -1,4 +1,4 @@
-use super::gc::{GcMut, GcOpt, Gc};
+use super::gc::{Gc, GcMut, GcOpt};
 use super::trace::Trace;
 
 /// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.

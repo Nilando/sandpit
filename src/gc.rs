@@ -18,7 +18,6 @@ use std::ops::Deref;
 use std::ptr::{null_mut, NonNull};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-
 // A Gc points to a valid T within a GC Arena which is also succeeded by its
 // GC header which may or may not be padded.
 // This holds true for GcMut as well as GcOpt if it is not null.
