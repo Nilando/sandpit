@@ -238,21 +238,6 @@ impl<'gc, T: Trace + ?Sized> From<GcMut<'gc, T>> for GcOpt<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + ?Sized> From<Option<GcMut<'gc, T>>> for GcOpt<'gc, T> {
-    fn from(opt_gc: Option<GcMut<'gc, T>>) -> Self {
-        match opt_gc {
-            Some(gc) => Self {
-                ptr: AtomicPtr::new(gc.ptr.load(Ordering::Relaxed)),
-                scope: PhantomData::<&'gc *mut T>,
-            },
-            None => Self {
-                ptr: AtomicPtr::new(null_mut()),
-                scope: PhantomData::<&'gc *mut T>,
-            },
-        }
-    }
-}
-
 impl<'gc, T: Trace + ?Sized> Clone for GcOpt<'gc, T> {
     fn clone(&self) -> Self {
         Self {
@@ -294,13 +279,13 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     }
 
     pub fn as_option(&self) -> Option<GcMut<'gc, T>> {
-        if self.is_none() {
-            None
-        } else {
+        if self.is_some() {
             Some(GcMut {
                 ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
                 scope: PhantomData::<&'gc *mut T>,
             })
+        } else {
+            None
         }
     }
 }

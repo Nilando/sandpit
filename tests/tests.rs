@@ -40,21 +40,6 @@ fn arena_allocating_and_collecting() {
     arena.mutate(|_, root| assert!(***root == 123));
 }
 
-// TODO find a way to write this test so that it doesn't use a crazy amount of memory
-#[ignore]
-#[test]
-fn yield_requested_after_allocating() {
-    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
-
-    arena.mutate(|mu, _| loop {
-        Gc::new(mu, 42);
-
-        if mu.yield_requested() {
-            break;
-        }
-    });
-}
-
 /*
  Got rid of the start monitor option for now
 #[test]
@@ -220,6 +205,85 @@ fn resets_old_object_count() {
 }
 
 #[test]
+fn alloc_option() {
+    let arena: Arena<Root![Gc<'_, GcMut<'_, Option<Gc<'_, usize>>>>]> = Arena::new(|mu| {
+        Gc::new(mu, GcMut::new(mu, None))
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 2);
+
+    arena.mutate(|mu, root| {
+        assert!(root.is_none());
+
+        root.write_barrier(mu, |barrier| {
+            barrier.set(Gc::new(mu, Some(Gc::new(mu, 69))));
+        });
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 3);
+}
+
+#[test]
+fn alloc_result() {
+    let arena: Arena<Root![Gc<'_, GcMut<'_, Result<Gc<'_, usize>, ()>>>]> = Arena::new(|mu| {
+        Gc::new(mu, GcMut::new(mu, Ok(Gc::new(mu, 3))))
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 3);
+
+    arena.mutate(|mu, root| {
+        assert!(*root.unwrap() == 3);
+
+        root.write_barrier(mu, |barrier| {
+            barrier.set(Gc::new(mu, Err(())));
+        });
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 2);
+}
+
+#[test]
+fn alloc_sized_array() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>; 100]>]> = Arena::new(|mu| {
+        let arr = std::array::from_fn(|idx| Gc::new(mu, idx));
+
+        Gc::new(mu, arr)
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 101);
+
+    arena.mutate(|_mu, root| {
+        for (idx, gc) in root.iter().enumerate() {
+            assert!(**gc == idx);
+        }
+    });
+}
+
+#[test]
+fn alloc_tuple() {
+    let arena: Arena<Root![(Gc<'_, usize>, Gc<'_, usize>)]> = Arena::new(|mu| {
+        (Gc::new(mu, 0), Gc::new(mu, 1))
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        assert!(*root.0 == 0);
+        assert!(*root.1 == 1);
+    });
+}
+
+#[test]
 fn alloc_array() {
     let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| mu.alloc_array(69, 420));
 
@@ -292,8 +356,8 @@ fn alloc_array_of_gc() {
 
 #[test]
 fn alloc_array_of_gc_mut() {
-    let arena: Arena<Root![Gc<'_, [GcMut<'_, usize>]>]> =
-        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| GcMut::new(mu, idx)));
+    let arena: Arena<Root![GcMut<'_, [GcMut<'_, usize>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| GcMut::new(mu, idx)).into());
 
     arena.major_collect();
     assert_eq!(arena.metrics().old_objects_count, 101);
@@ -408,16 +472,18 @@ fn traceleaf_tuple_struct() {
 #[test]
 fn trace_tuple_struct() {
     #[derive(Trace)]
-    struct Foo(u8, u8);
+    struct Foo<'gc>(Gc<'gc, u8>, Gc<'gc, u8>);
 
-    let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo(0, 1)));
+    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
+        Gc::new(mu, Foo(Gc::new(mu, 0), Gc::new(mu, 1)))
+    });
 
     arena.major_collect();
 
     // just to avoid dead code warning
     arena.mutate(|_mu, root| {
-        assert!(root.0 == 0);
-        assert!(root.1 == 1);
+        assert!(*root.0 == 0);
+        assert!(*root.1 == 1);
     });
 }
 
@@ -587,4 +653,68 @@ fn arena_size_does_not_explode() {
             break;
         }
     }
+}
+
+#[test]
+fn gc_opt_from_mut() {
+    let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69).into());
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+}
+
+#[test]
+fn gc_scoped_deref() {
+    let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69));
+
+    arena.mutate(|mu, root| {
+        struct Foo<'gc> {
+            inner: &'gc usize
+        }
+
+        impl<'gc> Foo<'gc> {
+            fn set_inner(&mut self, gc: Gc<'gc, usize>) {
+                // DOES NOT COMPILE 
+                // self.inner = &gc;
+                self.inner = &gc.scoped_deref();
+            }
+        }
+
+        let mut foo = Foo {
+            inner: root.scoped_deref()
+        };
+
+        let gc = Gc::new(mu, 2);
+
+        foo.set_inner(gc);
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().old_objects_count, 1);
+}
+
+#[test]
+fn barrier_as_option() {
+    let arena: Arena<Root![Gc<'_, Option<GcMut<'_, bool>>>]> = Arena::new(|mu| {
+        Gc::new(mu, Some(GcMut::new(mu, false)))
+    });
+
+    arena.mutate(|mu, root| {
+        root.write_barrier(mu, |barrier| {
+            barrier.into().unwrap().set(Gc::new(mu, true));
+        });
+    });
+}
+
+#[test]
+fn gc_clone() {
+    let arena: Arena<Root![Gc<'_, bool>]> = Arena::new(|mu| {
+        Gc::new(mu, false).clone()
+    });
+
+    arena.mutate(|_mu, root| {
+        assert!(!**root);
+    });
 }
