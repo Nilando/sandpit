@@ -17,7 +17,7 @@ use std::sync::RwLockReadGuard;
 /// In order for the GC to efficiently free memory any long lasting mutation
 /// which is allocating memory must periodically call [`Mutator::gc_yield`].
 ///
-/// `yield_requested` fulfills 2 operations
+/// `gc_yield` fulfills 2 operations
 /// - it will block the mutator if tracers are currently struggling to complete a trace.
 /// - if gc_yield returns true it signals that memory is ready to be freed and the mutation callbacks must be exited in order to do so.
 ///
@@ -140,8 +140,8 @@ impl<'gc> Mutator<'gc> {
     }
 
     /// This fn will return true when a trace is near completion.
-    /// The mutation callback should be exited if yield_requested returns true.
-    pub fn yield_requested(&self) -> bool {
+    /// The mutation callback should be exited if gc_yield returns true.
+    pub fn gc_yield(&self) -> bool {
         if self.tracer_controller.yield_flag() {
             true
         } else {

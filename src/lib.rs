@@ -100,7 +100,7 @@
 //! exit. Therefore, if a mutation involves a continuous loop of instructions,
 //! it must exit it's mutation every so often to allow the GC to free memory.
 //!
-//! The mutator exposes a signal([`Mutator::yield_requested`]) which indicates if it is ready to free memory,
+//! The mutator exposes a signal([`Mutator::gc_yield`]) which indicates if it is ready to free memory,
 //! and that the mutation should end.
 //!
 //! ```rust
@@ -117,7 +117,7 @@
 //!     // during this function it is likely the the GC will concurrently begin tracing!
 //!     allocate_stuff(mutator, root);
 //!
-//!     if mutator.yield_requested() {
+//!     if mutator.gc_yield() {
 //!         // the mutator is signaling to us that memory is ready to be freed so we should leave the mutation context
 //!         break;
 //!     } else {
