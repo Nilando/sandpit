@@ -12,6 +12,26 @@ use std::sync::RwLockReadGuard;
 ///
 /// A mutator is acquired through a the mutation callback on [`crate::Arena::mutate`].
 ///
+/// # Example
+/// ```rust
+/// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+///
+/// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+///    Gc::new(mu, 123)
+/// });
+///
+/// // By calling mutate we get access to a mutator and the root!
+/// arena.mutate(|mu, root| {
+///     // we can use a mutator to allocate into the arena.
+///     let a = Gc::new(mu, 456);
+///
+///     // we can also use the mutator to create write barriers.
+///     a.write_barrier(mu, |barrier| {
+///         // in this case there isn't anything useful to do with the barrier...
+///     });
+/// });
+/// ```
+///
 /// # Calling `gc_yield` is Critical!
 ///
 /// In order for the GC to efficiently free memory any long lasting mutation
@@ -71,6 +91,17 @@ impl<'gc> Mutator<'gc> {
     ///
     /// This may panic if the allocation fails which may be because of
     /// lack of memory or object allocated is too large.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// arena.mutate(|mu, root| {
+    ///     let a = mu.alloc(456);
+    /// });
+    /// ```
     pub fn alloc<T: Trace>(&self, value: T) -> Gc<'gc, T> {
         let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
@@ -91,30 +122,66 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    /// Alloc a gc array with specified length with each index set to value
+    /// Alloc a `Gc<[T]>` with specified length and with each index set to value.
     ///
-    /// Due to the reference restraints of Gc<T>, this is only really
-    /// useful if T has some form of interior mutability, for example,
-    /// Cell<usize>
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// arena.mutate(|mu, root| {
+    ///     let gc_slice = mu.alloc_array(333, 100);
     ///
-    /// Also
-    /// ```
-    /// // let value = GcNullMut::new_null();
-    /// // creates an array of null pointers which may be updated to
-    /// // point somewhere else
-    /// //let gc_array = mutator.alloc_array(value, len);
+    ///     assert!(gc_slice.len() == 100);
     ///
+    ///     for i in gc_slice.iter() {
+    ///         assert!(*i == 333);
+    ///     }
+    /// });
     /// ```
     pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
         // TODO: I think this could be done much faster
         self.alloc_array_from_fn(len, |_| value.clone())
     }
 
+    /// Alloc a `Gc<[T]>` by copying an existing slice.
+    ///
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// arena.mutate(|mu, root| {
+    ///     let data = vec![0, 1, 2, 3, 4, 5];
+    ///     let gc_slice = mu.alloc_array_from_slice(&data);
+    ///
+    ///     for (i, n) in gc_slice.iter().enumerate() {
+    ///         assert!(i == *n);
+    ///     }
+    /// });
+    /// ```
     pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
         // TODO: this could be one single write call
         self.alloc_array_from_fn(slice.len(), |idx| slice[idx].clone())
     }
 
+    /// Alloc a `Gc<[T]>` by using a closure that sets the value for each index.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// arena.mutate(|mu, root| {
+    ///     let gc_slice = mu.alloc_array_from_fn(100, |idx| idx % 2);
+    ///
+    ///     for (i, n) in gc_slice.iter().enumerate() {
+    ///         assert!((i % 2) == *n);
+    ///     }
+    /// });
+    /// ```
     pub fn alloc_array_from_fn<T, F>(&'gc self, len: usize, mut cb: F) -> Gc<'gc, [T]>
     where
         T: Trace,
@@ -141,6 +208,28 @@ impl<'gc> Mutator<'gc> {
 
     /// This fn will return true when a trace is near completion.
     /// The mutation callback should be exited if gc_yield returns true.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root, Mutator};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// # fn vm_execute_loop<'gc>(mu: &'gc Mutator, root: &Gc<'gc, usize>) { Gc::new(mu, 69); }
+    /// arena.mutate(|mu, root| {
+    ///     loop {
+    ///         // the vm_execute_loop would need to return every so often
+    ///         vm_execute_loop(mu, root);
+    ///
+    ///         // if the gc_yield returns true,
+    ///         // memory is ready to be freed
+    ///         if mu.gc_yield() {
+    ///             // exit the mutation
+    ///             break;
+    ///         }
+    ///     }
+    /// });
+    /// ```
     pub fn gc_yield(&self) -> bool {
         if self.tracer_controller.yield_flag() {
             true

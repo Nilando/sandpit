@@ -14,6 +14,31 @@ use std::sync::atomic::*;
 /// `Trace` if its inner type if TraceLeaf. This is because interior mutability requires
 /// careful consideration so that the tracers correctly mark all GC references reachable from
 /// the root. If a type
+///
+/// ## Safety:
+/// Can safely be implemented using `#[derive(TraceLeaf)]`. Implmenting
+/// this trait by hand is unsafe as not tracing a GC reference could lead to
+/// dangling pointers after the GC frees memory.
+///
+/// ## Example
+/// ```rust
+/// # use std::cell::Cell;
+/// # use sandpit::TraceLeaf;
+/// # #[derive(TraceLeaf)]
+/// # struct Bar;
+/// // If Foo is TraceLeaf, T must be TraceLeaf
+/// #[derive(TraceLeaf)]
+/// struct Foo<T> {
+///     // T is TraceLeaf so can be put in a cell
+///     data: Cell<T>, 
+///
+///     // bar is also traceleaf, so can exist within Foo
+///     bar: Bar 
+///
+///     // Foo cannot contain a Gc pointer, b/c it is trace
+///     // c: Gc<'_, usize>
+/// }
+/// ```
 pub unsafe trait TraceLeaf: Trace {
     // used by the traceleaf derive to statically assert that all inner types also impl TraceLeaf
     #[doc(hidden)]
@@ -47,8 +72,13 @@ impl<T: Drop> __MustNotDrop for T {}
 /// dangling pointers after the GC frees memory.
 ///
 /// ## Example
-///
-///
+/// ```rust
+/// # use sandpit::{Trace, gc::Gc};
+/// #[derive(Trace)]
+/// struct Foo<'gc, T: Trace> {
+///     ptr: Gc<'gc, T>
+/// }
+/// ```
 pub unsafe trait Trace: GcPointee {
     #[doc(hidden)]
     const IS_LEAF: bool;

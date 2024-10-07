@@ -1,7 +1,5 @@
 //! A concurrent, generational, trace and sweep garbage collected arena.
 //!
-//! ## High Level Example
-//!
 //! ## Creating An Arena
 //!
 //! All garbage collection in Sandpit happens within an arena. Therefore, to

@@ -4,9 +4,12 @@ use super::trace::Trace;
 /// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.
 ///
 /// A write barrier can only be obtained initially by calling [`GcMut::write_barrier`]
-/// or [`Gc::write_barrier`]. The barrier is given out in a callback, in whcih afterwards,
+/// or [`crate::gc::Gc::write_barrier`]. The barrier is given out in a callback, in which afterwards,
 /// the initial GC pointer will be retraced. This ensure any updates made by the
 /// barrier will be caught by the tracers.
+///
+/// Also see the [`crate::field`] macro which is needed to safely "move" the
+/// write barrier onto fields within a struct.
 pub struct WriteBarrier<'gc, T: Trace + ?Sized> {
     inner: &'gc T,
 }
@@ -147,7 +150,37 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
 
 /// Exists to allow getting a write barrier to an inner field.
 ///
-/// It would be unsafe to allow for creating a write barrier around
+/// The field macro is needed to control how a [`WriteBarrier`] can be created,
+/// ensuring that from one write barrier, further barriers can only be obtained
+/// to fields within the same contiguous allocation/type.
+///
+/// # Example 
+/// ```rust
+/// use sandpit::{Arena, Trace, Root, gc::{GcMut, Gc}, field};
+///
+/// #[derive(Trace)]
+/// struct Foo<'gc> {
+///     inner: GcMut<'gc, bool>,
+/// }
+/// let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
+///     let foo = Foo {
+///         inner: GcMut::new(mu, false),
+///     };
+///
+///     Gc::new(mu, foo)
+/// });
+///
+/// arena.mutate(|mu, root| {
+///     let new = Gc::new(mu, true);
+///     root.write_barrier(mu, |write_barrier| {
+///         // use `field!` to get a write barrier around Foo's inner field.
+///         let inner_barrier = field!(write_barrier, Foo, inner);
+///
+///         // Now that the write barrier is around `inner` we can update the GcMut.
+///         inner_barrier.set(new);
+///     });
+/// });
+/// ```
 #[macro_export]
 macro_rules! field {
     ($value:expr, $type:path, $field:ident) => {{

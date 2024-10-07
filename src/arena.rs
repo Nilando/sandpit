@@ -10,7 +10,20 @@ use std::sync::Arc;
 
 /// A concurrently garbage collected arena with a single root type.
 ///
-/// See the [module-level documentation](./index.html) for more details.
+/// The root type of an arena must be a Higher Kinded Type(HTK), which
+/// can easily be created by using the [`crate::Root!`] macro.
+///
+/// # Example
+/// ```rust
+/// use sandpit::{Arena, Root, gc::Gc};
+///
+/// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+///     Gc::new(mu, 42)
+/// });
+/// ```
+///
+/// This macro is a re-export of [`ForLt!`] from the [`higher_kinded_types`] crate, go
+/// check it out for more details on HTK's, and how to use `Root/FotLt`.
 pub struct Arena<R: ForLt + 'static>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,

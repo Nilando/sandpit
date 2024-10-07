@@ -94,8 +94,62 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     }
 }
 
+impl<'gc, T: Trace> Gc<'gc, T> {
+    /// Provides a way to allocate a value into the GC arena, returning a `Gc<T>`.
+    ///
+    /// This method is equivalent to calling [`crate::mutator::Mutator::alloc`].
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| ());
+    /// arena.mutate(|mu, root| {
+    ///    let new = Gc::new(mu, 69);
+    /// });
+    pub fn new(mu: &'gc Mutator<'gc>, obj: T) -> Self {
+        mu.alloc(obj)
+    }
+}
+
 impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     /// Get a reference to a garabage collected value with the lifetime of the mutation.
+    ///
+    /// Becuase all Gc pointers point to values valid for the entire mutation
+    /// lifetime, it is fine to dereference them with that lifetime.
+    ///
+    /// A regular deref of a `Gc<'gc, T>` gives `&'a T` where `'a` is the lifetime
+    /// of the pointer.
+    ///
+    /// # Example
+    ///
+    /// In this example scoded deref is needed to implement Foo's set_inner method.
+    ///
+    ///```rust
+    /// # use sandpit::{Arena, Root, gc::{GcMut, Gc}};
+    /// let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69));
+
+    /// arena.mutate(|mu, root| {
+    ///     struct Foo<'gc> {
+    ///         inner: &'gc usize
+    ///     }
+
+    ///     impl<'gc> Foo<'gc> {
+    ///         fn set_inner(&mut self, gc: Gc<'gc, usize>) {
+    ///             // DOES NOT COMPILE 
+    ///             // self.inner = &gc;
+    ///             self.inner = &gc.scoped_deref();
+    ///         }
+    ///     }
+
+    ///     let mut foo = Foo {
+    ///         inner: root.scoped_deref()
+    ///     };
+
+    ///     let gc = Gc::new(mu, 2);
+
+    ///     foo.set_inner(gc);
+    /// });
+    ///```
     pub fn scoped_deref(&self) -> &'gc T {
         unsafe { &*self.ptr }
     }
@@ -121,6 +175,37 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         NonNull::new(self.ptr as *const T as *const Thin<T> as *mut Thin<T>).unwrap()
     }
 
+    /// Allows for updating internal `GcMut`'s and `GcOpt`'s.
+    ///
+    /// Returns a reference to the pointed at value that is wrapped in a
+    /// [`crate::barrier::WriteBarrier`] which allows for mutating `GcMut` and
+    /// `GcOpt`'s.
+    ///
+    /// # Example 
+    ///
+    /// Get a writer barrier to a index of a slice behind write barrier.
+    ///
+    /// ## Example
+    ///
+    /// See [`crate::barrier::WriteBarrier`] for more examples.
+    ///
+    /// ```rust
+    /// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    ///
+    /// let arena: Arena<Root![Gc<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, GcMut::new(mu, 69))
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         let new_value = Gc::new(mu, 420);
+    ///
+    ///         barrier.set(new_value);
+    ///
+    ///         assert!(**barrier.inner() == 420);
+    ///     })
+    /// });
+    ///```
     pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F)
     where
         F: FnOnce(&WriteBarrier<T>),
@@ -135,20 +220,32 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> Gc<'gc, T> {
-    /// Provides a way to allocate a value into the GC arena, returning a `Gc<T>`.
-    /// This method is equivalent to calling [`crate::mutator::Mutator::alloc`].
-    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
-        m.alloc(obj)
-    }
-}
-
 // GcMut may be updated to point somewhere else which requires it to be atomic
 // in order to sync with the tracing threads.
-/// Mutable GC pointer, meaning a write barrier *can* be used to update this pointer.
+
+/// Mutable GC pointer, meaning a write barrier can be used to update this pointer.
+///
+/// See [`crate::barrier::WriteBarrier`] for how to update a [`GcMut`].
 pub struct GcMut<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
     scope: PhantomData<&'gc *mut T>,
+}
+
+impl<'gc, T: Trace> GcMut<'gc, T> {
+    /// Provides a way to allocate a value into the GC arena, returning a `Gc<T>`.
+    ///
+    /// This method is equivalent to calling [`crate::mutator::Mutator::alloc`].
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{GcMut}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| ());
+    /// arena.mutate(|mu, root| {
+    ///    let new = GcMut::new(mu, 69);
+    /// });
+    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
+        m.alloc(obj).into()
+    }
 }
 
 impl<'gc, T: Trace + ?Sized> Deref for GcMut<'gc, T> {
@@ -181,12 +278,6 @@ impl<'gc, T: Trace + ?Sized> Clone for GcMut<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> GcMut<'gc, T> {
-    pub fn new(m: &'gc Mutator<'gc>, obj: T) -> Self {
-        m.alloc(obj).into()
-    }
-}
-
 impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     pub(crate) unsafe fn set(&self, new_gc: impl Into<Gc<'gc, T>>) {
         let thin_ptr = new_gc.into().as_thin().as_ptr();
@@ -194,12 +285,81 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
         self.ptr.store(thin_ptr, Ordering::Relaxed);
     }
 
+    /// Get a reference to a garabage collected value with the lifetime of the mutation.
+    ///
+    /// Becuase all Gc pointers point to values valid for the entire mutation
+    /// lifetime, it is fine to dereference them with that lifetime.
+    ///
+    /// A regular deref of a `GcMut<'gc, T>` gives `&'a T` where `'a` is the lifetime
+    /// of the pointer.
+    ///
+    /// # Example
+    ///
+    /// In this example scoded deref is needed to implement Foo's set_inner method.
+    ///
+    ///```rust
+    /// # use sandpit::{Arena, Root, gc::GcMut};
+    /// let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69));
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     struct Foo<'gc> {
+    ///         inner: &'gc usize
+    ///     }
+    ///
+    ///     impl<'gc> Foo<'gc> {
+    ///         fn set_inner(&mut self, gc: GcMut<'gc, usize>) {
+    ///             // DOES NOT COMPILE 
+    ///             // self.inner = &gc;
+    ///             self.inner = &gc.scoped_deref();
+    ///         }
+    ///     }
+    ///
+    ///     let mut foo = Foo {
+    ///         inner: root.scoped_deref()
+    ///     };
+    ///
+    ///     let gc = GcMut::new(mu, 2);
+    ///
+    ///     foo.set_inner(gc);
+    /// });
+    ///```
     pub fn scoped_deref(&self) -> &'gc T {
         let thin_ptr = self.ptr.load(Ordering::Relaxed);
 
         <T as GcPointee>::deref(NonNull::new(thin_ptr).unwrap())
     }
 
+    /// Allows for updating internal `GcMut`'s and `GcOpt`'s.
+    ///
+    /// Returns a reference to the pointed at value that is wrapped in a
+    /// [`crate::barrier::WriteBarrier`] which allows for mutating `GcMut` and
+    /// `GcOpt`'s.
+    ///
+    /// # Example 
+    ///
+    /// Get a writer barrier to a index of a slice behind write barrier.
+    ///
+    /// ## Example
+    ///
+    /// See [`crate::barrier::WriteBarrier`] for more examples.
+    ///
+    /// ```rust
+    /// use sandpit::{Arena, gc::{GcMut}, Root};
+    ///
+    /// let arena: Arena<Root![GcMut<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
+    ///    GcMut::new(mu, GcMut::new(mu, 69))
+    /// });
+    ///
+    /// arena.mutate(|mu, root| {
+    ///     root.write_barrier(mu, |barrier| {
+    ///         let new_value = GcMut::new(mu, 420);
+    ///
+    ///         barrier.set(new_value);
+    ///
+    ///         assert!(**barrier.inner() == 420);
+    ///     });
+    /// });
+    ///```
     pub fn write_barrier<F>(&self, mu: &'gc Mutator, f: F)
     where
         F: FnOnce(&WriteBarrier<T>),
@@ -214,7 +374,10 @@ impl<'gc, T: Trace + ?Sized> GcMut<'gc, T> {
     }
 }
 
-/// A GC pointer which is able of pointing to null, can be unwrapped into a GcMut.
+/// A GC pointer which is able of pointing to null.
+///
+/// [`GcOpt`] can be unwrapped into a GcMut, and can also be updated via
+/// a [`crate::barrier::WriteBarrier`].
 pub struct GcOpt<'gc, T: Trace + ?Sized> {
     ptr: AtomicPtr<Thin<T>>,
     scope: PhantomData<&'gc *mut T>,
@@ -248,6 +411,18 @@ impl<'gc, T: Trace + ?Sized> Clone for GcOpt<'gc, T> {
 }
 
 impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
+    /// Creates a new GcOpt which points to null.
+    ///
+    /// A GcOpt can also be created from a [`GcMut`] or [`Gc`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use sandpit::{Arena, gc::{GcOpt}, Root};
+    ///
+    /// let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| {
+    ///    GcOpt::new_none(mu)
+    /// });
+    ///```
     pub fn new_none(_m: &'gc Mutator<'gc>) -> Self {
         Self {
             ptr: AtomicPtr::new(null_mut()),
@@ -255,12 +430,80 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
         }
     }
 
+    /// Check whether this [`GcOpt`] is null.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{GcOpt}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
+    ///    let gc_opt: GcOpt<()> = GcOpt::new_none(mu);
+    ///
+    ///    assert!(gc_opt.is_none());
+    /// # });
+    ///```
     pub fn is_none(&self) -> bool {
         self.ptr.load(Ordering::Relaxed).is_null()
     }
 
+    /// Check whether this [`GcOpt`] contains a valid [`GcMut`].
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
+    ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
+    ///
+    ///    assert!(gc_opt.is_some());
+    /// # });
+    ///```
     pub fn is_some(&self) -> bool {
         !self.is_none()
+    }
+
+    /// Mutate this [`GcOpt`] so that it is null.
+    ///
+    /// Normally updating a Gc pointer requires a write barrier, however,
+    /// this method is an exception as the null pointer requires no tracing.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
+    ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
+    ///
+    ///    assert!(gc_opt.is_some());
+    ///
+    ///    gc_opt.set_null();
+    ///
+    ///    assert!(gc_opt.is_none());
+    /// # });
+    ///```
+    pub fn set_null(&self) {
+        self.ptr.store(null_mut(), Ordering::Relaxed)
+    }
+
+    /// Convert into a Option of [`GcMut`].
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
+    ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
+    ///
+    ///    let gc_mut = gc_opt.as_option().unwrap();
+    ///
+    ///    assert!(*gc_mut == 123);
+    /// # });
+    ///```
+    pub fn as_option(&self) -> Option<GcMut<'gc, T>> {
+        if self.is_some() {
+            Some(GcMut {
+                ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
+                scope: PhantomData::<&'gc *mut T>,
+            })
+        } else {
+            None
+        }
     }
 
     // If the tracers have already traced this pointer, than the new pointer
@@ -271,22 +514,6 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
         let thin_ptr = new.ptr.load(Ordering::Relaxed);
 
         self.ptr.store(thin_ptr, Ordering::Relaxed);
-    }
-
-    // safe because setting to null doesn't require anything to be retraced!
-    pub fn set_null(&self) {
-        self.ptr.store(null_mut(), Ordering::Relaxed)
-    }
-
-    pub fn as_option(&self) -> Option<GcMut<'gc, T>> {
-        if self.is_some() {
-            Some(GcMut {
-                ptr: AtomicPtr::new(self.ptr.load(Ordering::Relaxed)),
-                scope: PhantomData::<&'gc *mut T>,
-            })
-        } else {
-            None
-        }
     }
 }
 
