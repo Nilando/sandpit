@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.5"
+version = "0.3.0"
 authors = ["Niland Schumacher <naschuma@ucsc.edu>"]
 edition = "2021"
 license = "MIT"
@@ -26,8 +26,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-nimix = { git = "https://github.com/Nilando/nimix", branch = "main" }
-sandpit_derive = { path = "./derive", version = "0.2.5" }
+nimix = "0.1.0"
+sandpit_derive = { path = "./derive", version = "0.3.0" }
 crossbeam-channel = "0.5.13"
 higher-kinded-types = "0.1.1"
 
