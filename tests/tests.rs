@@ -542,3 +542,24 @@ fn alloc_after_collect_test() {
         }
     });
 }
+
+#[test]
+fn arena_size_does_not_explode() {
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
+
+    for _ in 0..100 {
+        arena.mutate(|mu, _| loop {
+            Gc::new(mu, 42);
+
+            if mu.yield_requested() {
+                break;
+            }
+        });
+
+        let config = arena.metrics();
+        let arena_size_mb = config.arena_size as f64 / (1024 * 1024) as f64;
+
+        assert!(5.0 > arena_size_mb);
+        println!("Arena MB(s): {}", arena_size_mb);
+    }
+}

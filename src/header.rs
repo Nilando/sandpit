@@ -117,11 +117,11 @@ impl<T> SliceHeader<T> {
 
 impl<T> GcHeader for SliceHeader<T> {
     fn set_mark(&self, mark: GcMark) {
-        self.mark.store(mark.into(), Ordering::SeqCst);
+        self.mark.store(mark.into(), Ordering::Release);
     }
 
     fn get_mark(&self) -> GcMark {
-        self.mark.load(Ordering::SeqCst).into()
+        self.mark.load(Ordering::Acquire).into()
     }
 
     fn get_alloc_layout(&self) -> Layout {
