@@ -85,6 +85,10 @@ impl TracerController {
         self.time_slice_lock.lock().unwrap()
     }
 
+    pub fn get_trace_share_ratio(&self) -> f32 {
+        self.trace_share_ratio
+    }
+
     pub fn has_work(&self) -> bool {
         !self.receiver.is_empty()
     }

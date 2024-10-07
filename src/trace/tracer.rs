@@ -97,7 +97,7 @@ impl Tracer {
             return;
         }
 
-        let split_at = (self.work.len() as f64 * 0.5f64).floor() as usize;
+        let split_at = (self.work.len() as f32 * self.controller.get_trace_share_ratio()).floor() as usize;
         let share_work = self.work.split_off(split_at);
 
         if !share_work.is_empty() {

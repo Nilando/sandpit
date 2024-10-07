@@ -367,8 +367,8 @@ fn trace_complex_enum() {
     #[derive(Trace)]
     enum Foo {
         A,
-        B(u8, u8),
-        C { a: u8, b: u8, c: u8 },
+        _B(u8, u8),
+        _C { a: u8, b: u8, c: u8 },
     }
 
     let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo::A));
@@ -379,10 +379,10 @@ fn trace_complex_enum() {
 #[test]
 fn derive_empty_enums() {
     #[derive(Trace)]
-    enum Foo {}
+    enum _Foo {}
 
     #[derive(TraceLeaf)]
-    enum Bar {}
+    enum _Bar {}
     // can't actually instantiate Foo so this test is just
     // making sure Trace derive works
 }
@@ -391,12 +391,18 @@ fn derive_empty_enums() {
 fn traceleaf_tuple_struct() {
     use std::cell::Cell;
 
-    #[derive(TraceLeaf)]
+    #[derive(TraceLeaf, Copy, Clone)]
     struct Foo(u8, u8);
 
     let arena: Arena<Root![Gc<'_, Cell<Foo>>]> = Arena::new(|mu| Gc::new(mu, Cell::new(Foo(0, 1))));
 
     arena.major_collect();
+
+    // just to avoid dead code warning
+    arena.mutate(|_mu, root| {
+        assert!(root.get().0 == 0);
+        assert!(root.get().1 == 1);
+    });
 }
 
 #[test]
@@ -407,6 +413,12 @@ fn trace_tuple_struct() {
     let arena: Arena<Root![Gc<'_, Foo>]> = Arena::new(|mu| Gc::new(mu, Foo(0, 1)));
 
     arena.major_collect();
+
+    // just to avoid dead code warning
+    arena.mutate(|_mu, root| {
+        assert!(root.0 == 0);
+        assert!(root.1 == 1);
+    });
 }
 
 #[test]
