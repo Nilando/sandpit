@@ -1,4 +1,4 @@
-use super::allocator::Allocator;
+use super::heap::Heap;
 use super::trace::TracerController;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +15,7 @@ use std::time::Duration;
 // The timeslicer relies on the assumption that the mutators regularly call `gc_yield`
 pub struct TimeSlicer {
     tracer_controller: Arc<TracerController>,
-    allocator: Allocator,
+    heap: Heap,
     arena_size_ratio_trigger: f32,
     max_headroom_ratio: f32,
     timeslice_size: f32,
@@ -25,7 +25,7 @@ pub struct TimeSlicer {
 impl TimeSlicer {
     pub fn new(
         tracer_controller: Arc<TracerController>,
-        allocator: Allocator,
+        heap: Heap,
         arena_size_ratio_trigger: f32,
         max_headroom_ratio: f32,
         timeslice_size: f32,
@@ -33,7 +33,7 @@ impl TimeSlicer {
     ) -> Self {
         Self {
             tracer_controller,
-            allocator,
+            heap,
             arena_size_ratio_trigger,
             max_headroom_ratio,
             timeslice_size,
@@ -44,7 +44,7 @@ impl TimeSlicer {
     fn split_timeslice(&self, max_headroom: usize, prev_size: usize) -> (Duration, Duration) {
         // Algorithm inspired from webkit riptide collector:
         let one_mili_in_nanos = 1_000_000.0;
-        let available_headroom = (max_headroom + prev_size) - self.allocator.get_size();
+        let available_headroom = (max_headroom + prev_size) - self.heap.get_size();
         let headroom_ratio = available_headroom as f32 / max_headroom as f32;
         let m = (self.timeslice_size - self.slice_min) * headroom_ratio;
         let mutator_nanos = (one_mili_in_nanos * m) as u64;
@@ -61,13 +61,13 @@ impl TimeSlicer {
     }
 
     pub fn run(&self) {
-        let prev_size = self.allocator.get_size();
+        let prev_size = self.heap.get_size();
         let max_headroom =
             ((prev_size as f32 / self.arena_size_ratio_trigger) * self.max_headroom_ratio) as usize;
 
         loop {
             // we've ran out of headroom, stop the mutators
-            if self.allocator.get_size() >= (max_headroom + prev_size) {
+            if self.heap.get_size() >= (max_headroom + prev_size) {
                 self.tracer_controller.raise_yield_flag();
                 break;
             }

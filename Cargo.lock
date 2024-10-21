@@ -284,9 +284,9 @@ checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
 
 [[package]]
 name = "nimix"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b4652fe18b55a6c8f055478793862c00a30535fc81ed11b8fef96a4a96b5e6a"
+checksum = "d56961b106692bf2613074a405ed25b0978fd4738936851a23259580df62cd8c"
 
 [[package]]
 name = "num-traits"

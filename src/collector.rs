@@ -1,4 +1,4 @@
-use super::allocator::Allocator;
+use super::heap::Heap;
 use super::config::Config;
 use super::header::GcMark;
 use super::mutator::Mutator;
@@ -40,7 +40,7 @@ pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    arena: Allocator,
+    heap: Heap,
     tracer: Arc<TracerController>,
 
     // this lock is held while a collection is happening.
@@ -76,7 +76,7 @@ where
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
-            self.arena.sweep(self.get_current_mark(), || {
+            self.heap.sweep(self.get_current_mark(), || {
                 drop(mutation_lock);
             });
         }
@@ -101,7 +101,7 @@ where
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
-            self.arena.sweep(self.get_current_mark(), || {
+            self.heap.sweep(self.get_current_mark(), || {
                 drop(mutation_lock);
             });
         }
@@ -126,7 +126,7 @@ where
     }
 
     fn get_arena_size(&self) -> usize {
-        self.arena.get_size()
+        self.heap.get_size()
     }
 
     fn get_old_objects_count(&self) -> usize {
@@ -160,19 +160,19 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        let arena = Allocator::new();
+        let heap = Heap::new();
         let tracer = Arc::new(TracerController::new(config));
         let tracer_ref: &'static TracerController =
             unsafe { &*(&*tracer as *const TracerController) };
         let lock = tracer_ref.yield_lock();
-        let mutator = Mutator::new(arena.clone(), tracer_ref, lock);
+        let mutator = Mutator::new(heap.clone(), tracer_ref, lock);
         let mutator_ref: &'static Mutator<'static> =
             unsafe { &*(&mutator as *const Mutator<'static>) };
 
         let root: R::Of<'static> = f(mutator_ref);
         let time_slicer = TimeSlicer::new(
             tracer.clone(),
-            arena.clone(),
+            heap.clone(),
             config.monitor_arena_size_ratio_trigger,
             config.collector_max_headroom_ratio,
             config.collector_timeslice_size,
@@ -180,7 +180,7 @@ where
         );
 
         Self {
-            arena,
+            heap,
             tracer,
             root,
             collection_lock: Mutex::new(()),
@@ -212,7 +212,7 @@ where
         let _mutation_lock = self.mutation_lock.lock().unwrap();
         let yield_lock = self.tracer.yield_lock();
 
-        Mutator::new(self.arena.clone(), self.tracer.as_ref(), yield_lock)
+        Mutator::new(self.heap.clone(), self.tracer.as_ref(), yield_lock)
     }
 
     fn update_collection_time(

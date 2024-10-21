@@ -132,7 +132,7 @@ extern crate self as sandpit;
 
 pub mod gc;
 
-mod allocator;
+mod heap;
 mod arena;
 mod barrier;
 mod collector;

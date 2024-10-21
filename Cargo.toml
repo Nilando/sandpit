@@ -26,7 +26,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-nimix = "0.1.0"
+nimix = "0.1.2"
 sandpit_derive = { path = "./derive", version = "0.3.0" }
 crossbeam-channel = "0.5.13"
 higher-kinded-types = "0.1.1"
@@ -36,7 +36,7 @@ criterion = "0.5.1"
 rand = "0.8.4"
 
 [[bench]]
-name = "linked_list_bench"
+name = "bench"
 harness = false
 
 [profile.bench]

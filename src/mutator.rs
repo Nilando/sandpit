@@ -1,4 +1,4 @@
-use super::allocator::Allocator;
+use super::heap::Heap;
 use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
@@ -57,7 +57,7 @@ use std::sync::RwLockReadGuard;
 /// which point the Gc will free memory and then allow for mutation to resume.
 pub struct Mutator<'gc> {
     tracer_controller: &'gc TracerController,
-    allocator: Allocator,
+    heap: Heap,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
     mark: GcMark,
@@ -72,14 +72,14 @@ impl<'gc> Drop for Mutator<'gc> {
 
 impl<'gc> Mutator<'gc> {
     pub(crate) fn new(
-        allocator: Allocator,
+        heap: Heap,
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
         let mark = tracer_controller.prev_mark();
 
         Self {
-            allocator,
+            heap,
             tracer_controller,
             rescan: RefCell::new(vec![]),
             mark,
@@ -106,7 +106,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout);
+            let ptr = self.heap.alloc(alloc_layout);
             // SAFETY: the alloc layout was extended to have capacity
             // for the header and object to be written into.
 
@@ -190,7 +190,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout);
+            let ptr = self.heap.alloc(alloc_layout);
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 

@@ -1,7 +1,7 @@
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
-use crate::allocator::Allocator;
+use crate::heap::Heap;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
 use std::cell::Cell;
@@ -46,7 +46,7 @@ impl Tracer {
 
         self.increment_mark_count();
 
-        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
+        unsafe { Heap::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
 
         if T::IS_LEAF {
             return;
