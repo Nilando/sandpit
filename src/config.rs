@@ -33,20 +33,20 @@ pub struct Config {
     /// during a collection, before a yield is requested.
     /// The headroom is calculated by multiplying the previous arena size by
     /// the headroom ratio.
-    pub collector_max_headroom_ratio: f32,
+    pub collector_max_headroom_ratio: f64,
 
     /// The timeslicer essentially rate limits aggressive mutators, to ensure
     /// that the tracers will outpace them. The timeslice size will effect the
     /// length of time the timeslicer will request a mutator to yield in a single
     /// time frame. This represent number represents milliseconds.
-    pub collector_timeslice_size: f32,
+    pub collector_timeslice_size: f64,
 
     /// The minimum amount of time the timeslicer will request yields for.
     /// Lowering this may help less aggressive mutators, but might make more
     /// aggressive mutators more likely to trigger yield earlier in the tracing
     /// process (meaning less concurrency).
     /// This represent number represents milliseconds.
-    pub collector_slice_min: f32,
+    pub collector_slice_min: f64,
 }
 
 pub const GC_CONFIG_DEFAULT_TRACE_THREADS: usize = 2;
@@ -78,7 +78,7 @@ impl Config {
 
             mutator_share_min: 1000,
 
-            collector_max_headroom_ratio: 2.0,
+            collector_max_headroom_ratio: 0.5,
             collector_timeslice_size: 2.0,
             collector_slice_min: 0.6,
         }

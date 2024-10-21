@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
 use std::thread;
@@ -18,8 +18,8 @@ pub struct Monitor<T: Collect + 'static> {
     flag: AtomicBool,
     monitor_lock: Mutex<()>,
 
-    prev_arena_size: AtomicUsize,
-    max_old_objects: AtomicUsize,
+    prev_arena_size: AtomicU64,
+    max_old_objects: AtomicU64,
 
     // config vars
     max_old_growth_rate: f32,
@@ -38,9 +38,9 @@ impl<T: Collect + 'static> Monitor<T> {
             collector,
             flag: AtomicBool::new(false),
             monitor_lock: Mutex::new(()),
-            prev_arena_size: AtomicUsize::new(prev_arena_size),
+            prev_arena_size: AtomicU64::new(prev_arena_size),
             // TODO make this a config var
-            max_old_objects: AtomicUsize::new(0),
+            max_old_objects: AtomicU64::new(0),
             max_old_growth_rate: config.monitor_max_old_growth_rate,
             arena_size_ratio_trigger: config.monitor_arena_size_ratio_trigger,
             wait_duration: config.monitor_wait_time,
@@ -52,11 +52,11 @@ impl<T: Collect + 'static> Monitor<T> {
         let _lock = self.monitor_lock.lock().unwrap();
     }
 
-    pub fn get_max_old_objects(&self) -> usize {
+    pub fn get_max_old_objects(&self) -> u64 {
         self.max_old_objects.load(Ordering::Relaxed)
     }
 
-    pub fn get_prev_arena_size(&self) -> usize {
+    pub fn get_prev_arena_size(&self) -> u64 {
         self.prev_arena_size.load(Ordering::Relaxed)
     }
 
@@ -102,7 +102,7 @@ impl<T: Collect + 'static> Monitor<T> {
     }
 
     fn major_trigger(&self) -> bool {
-        let old_objects = self.collector.get_old_objects_count();
+        let old_objects = self.collector.get_old_objects_count() as u64;
 
         old_objects > self.max_old_objects.load(Ordering::Relaxed)
     }
@@ -118,7 +118,7 @@ impl<T: Collect + 'static> Monitor<T> {
         let old_objects = self.collector.get_old_objects_count();
 
         self.max_old_objects.store(
-            (old_objects as f32 * self.max_old_growth_rate).floor() as usize,
+            (old_objects as f32 * self.max_old_growth_rate).floor() as u64,
             Ordering::Relaxed,
         );
     }

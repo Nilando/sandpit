@@ -26,7 +26,7 @@ impl Heap {
         self.heap.sweep(live_mark.into(), cb)
     }
 
-    pub fn get_size(&self) -> usize {
-        self.heap.size()
+    pub fn get_size(&self) -> u64 {
+        self.heap.size() as u64
     }
 }

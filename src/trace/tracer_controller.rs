@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
 };
 use std::thread::JoinHandle;
@@ -147,7 +147,7 @@ impl TracerController {
     pub fn trace<T: Trace, F: FnOnce()>(
         self: Arc<Self>,
         root: &T,
-        old_object_count: Arc<AtomicUsize>,
+        old_object_count: Arc<AtomicU64>,
         trace_callback: F,
     ) {
         self.clone().trace_root(root, old_object_count.clone());
@@ -195,11 +195,11 @@ impl TracerController {
         self.tracers_waiting.store(0, Ordering::SeqCst);
     }
 
-    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicUsize>) {
+    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicU64>) {
         let mut tracer = self.new_tracer(0);
         root.trace(&mut tracer);
         tracer.flush_work();
-        old_object_count.fetch_add(tracer.get_mark_count(), Ordering::SeqCst);
+        old_object_count.fetch_add(tracer.get_mark_count() as u64, Ordering::SeqCst);
     }
 
     fn new_tracer(self: Arc<Self>, id: usize) -> Tracer {
@@ -208,7 +208,7 @@ impl TracerController {
         Tracer::new(self.clone(), mark, id)
     }
 
-    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicUsize>) -> Vec<JoinHandle<()>> {
+    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicU64>) -> Vec<JoinHandle<()>> {
         let mut join_handles = vec![];
 
         for i in 0..self.num_tracers {
@@ -219,7 +219,7 @@ impl TracerController {
             let jh = thread
                 .spawn(move || {
                     let mut tracer = controller.clone().new_tracer(i);
-                    let marked_objects = tracer.trace_loop();
+                    let marked_objects = tracer.trace_loop() as u64;
 
                     object_count.fetch_add(marked_objects, Ordering::SeqCst);
                 })

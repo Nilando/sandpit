@@ -18,17 +18,17 @@ pub struct Metrics {
 
     /// Once the old objects count reaches this number, a major collection will
     /// be triggered
-    pub max_old_objects: usize,
+    pub max_old_objects: u64,
 
     /// Running total of object that have been traced since the last major
     /// collection and all succeeding minor collections.
-    pub old_objects_count: usize,
+    pub old_objects_count: u64,
 
     /// Total amount of memory allocated by the arena.
-    pub arena_size: usize,
+    pub arena_size: u64,
 
     /// The arena size at the start of the last collection.
-    pub prev_arena_size: usize,
+    pub prev_arena_size: u64,
 
     /// The current state of the GC.
     pub state: GcState,

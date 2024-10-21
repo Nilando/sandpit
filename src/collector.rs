@@ -8,7 +8,7 @@ use super::trace::{Trace, TracerController};
 use higher_kinded_types::ForLt;
 
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicUsize, AtomicU64, Ordering},
     Arc, Mutex,
 };
 use std::time::Instant;
@@ -27,8 +27,8 @@ pub trait Collect {
     fn major_collect(&self);
     fn minor_collect(&self);
 
-    fn get_old_objects_count(&self) -> usize;
-    fn get_arena_size(&self) -> usize;
+    fn get_old_objects_count(&self) -> u64;
+    fn get_arena_size(&self) -> u64;
     fn get_major_collections(&self) -> usize;
     fn get_minor_collections(&self) -> usize;
     fn get_major_collect_avg_time(&self) -> usize;
@@ -52,7 +52,7 @@ where
     root: R::Of<'static>,
     major_collections: AtomicUsize,
     minor_collections: AtomicUsize,
-    old_objects: Arc<AtomicUsize>,
+    old_objects: Arc<AtomicU64>,
 
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
@@ -125,11 +125,11 @@ where
         self.minor_collections.load(Ordering::Relaxed)
     }
 
-    fn get_arena_size(&self) -> usize {
+    fn get_arena_size(&self) -> u64 {
         self.heap.get_size()
     }
 
-    fn get_old_objects_count(&self) -> usize {
+    fn get_old_objects_count(&self) -> u64 {
         self.old_objects.load(Ordering::Relaxed)
     }
 
@@ -173,7 +173,6 @@ where
         let time_slicer = TimeSlicer::new(
             tracer.clone(),
             heap.clone(),
-            config.monitor_arena_size_ratio_trigger,
             config.collector_max_headroom_ratio,
             config.collector_timeslice_size,
             config.collector_slice_min,
@@ -189,7 +188,7 @@ where
             minor_collections: AtomicUsize::new(0),
             major_collect_avg_time: AtomicUsize::new(0),
             minor_collect_avg_time: AtomicUsize::new(0),
-            old_objects: Arc::new(AtomicUsize::new(0)),
+            old_objects: Arc::new(AtomicU64::new(0)),
             time_slicer,
         }
     }
