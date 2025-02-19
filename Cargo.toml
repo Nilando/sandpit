@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "derive",
+    "derive", "examples/linked_list",
 ]
 
 [workspace.package]
@@ -26,7 +26,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-nimix = "0.1.2"
+nimix = "=0.1.2"
 sandpit_derive = { path = "./derive", version = "0.3.0" }
 crossbeam-channel = "0.5.13"
 higher-kinded-types = "0.1.1"
@@ -41,3 +41,10 @@ harness = false
 
 [profile.bench]
 debug = true
+
+#[profile.release]
+#opt-level = 3
+#lto = true
+#strip = true
+#panic = "abort"
+#codegen-units = 1

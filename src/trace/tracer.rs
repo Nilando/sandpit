@@ -32,6 +32,10 @@ impl Tracer {
         self.mark_count.get()
     }
 
+    pub(crate) fn get_mark(&self) -> GcMark {
+        self.mark
+    }
+
     pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
 
         let header = gc.get_header();

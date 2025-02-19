@@ -14,7 +14,7 @@ use std::sync::RwLockReadGuard;
 ///
 /// # Example
 /// ```rust
-/// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+/// use sandpit::{Arena, gc::Gc, Root};
 ///
 /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
 ///    Gc::new(mu, 123)
@@ -94,7 +94,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, gc::Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -126,7 +126,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, gc::Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -148,7 +148,7 @@ impl<'gc> Mutator<'gc> {
     /// Alloc a `Gc<[T]>` by copying an existing slice.
     ///
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, gc::Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -170,7 +170,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, gc::Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -211,7 +211,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root, Mutator};
+    /// # use sandpit::{Arena, gc::Gc, Root, Mutator};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -239,12 +239,16 @@ impl<'gc> Mutator<'gc> {
         }
     }
 
-    pub(crate) fn retrace<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) {
-        if gc_ptr.get_header().get_mark() != self.tracer_controller.get_current_mark() {
-            return;
-        }
+    pub(crate) fn has_marked<T: Trace + ?Sized>(&self, gc_ptr: &Gc<'gc, T>) -> bool {
+        gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
+    }
 
-        let ptr: NonNull<Thin<T>> = gc_ptr.as_thin();
+    pub(crate) fn get_mark(&self) -> GcMark {
+       self.tracer_controller.get_current_mark()
+    }
+
+    pub(crate) fn retrace<T: Trace + ?Sized>(&self, obj: &T) {
+        let ptr: NonNull<Thin<T>> = NonNull::from(obj).cast(); // safe b/c of implicit Sized bound
         let trace_job = TraceJob::new(ptr);
 
         self.rescan.borrow_mut().push(trace_job);

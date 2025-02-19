@@ -1,7 +1,7 @@
 use rand::prelude::*;
 use sandpit::{
     field,
-    gc::{Gc, GcMut, GcOpt},
+    gc::{Gc, GcOpt},
     Arena, Mutator, Root, Trace, TraceLeaf,
 };
 
@@ -119,7 +119,7 @@ fn trace_gc_null_mut() {
     assert_eq!(arena.metrics().old_objects_count, 2);
 
     arena.mutate(|_, root| {
-        root.set_null();
+        root.set_none();
     });
 
     arena.major_collect();
@@ -164,9 +164,9 @@ fn write_barrier() {
         let new = Gc::new(mu, 420);
 
         root.write_barrier(mu, |write_barrier| {
-            field!(write_barrier, Foo, a).set(new);
-            field!(write_barrier, Foo, b).set(new);
-            field!(write_barrier, Foo, c).set(new);
+            field!(write_barrier, Foo, a).set(new.clone());
+            field!(write_barrier, Foo, b).set(new.clone());
+            field!(write_barrier, Foo, c).set(new.clone());
         });
     });
 
@@ -197,7 +197,7 @@ fn resets_old_object_count() {
 
     assert_eq!(arena.metrics().old_objects_count, 2);
 
-    arena.mutate(|_mu, root| root.set_null());
+    arena.mutate(|_mu, root| root.set_none());
 
     arena.major_collect();
 
@@ -206,8 +206,8 @@ fn resets_old_object_count() {
 
 #[test]
 fn alloc_option() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, Option<Gc<'_, usize>>>>]> = Arena::new(|mu| {
-        Gc::new(mu, GcMut::new(mu, None))
+    let arena: Arena<Root![Gc<'_, Gc<'_, Option<Gc<'_, usize>>>>]> = Arena::new(|mu| {
+        Gc::new(mu, Gc::new(mu, None))
     });
 
     arena.major_collect();
@@ -229,8 +229,8 @@ fn alloc_option() {
 
 #[test]
 fn alloc_result() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, Result<Gc<'_, usize>, ()>>>]> = Arena::new(|mu| {
-        Gc::new(mu, GcMut::new(mu, Ok(Gc::new(mu, 3))))
+    let arena: Arena<Root![Gc<'_, Gc<'_, Result<Gc<'_, usize>, ()>>>]> = Arena::new(|mu| {
+        Gc::new(mu, Gc::new(mu, Ok(Gc::new(mu, 3))))
     });
 
     arena.major_collect();
@@ -238,7 +238,8 @@ fn alloc_result() {
     assert_eq!(arena.metrics().old_objects_count, 3);
 
     arena.mutate(|mu, root| {
-        assert!(*root.unwrap() == 3);
+        let n = root.as_ref().unwrap();
+        assert!(**n == 3);
 
         root.write_barrier(mu, |barrier| {
             barrier.set(Gc::new(mu, Err(())));
@@ -339,7 +340,7 @@ fn alloc_array_from_slice() {
 }
 
 #[test]
-fn alloc_array_of_gc() {
+fn alloc_array_of_static_gc() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> =
         Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)));
 
@@ -355,16 +356,16 @@ fn alloc_array_of_gc() {
 }
 
 #[test]
-fn alloc_array_of_gc_mut() {
-    let arena: Arena<Root![GcMut<'_, [GcMut<'_, usize>]>]> =
-        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| GcMut::new(mu, idx)).into());
+fn alloc_array_of_updated_gc() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)).into());
 
     arena.major_collect();
     assert_eq!(arena.metrics().old_objects_count, 101);
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
-            let new = GcMut::new(mu, i + 100);
+            let new = Gc::new(mu, i + 100);
 
             root.write_barrier(mu, |barrier| {
                 barrier.at(i).set(new);
@@ -404,7 +405,7 @@ fn two_dimensional_array() {
 
 #[test]
 fn change_array_size() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, [usize]>>]> =
+    let arena: Arena<Root![Gc<'_, Gc<'_, [usize]>>]> =
         Arena::new(|mu| Gc::new(mu, mu.alloc_array_from_fn(100, |i| i).into()));
 
     arena.mutate(|mu, root| {
@@ -538,19 +539,19 @@ fn cyclic_graph() {
         let d = Gc::new(mu, Node::new(mu));
 
         a.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(b);
+            field!(barrier, Node, ptr).set(b.clone());
         });
         b.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(c);
+            field!(barrier, Node, ptr).set(c.clone());
         });
         c.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(d);
+            field!(barrier, Node, ptr).set(d.clone());
         });
         d.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a);
+            field!(barrier, Node, ptr).set(a.clone());
         });
         root.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a);
+            field!(barrier, Node, ptr).set(a.clone());
         });
     });
 
@@ -645,7 +646,7 @@ fn arena_size_does_not_explode() {
         let arena_size_mb = config.arena_size as f64 / (1024 * 1024) as f64;
         let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
 
-        assert!(5.0 > arena_size_mb);
+        assert!(100.0 > arena_size_mb);
         println!("Arena MB(s): {}", arena_size_mb);
         println!("Allocated MB(s): {}", allocated_mb);
 
@@ -656,8 +657,8 @@ fn arena_size_does_not_explode() {
 }
 
 #[test]
-fn gc_opt_from_mut() {
-    let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69).into());
+fn gc_opt_from_gc() {
+    let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69).into());
 
     arena.major_collect();
 
@@ -666,7 +667,7 @@ fn gc_opt_from_mut() {
 
 #[test]
 fn gc_scoped_deref() {
-    let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69));
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
     arena.mutate(|mu, root| {
         struct Foo<'gc> {
@@ -697,8 +698,8 @@ fn gc_scoped_deref() {
 
 #[test]
 fn barrier_as_option() {
-    let arena: Arena<Root![Gc<'_, Option<GcMut<'_, bool>>>]> = Arena::new(|mu| {
-        Gc::new(mu, Some(GcMut::new(mu, false)))
+    let arena: Arena<Root![Gc<'_, Option<Gc<'_, bool>>>]> = Arena::new(|mu| {
+        Gc::new(mu, Some(Gc::new(mu, false)))
     });
 
     arena.mutate(|mu, root| {

@@ -1,9 +1,12 @@
-use super::gc::{GcMut, GcOpt};
-use super::trace::Trace;
+use super::gc::{Gc, GcOpt};
+use super::trace::{Trace, Tracer};
+use super::mutator::Mutator;
+use super::tagged::Tagged;
+use std::sync::atomic::{AtomicU8, Ordering};
 
-/// Allows for the mutation of [`GcMut`] and [`GcOpt`] pointers.
+/// Allows for the mutation of [`Gc`] and [`GcOpt`] pointers.
 ///
-/// A write barrier can only be obtained initially by calling [`GcMut::write_barrier`]
+/// A write barrier can only be obtained initially by calling [`Gc::write_barrier`]
 /// or [`crate::gc::Gc::write_barrier`]. The barrier is given out in a callback, in which afterwards,
 /// the initial GC pointer will be retraced. This ensure any updates made by the
 /// barrier will be caught by the tracers.
@@ -27,10 +30,10 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// use sandpit::{Arena, gc::{Gc}, Root};
     ///
-    /// let arena: Arena<Root![Gc<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
-    ///    Gc::new(mu, GcMut::new(mu, 69))
+    /// let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, Gc::new(mu, 69))
     /// });
     ///
     /// arena.mutate(|mu, root| {
@@ -52,20 +55,20 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcMut<'gc, T>> {
-    /// Update a [`GcMut`] that is within a write barrier to point at a new value.
+impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, Gc<'gc, T>> {
+    /// Update a [`Gc`] that is within a write barrier to point at a new value.
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// use sandpit::{Arena, gc::Gc, Root};
     ///
-    /// let arena: Arena<Root![Gc<'_, GcMut<'_, usize>>]> = Arena::new(|mu| {
-    ///    Gc::new(mu, GcMut::new(mu, 69))
+    /// let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
+    ///    Gc::new(mu, Gc::new(mu, 69))
     /// });
     ///
     /// arena.mutate(|mu, root| {
     ///     root.write_barrier(mu, |barrier| {
-    ///         let new_value = GcMut::new(mu, 420);
+    ///         let new_value = Gc::new(mu, 420);
     ///         barrier.set(new_value);
     ///
     ///         assert!(**barrier.inner() == 420);
@@ -75,7 +78,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcMut<'gc, T>> {
     // SAFETY: A write barrier can only be safely obtained through
     // the callback passed to `fn write_barrier` in which the object
     // containing this pointer will be retraced
-    pub fn set(&self, gc: impl Into<GcMut<'gc, T>>) {
+    pub fn set(&self, gc: impl Into<Gc<'gc, T>>) {
         unsafe {
             self.inner.set(gc.into());
         }
@@ -148,6 +151,65 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
     }
 }
 
+pub struct InnerBarrier<T: Trace> {
+    mark: AtomicU8,
+    inner: T,
+}
+
+impl<T: Trace> InnerBarrier<T> {
+    pub fn new(mu: &Mutator, inner: T) -> Self {
+        Self {
+            mark: AtomicU8::new(mu.get_mark().into()),
+            inner
+        }
+    }
+
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+
+    pub fn write_barrier<'gc, F>(&self, mu: &'gc Mutator, f: F)
+    where
+        F: FnOnce(&WriteBarrier<T>),
+    {
+        // SAFETY: Its safe to create a writebarrier over this pointer b/c it is guaranteed
+        // to be retraced after the closure ends.
+        let barrier = unsafe { WriteBarrier::new(&self.inner) };
+
+        f(&barrier);
+
+        if self.mark.load(Ordering::Acquire) == mu.get_mark().into() {
+            mu.retrace(&self.inner);
+        }
+    }
+}
+
+unsafe impl<T: Trace> Trace for InnerBarrier<T> {
+    const IS_LEAF: bool = T::IS_LEAF;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        if self.mark.load(Ordering::Acquire) == tracer.get_mark().into() {
+            self.inner.trace(tracer);
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, Tagged<Gc<'gc, T>>> {
+    pub fn set(&self, gc: impl Into<Gc<'gc, T>>) {
+        unsafe {
+            self.inner.set_ptr(gc.into());
+        }
+    }
+}
+
+impl<'gc, T: Trace> WriteBarrier<'gc, Tagged<GcOpt<'gc, T>>> {
+    pub fn set(&self, gc: impl Into<GcOpt<'gc, T>>) {
+        unsafe {
+            self.inner.set_ptr(gc.into());
+        }
+    }
+}
+
 /// Exists to allow getting a write barrier to an inner field.
 ///
 /// The field macro is needed to control how a [`WriteBarrier`] can be created,
@@ -156,15 +218,15 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
 ///
 /// # Example 
 /// ```rust
-/// use sandpit::{Arena, Trace, Root, gc::{GcMut, Gc}, field};
+/// use sandpit::{Arena, Trace, Root, gc::Gc, field};
 ///
 /// #[derive(Trace)]
 /// struct Foo<'gc> {
-///     inner: GcMut<'gc, bool>,
+///     inner: Gc<'gc, bool>,
 /// }
 /// let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
 ///     let foo = Foo {
-///         inner: GcMut::new(mu, false),
+///         inner: Gc::new(mu, false),
 ///     };
 ///
 ///     Gc::new(mu, foo)
@@ -176,7 +238,7 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
 ///         // use `field!` to get a write barrier around Foo's inner field.
 ///         let inner_barrier = field!(write_barrier, Foo, inner);
 ///
-///         // Now that the write barrier is around `inner` we can update the GcMut.
+///         // Now that the write barrier is around `inner` we can update the Gc.
 ///         inner_barrier.set(new);
 ///     });
 /// });

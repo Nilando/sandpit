@@ -1,5 +1,6 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcOpt};
+use crate::tagged::Tagged;
+use crate::gc::{Gc, GcOpt, GcPointer};
 use crate::pointee::{GcPointee, Thin};
 use std::cell::*;
 use std::ptr::NonNull;
@@ -99,15 +100,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(*self);
-    }
-}
-
-unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace(&self, tracer: &mut Tracer) {
-        Gc::from(self.clone()).trace(tracer)
+        tracer.mark_and_trace(self.clone());
     }
 }
 
@@ -116,6 +109,16 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
 
     fn trace(&self, tracer: &mut Tracer) {
         if let Some(gc_mut) = self.as_option() { gc_mut.trace(tracer) }
+    }
+}
+
+unsafe impl<T: GcPointer> Trace for Tagged<T> {
+    const IS_LEAF: bool = false;
+
+    fn trace(&self, tracer: &mut Tracer) {
+        if let Some(ptr) = self.get_ptr() {
+            ptr.trace(tracer);
+        }
     }
 }
 
