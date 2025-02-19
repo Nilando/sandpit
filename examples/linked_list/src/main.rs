@@ -2,7 +2,7 @@ use sandpit::{
     Arena,
     Root,
     field,
-    gc::{Gc, GcMut, GcOpt}, Mutator, Trace,
+    gc::{Gc, GcOpt}, Mutator, Trace,
 };
 
 use std::cell::Cell;
@@ -236,11 +236,11 @@ impl<'gc, T: Trace> Node<'gc, T> {
         &self.val
     }
 
-    fn get_next(&'gc self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+    fn get_next(&'gc self) -> Option<Gc<'gc, Node<'gc, T>>> {
         self.next.as_option()
     }
 
-    fn get_prev(&'gc self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+    fn get_prev(&'gc self) -> Option<Gc<'gc, Node<'gc, T>>> {
         self.prev.as_option()
     }
 }

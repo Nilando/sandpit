@@ -1,0 +1,12 @@
+[package]
+name = "linked_list"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+sandpit = { path = "../../" }
