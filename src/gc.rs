@@ -6,7 +6,7 @@
 //!
 //! [`Gc`] and [`GcOpt`] may be updated via a [`crate::WriteBarrier`] to point
 //! at different values.
-use super::trace::Trace;
+use super::trace::{Trace, TraceLeaf};
 use super::tagged::Tagged;
 use crate::barrier::WriteBarrier;
 use crate::header::GcHeader;
@@ -67,7 +67,7 @@ impl<'gc, T: Trace> Gc<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc}, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| ());
     /// arena.mutate(|mu, root| {
     ///    let new = Gc::new(mu, 69);
@@ -148,7 +148,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     /// In this example scoded deref is needed to implement Foo's set_inner method.
     ///
     ///```rust
-    /// # use sandpit::{Arena, Root, gc::Gc};
+    /// # use sandpit::{Arena, Root, Gc};
     /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
     ///
     /// arena.mutate(|mu, root| {
@@ -194,7 +194,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     /// See [`crate::barrier::WriteBarrier`] for more examples.
     ///
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc}, Root};
+    /// use sandpit::{Arena, Gc, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
     ///    Gc::new(mu, Gc::new(mu, 69))
@@ -260,7 +260,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{GcOpt}, Root};
+    /// use sandpit::{Arena, GcOpt, Root};
     ///
     /// let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| {
     ///    GcOpt::new_none(mu)
@@ -277,7 +277,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{GcOpt}, Root};
+    /// # use sandpit::{Arena, GcOpt, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
     ///    let gc_opt: GcOpt<()> = GcOpt::new_none(mu);
     ///
@@ -292,7 +292,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # use sandpit::{Arena, Gc, GcOpt, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
     ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
     ///
@@ -310,7 +310,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # use sandpit::{Arena, Gc, GcOpt, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
     ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
     ///
@@ -329,7 +329,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// # use sandpit::{Arena, Gc, GcOpt, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
     ///    let gc_opt = GcOpt::from(Gc::new(mu, 123));
     ///

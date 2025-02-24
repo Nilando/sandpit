@@ -1,8 +1,9 @@
 use rand::prelude::*;
 use sandpit::{
     field,
-    gc::{Gc, GcOpt},
+    Gc, GcOpt,
     Arena, Mutator, Root, Trace, TraceLeaf,
+    InnerBarrier,
 };
 
 fn alloc_rand_garbage(mu: &Mutator) {
@@ -14,7 +15,7 @@ fn alloc_rand_garbage(mu: &Mutator) {
 
         for _ in 0..rng.gen_range(1..10) {
             let array_size = rng.gen_range(0..u16::MAX);
-            mu.alloc_array(0u8, array_size as usize);
+            mu.alloc_array_from_fn(array_size.into(), |i| i);
         }
     }
 }
@@ -717,5 +718,19 @@ fn gc_clone() {
 
     arena.mutate(|_mu, root| {
         assert!(!**root);
+    });
+}
+
+#[test]
+fn change_array_size_with_inner_barrier() {
+    let arena: Arena<Root![InnerBarrier<Gc<'_, [usize]>>]> =
+        Arena::new(|mu| InnerBarrier::new(mu, mu.alloc_array_from_fn(100, |i| i).into()));
+
+    arena.mutate(|mu, root| {
+        let new = mu.alloc_array_from_fn(10, |_| 69);
+
+        root.write_barrier(mu, |barrier| barrier.set(new));
+
+        assert!(root.inner().len() == 10);
     });
 }

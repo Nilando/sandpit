@@ -2,7 +2,7 @@ use sandpit::{
     Arena,
     Root,
     field,
-    gc::{Gc, GcOpt}, Mutator, Trace,
+    Gc, GcOpt, Mutator, Trace,
 };
 
 use std::cell::Cell;

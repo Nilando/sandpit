@@ -5,7 +5,7 @@ use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::trace::{Trace, TraceJob, TracerController};
 use std::cell::RefCell;
-use std::ptr::{write, NonNull};
+use std::ptr::{write, copy, NonNull};
 use std::sync::RwLockReadGuard;
 
 /// Allows for allocation and mutation within the GC arena.
@@ -14,7 +14,7 @@ use std::sync::RwLockReadGuard;
 ///
 /// # Example
 /// ```rust
-/// use sandpit::{Arena, gc::Gc, Root};
+/// use sandpit::{Arena, Gc, Root};
 ///
 /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
 ///    Gc::new(mu, 123)
@@ -94,7 +94,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::Gc, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -126,7 +126,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::Gc, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -140,15 +140,29 @@ impl<'gc> Mutator<'gc> {
     ///     }
     /// });
     /// ```
-    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
-        // TODO: I think this could be done much faster
-        self.alloc_array_from_fn(len, |_| value.clone())
+    pub fn alloc_array<T: Trace + Copy>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
+
+        unsafe {
+            let ptr = self.heap.alloc(alloc_layout);
+            let header_ptr = ptr.cast();
+            let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+            for i in 0..len {
+                write(slice_ptr.add(i), value);
+            }
+
+            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
+            write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
+
+            Gc::from_ptr(slice)
+        }
     }
 
     /// Alloc a `Gc<[T]>` by copying an existing slice.
     ///
     /// ```rust
-    /// # use sandpit::{Arena, gc::Gc, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -161,16 +175,28 @@ impl<'gc> Mutator<'gc> {
     ///     }
     /// });
     /// ```
-    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
-        // TODO: this could be one single write call
-        self.alloc_array_from_fn(slice.len(), |idx| slice[idx].clone())
+    pub fn alloc_array_from_slice<T: Trace + Copy>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(slice.len());
+
+        unsafe {
+            let ptr = self.heap.alloc(alloc_layout);
+            let header_ptr = ptr.cast();
+            let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+            copy(slice.as_ptr(), slice_ptr, slice.len());
+
+            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, slice.len());
+            write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
+
+            Gc::from_ptr(slice)
+        }
     }
 
     /// Alloc a `Gc<[T]>` by using a closure that sets the value for each index.
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::Gc, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -211,7 +237,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::Gc, Root, Mutator};
+    /// # use sandpit::{Arena, Gc, Root, Mutator};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });

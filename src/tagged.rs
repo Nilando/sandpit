@@ -147,7 +147,7 @@ mod tests {
     fn test_slice_of_tagged_pointers() {
         let _: Arena<Root![_]> = Arena::new(|_| {
             assert!(std::mem::size_of::<Gc<()>>() == std::mem::size_of::<Tagged<Gc<()>>>());
-            assert!(std::mem::size_of::<Gc<()>>() == std::mem::size_of::<Tagged<GcOpt<()>>>());
+            assert!(std::mem::size_of::<GcOpt<()>>() == std::mem::size_of::<Tagged<GcOpt<()>>>());
         });
     }
 }

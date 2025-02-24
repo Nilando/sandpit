@@ -31,7 +31,7 @@
 //! which can be safely derived as long as all inner types also impl [`Trace`].
 //!
 //! ```rust
-//! use sandpit::{Trace, gc::{Gc, GcOpt}};
+//! use sandpit::{Trace, Gc, GcOpt};
 //! # #[derive(Trace)]
 //! # struct A;
 //! # #[derive(Trace)]
@@ -64,7 +64,7 @@
 //! * Create new garbage collected values.
 //! * Update Gc pointers to point to new values via a [`WriteBarrier`].
 //! ```rust
-//! use sandpit::{Trace, gc::Gc};
+//! use sandpit::{Trace, Gc};
 //!
 //! # use sandpit::{Arena, Root, Mutator, WriteBarrier};
 //! # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mutator| {
@@ -98,7 +98,7 @@
 //! and that the mutation should end.
 //!
 //! ```rust
-//! # use sandpit::{Arena, Root, Mutator, WriteBarrier, gc::Gc};
+//! # use sandpit::{Arena, Root, Mutator, WriteBarrier, Gc};
 //! # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mutator| {
 //! #     Gc::new(mutator, 0usize)
 //! # });
@@ -126,8 +126,7 @@
 //!
 extern crate self as sandpit;
 
-pub mod gc;
-
+mod gc;
 mod heap;
 mod arena;
 mod barrier;
@@ -142,17 +141,18 @@ mod time_slicer;
 mod trace;
 mod tagged;
 
-pub use arena::Arena;
-pub use barrier::{WriteBarrier, InnerBarrier};
-pub use config::Config;
-
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
 
+pub use arena::Arena;
+pub use barrier::{WriteBarrier, InnerBarrier};
+pub use config::Config;
 pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{Trace, TraceLeaf};
+pub use tagged::Tagged;
+pub use gc::{Gc, GcOpt};
 
 #[doc(hidden)]
 pub use trace::{Tracer, __MustNotDrop};

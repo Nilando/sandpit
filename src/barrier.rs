@@ -30,7 +30,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, T> {
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc}, Root};
+    /// use sandpit::{Arena, Gc, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
     ///    Gc::new(mu, Gc::new(mu, 69))
@@ -60,7 +60,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, Gc<'gc, T>> {
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::Gc, Root};
+    /// use sandpit::{Arena, Gc, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, Gc<'_, usize>>]> = Arena::new(|mu| {
     ///    Gc::new(mu, Gc::new(mu, 69))
@@ -90,7 +90,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcOpt<'gc, T>> {
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// use sandpit::{Arena, Gc, GcOpt, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, GcOpt<'_, usize>>]> = Arena::new(|mu| {
     ///    Gc::new(mu, GcOpt::new_none(mu))
@@ -121,7 +121,7 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
     ///
     /// ## Example
     /// ```rust
-    /// use sandpit::{Arena, gc::{Gc, GcOpt}, Root};
+    /// use sandpit::{Arena, Gc, GcOpt, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, [usize]>]> = Arena::new(|mu| {
     ///    mu.alloc_array_from_fn(10, |i| i)
@@ -218,12 +218,13 @@ impl<'gc, T: Trace> WriteBarrier<'gc, Tagged<GcOpt<'gc, T>>> {
 ///
 /// # Example 
 /// ```rust
-/// use sandpit::{Arena, Trace, Root, gc::Gc, field};
+/// use sandpit::{Arena, Trace, Root, Gc, field};
 ///
 /// #[derive(Trace)]
 /// struct Foo<'gc> {
 ///     inner: Gc<'gc, bool>,
 /// }
+///
 /// let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
 ///     let foo = Foo {
 ///         inner: Gc::new(mu, false),

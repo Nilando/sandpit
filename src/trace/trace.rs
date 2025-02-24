@@ -74,7 +74,7 @@ impl<T: Drop> __MustNotDrop for T {}
 ///
 /// ## Example
 /// ```rust
-/// # use sandpit::{Trace, gc::Gc};
+/// # use sandpit::{Trace, Gc};
 /// #[derive(Trace)]
 /// struct Foo<'gc, T: Trace> {
 ///     ptr: Gc<'gc, T>

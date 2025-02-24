@@ -4,7 +4,7 @@ use criterion::{
     Criterion, 
 };
 
-use sandpit::{Arena, gc::Gc, Root};
+use sandpit::{Arena, Gc, Root};
 
 fn mutate_and_alloc(c: &mut Criterion) {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
