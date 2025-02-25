@@ -373,23 +373,35 @@ impl<'gc, T: Trace> GcOpt<'gc, T> {
     }
 }
 
+impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
+    pub unsafe fn from_ptr(ptr: *mut T) -> Self {
+        Self {
+            ptr: AtomicPtr::new(ptr as *mut Thin<T>),
+            scope: PhantomData::<&'gc *mut T>,
+        }
+    }
+}
+
 pub trait GcPointer: Trace + Clone {
     const POINTEE_ALIGNMENT: usize;
 
-    fn as_bytes(&self) -> usize;
-    unsafe fn from_usize(&self) -> Self { todo!() }
+    unsafe fn set(&self, value: Self);
 }
 
 impl<'gc, T: Trace> GcPointer for Gc<'gc, T> {
     const POINTEE_ALIGNMENT: usize = std::mem::align_of::<T>();
 
-    fn as_bytes(&self) -> usize { todo!() }
+    unsafe fn set(&self, value: Self) {
+        self.set(value)
+    }
 }
 
 impl<'gc, T: Trace> GcPointer for GcOpt<'gc, T> {
     const POINTEE_ALIGNMENT: usize = std::mem::align_of::<T>();
 
-    fn as_bytes(&self) -> usize { todo!() }
+    unsafe fn set(&self, value: Self) {
+        self.set(value)
+    }
 }
 
 impl<'gc, T: Trace> TryFrom<Tagged<Gc<'gc, T>>> for Gc<'gc, T> {

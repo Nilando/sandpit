@@ -140,6 +140,8 @@ mod pointee;
 mod time_slicer;
 mod trace;
 mod tagged;
+mod vec;
+mod gc_sync;
 
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
@@ -153,6 +155,7 @@ pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{Trace, TraceLeaf};
 pub use tagged::Tagged;
 pub use gc::{Gc, GcOpt};
+pub use vec::GcVec;
 
 #[doc(hidden)]
 pub use trace::{Tracer, __MustNotDrop};

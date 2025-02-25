@@ -1,17 +1,27 @@
 use std::mem::ManuallyDrop;
-use crate::Trace;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use super::gc::{Gc, GcOpt, GcPointer};
 
-pub union Tagged<A: GcPointer> {
-    ptr: ManuallyDrop<A>,
+pub union Tagged<T: GcPointer> {
+    ptr: ManuallyDrop<T>,
     raw: ManuallyDrop<AtomicUsize>,
 } 
 
-impl<A: GcPointer> From<A> for Tagged<A> {
-    fn from(value: A) -> Self {
+impl<T: GcPointer> From<T> for Tagged<T> {
+    fn from(value: T) -> Self {
         Self {
             ptr: ManuallyDrop::new(value)
+        }
+    }
+}
+
+impl<T: GcPointer> Clone for Tagged<T> {
+    fn clone(&self) -> Self {
+        let raw =
+            unsafe { AtomicUsize::new(self.raw.load(Ordering::Relaxed)) };
+
+        Self {
+            raw: ManuallyDrop::new(raw)
         }
     }
 }
@@ -58,9 +68,6 @@ impl<A: GcPointer> Tagged<A> {
             self.raw.load(Ordering::Relaxed)
         }
     }
-}
-
-impl<'gc, T: Trace> Tagged<GcOpt<'gc, T>> {
     pub fn set_raw(&self, value: usize) {
         assert!(Self::TAG_MASK & value != 0, "Invalid pointer tag");
 
@@ -73,25 +80,7 @@ impl<'gc, T: Trace> Tagged<GcOpt<'gc, T>> {
         self.raw.store(value, Ordering::Relaxed);
     }
 
-    pub unsafe fn set_ptr(&self, ptr: GcOpt<'gc, T>) {
-        self.ptr.set(ptr);
-    }
-}
-
-impl<'gc, T: Trace> Tagged<Gc<'gc, T>> {
-    pub fn set_raw(&self, value: usize) {
-        assert!(Self::TAG_MASK & value != 0, "Invalid pointer tag");
-
-        unsafe {
-            self.set_raw_unchecked(value);
-        }
-    }
-
-    pub unsafe fn set_raw_unchecked(&self, value: usize) {
-        self.raw.store(value, Ordering::Relaxed);
-    }
-
-    pub unsafe fn set_ptr(&self, ptr: Gc<'gc, T>) {
+    pub unsafe fn set_ptr(&self, ptr: A) {
         self.ptr.set(ptr);
     }
 }

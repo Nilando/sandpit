@@ -2,6 +2,8 @@ use super::gc::{Gc, GcOpt};
 use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
 use super::tagged::Tagged;
+use super::gc_sync::GcSync;
+use super::gc::GcPointer;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Allows for the mutation of [`Gc`] and [`GcOpt`] pointers.
@@ -168,6 +170,10 @@ impl<T: Trace> InnerBarrier<T> {
         &self.inner
     }
 
+    pub fn mark(&self, tracer: &mut Tracer) {
+        self.mark.store(tracer.get_mark().into(), Ordering::SeqCst);
+    }
+
     pub fn write_barrier<'gc, F>(&self, mu: &'gc Mutator, f: F)
     where
         F: FnOnce(&WriteBarrier<T>),
@@ -189,23 +195,16 @@ unsafe impl<T: Trace> Trace for InnerBarrier<T> {
 
     fn trace(&self, tracer: &mut Tracer) {
         if self.mark.load(Ordering::Acquire) == tracer.get_mark().into() {
+            self.mark(tracer);
             self.inner.trace(tracer);
         }
     }
 }
 
-impl<'gc, T: Trace> WriteBarrier<'gc, Tagged<Gc<'gc, T>>> {
-    pub fn set(&self, gc: impl Into<Gc<'gc, T>>) {
+impl<'gc, T: GcPointer> WriteBarrier<'gc, Tagged<T>> {
+    pub fn set(&self, gc_ptr: T) {
         unsafe {
-            self.inner.set_ptr(gc.into());
-        }
-    }
-}
-
-impl<'gc, T: Trace> WriteBarrier<'gc, Tagged<GcOpt<'gc, T>>> {
-    pub fn set(&self, gc: impl Into<GcOpt<'gc, T>>) {
-        unsafe {
-            self.inner.set_ptr(gc.into());
+            self.inner.set_ptr(gc_ptr);
         }
     }
 }

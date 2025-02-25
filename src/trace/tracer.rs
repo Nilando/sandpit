@@ -36,8 +36,7 @@ impl Tracer {
         self.mark
     }
 
-    pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
-
+    pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
         let header = gc.get_header();
         let alloc_ptr = gc.get_header_ptr();
         let alloc_layout = gc.get_layout();
@@ -51,6 +50,10 @@ impl Tracer {
         self.increment_mark_count();
 
         unsafe { Heap::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
+    }
+
+    pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
+        self.mark(gc.clone());
 
         if T::IS_LEAF {
             return;
