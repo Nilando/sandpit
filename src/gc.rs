@@ -106,7 +106,7 @@ impl<'gc, T: Trace + ?Sized> Clone for Gc<'gc, T> {
 
 impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     pub(crate) unsafe fn set(&self, value: Gc<'gc, T>) {
-        let thin_ptr = value.as_thin().as_ptr();
+        let thin_ptr = value.ptr.load(Ordering::Relaxed);
 
         self.ptr.store(thin_ptr, Ordering::Relaxed);
     }
@@ -363,7 +363,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     pub(crate) unsafe fn set(&self, new: GcOpt<'gc, T>) {
         let thin_ptr = new.ptr.load(Ordering::Relaxed);
 
-        self.ptr.store(thin_ptr, Ordering::Relaxed);
+        self.ptr.store(thin_ptr, Ordering::SeqCst);
     }
 }
 

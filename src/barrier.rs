@@ -2,7 +2,6 @@ use super::gc::{Gc, GcOpt};
 use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
 use super::tagged::Tagged;
-use super::gc_sync::GcSync;
 use super::gc::GcPointer;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -170,8 +169,16 @@ impl<T: Trace> InnerBarrier<T> {
         &self.inner
     }
 
-    pub fn mark(&self, tracer: &mut Tracer) {
+    pub fn mark(&self, tracer: &mut Tracer) -> bool {
+        let mark = self.mark.load(Ordering::Acquire);
+
+        if mark == tracer.get_mark().into() {
+            return false;
+        }
+
         self.mark.store(tracer.get_mark().into(), Ordering::SeqCst);
+
+        return true;
     }
 
     pub fn write_barrier<'gc, F>(&self, mu: &'gc Mutator, f: F)
@@ -194,7 +201,7 @@ unsafe impl<T: Trace> Trace for InnerBarrier<T> {
     const IS_LEAF: bool = T::IS_LEAF;
 
     fn trace(&self, tracer: &mut Tracer) {
-        if self.mark.load(Ordering::Acquire) == tracer.get_mark().into() {
+        if self.mark.load(Ordering::Acquire) != tracer.get_mark().into() {
             self.mark(tracer);
             self.inner.trace(tracer);
         }

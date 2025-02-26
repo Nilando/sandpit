@@ -10,7 +10,10 @@ unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
 
     fn trace(&self, tracer: &mut Tracer) {
         // mark the inner barrier
-        self.items.mark(tracer);
+        if !self.items.mark(tracer) {
+            // if its already marked dont trace it
+            return;
+        }
 
         // mark the array holding all the items
         if let Some(ptr) = self.items.inner().as_option() {
