@@ -151,7 +151,7 @@ pub use barrier::{WriteBarrier, InnerBarrier};
 pub use config::Config;
 pub use metrics::Metrics;
 pub use mutator::Mutator;
-pub use sandpit_derive::{Trace, TraceLeaf};
+pub use sandpit_derive::{Tag, Trace, TraceLeaf};
 pub use trace::{Trace, TraceLeaf};
 pub use tagged::{Tagged, Tag};
 pub use gc::{Gc, GcOpt};
