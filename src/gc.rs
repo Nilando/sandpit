@@ -7,7 +7,7 @@
 //! [`Gc`] and [`GcOpt`] may be updated via a [`crate::WriteBarrier`] to point
 //! at different values.
 use super::trace::{Trace, TraceLeaf};
-use super::tagged::Tagged;
+use super::tagged::{Tagged, Tag};
 use crate::barrier::WriteBarrier;
 use crate::header::GcHeader;
 use crate::mutator::Mutator;
@@ -404,10 +404,10 @@ impl<'gc, T: Trace> GcPointer for GcOpt<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> TryFrom<Tagged<Gc<'gc, T>>> for Gc<'gc, T> {
+impl<'gc, T: Trace, B: Tag> TryFrom<Tagged<Gc<'gc, T>, B>> for Gc<'gc, T> {
     type Error = ();
 
-    fn try_from(value: Tagged<Gc<'gc, T>>) -> Result<Self, Self::Error> {
+    fn try_from(value: Tagged<Gc<'gc, T>, B>) -> Result<Self, Self::Error> {
         match value.get_ptr() {
             Some(ptr) => Ok(ptr),
             None => Err(())
@@ -415,10 +415,10 @@ impl<'gc, T: Trace> TryFrom<Tagged<Gc<'gc, T>>> for Gc<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> TryFrom<Tagged<GcOpt<'gc, T>>> for GcOpt<'gc, T> {
+impl<'gc, T: Trace, B: Tag> TryFrom<Tagged<GcOpt<'gc, T>, B>> for GcOpt<'gc, T> {
     type Error = ();
 
-    fn try_from(value: Tagged<GcOpt<'gc, T>>) -> Result<Self, Self::Error> {
+    fn try_from(value: Tagged<GcOpt<'gc, T>, B>) -> Result<Self, Self::Error> {
         match value.get_ptr() {
             Some(ptr) => Ok(ptr),
             None => Err(())

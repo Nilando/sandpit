@@ -153,7 +153,7 @@ pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Trace, TraceLeaf};
 pub use trace::{Trace, TraceLeaf};
-pub use tagged::Tagged;
+pub use tagged::{Tagged, Tag};
 pub use gc::{Gc, GcOpt};
 pub use vec::GcVec;
 

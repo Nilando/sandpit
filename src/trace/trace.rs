@@ -1,5 +1,5 @@
 use super::tracer::Tracer;
-use crate::tagged::Tagged;
+use crate::tagged::{Tagged, Tag};
 use crate::gc::{Gc, GcOpt, GcPointer};
 use crate::pointee::{GcPointee, Thin};
 use std::cell::*;
@@ -112,7 +112,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     }
 }
 
-unsafe impl<T: GcPointer> Trace for Tagged<T> {
+unsafe impl<T: GcPointer, B: Tag> Trace for Tagged<T, B> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {

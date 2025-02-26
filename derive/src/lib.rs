@@ -242,3 +242,56 @@ fn add_leaf(mut generics: Generics) -> Generics {
     }
     generics
 }
+
+#[proc_macro_derive(Tag)]
+pub fn tag(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let mut from_usize_arms = vec![];
+    let mut into_usize_arms = vec![];
+    let num_variants;
+
+    match input.data {
+        Data::Enum(DataEnum { variants, .. }) => {
+            num_variants = variants.len();
+            for (idx, variant) in variants.iter().enumerate() {
+                let name = variant.ident.clone();
+                let idx = idx + 1;
+
+                match &variant.fields {
+                    Fields::Unit => {
+                        from_usize_arms.push(quote! { #idx => Some(Self::#name), });
+                        into_usize_arms.push(quote! { Self::#name => #idx, });
+                    }
+                    _ => panic!("Tag can only be derived for fieldless enums"),
+                }
+            }
+        }
+        _ => panic!("Tag can only be derived for fieldless enums"),
+    }
+
+
+    let expanded = quote! {
+        #[automatically_derived]
+        unsafe impl #impl_generics sandpit::Tag for #name #ty_generics #where_clause {
+            const VARIANTS: usize = #num_variants;
+
+            fn into_usize(&self) -> usize {
+                match self {
+                    #(#into_usize_arms)*
+                }
+            }
+
+            fn from_usize(value: usize) -> Option<Self> {
+                match value {
+                    #(#from_usize_arms)*
+                    _ => None,
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}

@@ -1,7 +1,7 @@
 use super::gc::{Gc, GcOpt};
 use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
-use super::tagged::Tagged;
+use super::tagged::{Tagged, Tag};
 use super::gc::GcPointer;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -208,7 +208,7 @@ unsafe impl<T: Trace> Trace for InnerBarrier<T> {
     }
 }
 
-impl<'gc, T: GcPointer> WriteBarrier<'gc, Tagged<T>> {
+impl<'gc, T: GcPointer, B: Tag> WriteBarrier<'gc, Tagged<T, B>> {
     pub fn set(&self, gc_ptr: T) {
         unsafe {
             self.inner.set_ptr(gc_ptr);
