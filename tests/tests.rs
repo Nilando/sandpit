@@ -149,9 +149,9 @@ fn write_barrier() {
 
     let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
         let foo = Foo {
-            a: GcOpt::new_none(mu),
-            b: GcOpt::new_none(mu),
-            c: GcOpt::new_none(mu),
+            a: GcOpt::new_none(),
+            b: GcOpt::new_none(),
+            c: GcOpt::new_none(),
         };
 
         Gc::new(mu, foo)
@@ -526,7 +526,7 @@ fn cyclic_graph() {
     impl<'gc> Node<'gc> {
         fn new(mu: &'gc Mutator) -> Self {
             Self {
-                ptr: GcOpt::new_none(mu),
+                ptr: GcOpt::new_none(),
             }
         }
     }
@@ -583,7 +583,7 @@ fn alloc_after_collect_test() {
         Gc::new(
             mu,
             Node {
-                ptr: GcOpt::new_none(mu),
+                ptr: GcOpt::new_none(),
                 idx: 0,
             },
         )

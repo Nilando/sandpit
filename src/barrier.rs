@@ -94,7 +94,7 @@ impl<'gc, T: Trace + ?Sized> WriteBarrier<'gc, GcOpt<'gc, T>> {
     /// use sandpit::{Arena, Gc, GcOpt, Root};
     ///
     /// let arena: Arena<Root![Gc<'_, GcOpt<'_, usize>>]> = Arena::new(|mu| {
-    ///    Gc::new(mu, GcOpt::new_none(mu))
+    ///    Gc::new(mu, GcOpt::new_none())
     /// });
     ///
     /// arena.mutate(|mu, root| {
@@ -259,6 +259,7 @@ macro_rules! field {
             $type { ref $field, .. } => unsafe {
                 $crate::WriteBarrier::__from_field($field, $field as *const _)
             },
+            _ => panic!("WriteBarrier field! macro failed to match on inner field"),
         }
     }};
 }

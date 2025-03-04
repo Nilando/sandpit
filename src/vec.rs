@@ -50,7 +50,7 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
     pub fn new(mu: &'gc Mutator) -> Self {
         Self {
             len: AtomicUsize::new(0),
-            items: InnerBarrier::new(mu, GcOpt::new_none(mu)),
+            items: InnerBarrier::new(mu, GcOpt::new_none()),
         }
     }
 

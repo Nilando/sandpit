@@ -263,10 +263,10 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     /// use sandpit::{Arena, GcOpt, Root};
     ///
     /// let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| {
-    ///    GcOpt::new_none(mu)
+    ///    GcOpt::new_none()
     /// });
     ///```
-    pub fn new_none(_m: &'gc Mutator<'gc>) -> Self {
+    pub fn new_none() -> Self {
         Self {
             ptr: AtomicPtr::new(null_mut()),
             scope: PhantomData::<&'gc *mut T>,
@@ -279,7 +279,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     /// ```rust
     /// # use sandpit::{Arena, GcOpt, Root};
     /// # let arena: Arena<Root![()]> = Arena::new(|mu| {
-    ///    let gc_opt: GcOpt<()> = GcOpt::new_none(mu);
+    ///    let gc_opt: GcOpt<()> = GcOpt::new_none();
     ///
     ///    assert!(gc_opt.is_none());
     /// # });
