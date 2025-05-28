@@ -135,6 +135,8 @@ mod tests {
         Usize,
         #[ptr(isize)]
         Isize,
+        #[ptr(Gc<'gc, usize>)]
+        Gc,
         RawData,
     }
 
@@ -152,6 +154,15 @@ mod tests {
         });
     }
 
+    #[test]
+    fn test_gc_data_variant() {
+        let _: Arena<Root![_]> = Arena::new(|mu| {
+            let tagged = MyTag::from_gc(Gc::new(mu, Gc::new(mu, 100usize)));
+            
+            let extracted: Gc<Gc<usize>> = MyTag::get_gc(tagged).unwrap();
+            assert_eq!(**extracted, 100);
+        });
+    }
 
     #[test]
     fn test_raw_data_variant() {

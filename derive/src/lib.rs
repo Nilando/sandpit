@@ -248,7 +248,6 @@ pub fn tag(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
     let mut from_usize_arms = vec![];
     let mut into_usize_arms = vec![];
     let mut is_ptr_arms = vec![];
@@ -298,14 +297,16 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             let method_name = Ident::new(&format!("from_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             creation_methods.push(quote! {
                                 pub fn #method_name<'gc>(ptr: sandpit::Gc<'gc, #ptr_type>) -> sandpit::Tagged<'gc, #name> {
-                                    unsafe { sandpit::Tagged::from_ptr(ptr, #name::#variant_name) }
+                                    unsafe { 
+                                        sandpit::Tagged::from_ptr(ptr, #name::#variant_name)
+                                    }
                                 }
                             });
 
                             // Generate extraction method for this pointer type  
                             let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             extraction_methods.push(quote! {
-                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<'a, Self>) -> Option<sandpit::Gc<'a, #ptr_type>> {
+                                pub fn #extract_method_name<'gc>(tagged_ptr: sandpit::Tagged<'gc, Self>) -> Option<sandpit::Gc<'gc, #ptr_type>> {
                                     if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
                                         unsafe {
                                             Some(tagged_ptr.cast_to_gc())
@@ -333,6 +334,15 @@ pub fn tag(input: TokenStream) -> TokenStream {
         }
         _ => panic!("Tag can only be derived for fieldless enums"),
     }
+
+    let pointer_types: Vec<Type> = pointer_types
+        .into_iter()
+        .map(|mut ty| {
+            elide_lifetimes(&mut ty);
+            ty
+        })
+        .collect();
+
 
     // Calculate minimum alignment from all pointer types
     let min_alignment_calculation = if pointer_types.is_empty() {
@@ -391,4 +401,24 @@ pub fn tag(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+use syn::{visit_mut::VisitMut, Lifetime, Type};
+
+struct ElideLifetimes;
+
+impl VisitMut for ElideLifetimes {
+    fn visit_lifetime_mut(&mut self, lt: &mut Lifetime) {
+        *lt = syn::parse_quote!('_);
+    }
+
+    fn visit_type_reference_mut(&mut self, i: &mut syn::TypeReference) {
+        i.lifetime = Some(syn::parse_quote!('_));
+
+        syn::visit_mut::visit_type_reference_mut(self, i);
+    }
+}
+
+fn elide_lifetimes(ty: &mut Type) {
+    ElideLifetimes.visit_type_mut(ty);
 }
