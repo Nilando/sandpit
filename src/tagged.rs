@@ -147,7 +147,7 @@ mod tests {
             assert!(tagged.is_ptr());
             assert!(matches!(tagged.get_tag(), MyTag::Usize));
             
-            let extracted = tagged.get_usize().unwrap();
+            let extracted = MyTag::get_usize(tagged).unwrap();
             assert_eq!(*extracted, 69);
         });
     }
@@ -171,7 +171,7 @@ mod tests {
             let tagged = MyTag::from_usize(ptr);
             
             // Should return None when trying to extract as wrong type
-            assert!(tagged.get_isize().is_none());
+            assert!(MyTag::get_isize(tagged).is_none());
         });
     }
 

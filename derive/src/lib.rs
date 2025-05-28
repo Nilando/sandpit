@@ -305,10 +305,10 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // Generate extraction method for this pointer type  
                             let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             extraction_methods.push(quote! {
-                                pub fn #extract_method_name(&self) -> Option<sandpit::gc::Gc<#ptr_type>> {
-                                    if matches!(self.get_tag(), #name::#variant_name) {
+                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<Self>) -> Option<sandpit::gc::Gc<'a, #ptr_type>> {
+                                    if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
                                         unsafe {
-                                            Some(self.cast_to_gc())
+                                            Some(tagged_ptr.cast_to_gc())
                                         }
                                     } else {
                                         None
@@ -385,9 +385,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
 
         impl #impl_generics #name #ty_generics #where_clause {
             #(#creation_methods)*
-        }
 
-        impl #impl_generics sandpit::Tagged<#name> #ty_generics #where_clause {
             #(#extraction_methods)*
         }
     };
