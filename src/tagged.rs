@@ -1,6 +1,8 @@
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use super::gc::GcPointer;
+use crate::Trace;
+
+use super::gc::{Gc};
 use std::marker::PhantomData;
 
 
@@ -8,98 +10,94 @@ use std::marker::PhantomData;
 
 pub unsafe trait Tag: Sized {
     const VARIANTS: usize;
+    const MIN_ALIGNMENT: usize;
 
     fn into_usize(&self) -> usize;
     fn from_usize(tag: usize) -> Option<Self>;
+    fn is_ptr(&self) -> bool;
+    fn trace_tagged(tagged_ptr: &Tagged<Self>, tracer: &mut crate::Tracer);
 }
 
-pub union Tagged<A: GcPointer, B: Tag> {
-    ptr: ManuallyDrop<A>,
+pub struct Tagged<T: Tag> {
     raw: ManuallyDrop<AtomicUsize>,
-    _tag_type: PhantomData<B>
+    _tag_type: PhantomData<T>
 } 
 
-impl<A: GcPointer, B: Tag> From<A> for Tagged<A, B> {
-    fn from(value: A) -> Self {
-        Self::const_assert();
-
-        Self {
-            ptr: ManuallyDrop::new(value)
-        }
-    }
-}
-
-impl<A: GcPointer, B: Tag> Clone for Tagged<A, B> {
+impl<T: Tag> Clone for Tagged<T> {
     fn clone(&self) -> Self {
-        let raw = unsafe { 
-            self.raw.load(Ordering::Relaxed)
-        };
+        let raw = self.raw.load(Ordering::Relaxed);
 
         Self {
-            raw: ManuallyDrop::new(AtomicUsize::new(raw))
+            raw: ManuallyDrop::new(AtomicUsize::new(raw)),
+            _tag_type: PhantomData::<T>
         }
     }
 }
 
-impl<A: GcPointer, B: Tag> TryFrom<usize> for Tagged<A, B> {
+impl<T: Tag> TryFrom<usize> for Tagged<T> {
     type Error = ();
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        Self::const_assert();
-
-        match B::from_usize(value) {
+        match T::from_usize(value & Self::TAG_MASK) {
             None => Err(()),
             Some(_) => {
                 Ok(Self {
-                    raw: ManuallyDrop::new(AtomicUsize::new(value))
+                    raw: ManuallyDrop::new(AtomicUsize::new(value)),
+                    _tag_type: PhantomData::<T>
                 })
             }
         }
     }
 }
 
-impl<PTR: GcPointer, TAG: Tag> Tagged<PTR, TAG> {
-    fn const_assert() {
-        const { assert!(TAG::VARIANTS < PTR::POINTEE_ALIGNMENT) };
-    }
-}
+impl<T: Tag> Tagged<T> {
+    const TAG_MASK: usize = T::MIN_ALIGNMENT - 1;
 
-impl<A: GcPointer, B: Tag> Tagged<A, B> {
-    const TAG_MASK: usize = A::POINTEE_ALIGNMENT - 1;
+    fn const_assert() {
+        const { assert!(T::VARIANTS <= T::MIN_ALIGNMENT) };
+    }
+
+    pub unsafe fn cast_to_gc<'gc, A: Trace>(&self) -> Gc<'gc, A> {
+        Self::const_assert();
+        assert!(self.is_ptr(), "Tag must be a pointer variant");
+
+        let tagged_value = Self::strip_tag(self.raw.load(Ordering::Relaxed));
+
+        Gc::from_ptr(tagged_value as *const _)
+    }
+
+    pub unsafe fn from_ptr<'gc, A: Trace>(value: Gc<'gc, A>, tag: T) -> Self {
+        Self::const_assert();
+
+        assert!(tag.is_ptr(), "Tag must be a pointer variant");
+
+        let tagged_value = Self::apply_tag(value.scoped_deref() as *const _ as usize, tag);
+
+        Self {
+            raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
+            _tag_type: PhantomData::<T>
+        }
+    }
+
+    pub fn from_raw(value: usize, tag: T) -> Self {
+        Self::const_assert();
+        assert!(!tag.is_ptr(), "Tag must be a non-pointer variant");
+
+        let tagged_value = Self::apply_tag(value, tag);
+
+        Self {
+            raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
+            _tag_type: PhantomData::<T>
+        }
+    }
 
     pub fn is_ptr(&self) -> bool {
-        self.get_tag().is_none()
+        self.get_tag().is_ptr()
     }
 
-    pub fn is_tagged(&self) -> bool {
-        !self.is_ptr()
-    }
-
-    pub fn get_ptr(&self) -> Option<A> {
-        if self.is_ptr() {
-            unsafe {
-                return Some((*self.ptr).clone())
-            }
-        }
-
-        None
-    }
-
-    pub fn get_tag(&self) -> Option<B> {
-        unsafe {
-            let raw = self.raw.load(Ordering::Relaxed);
-
-            B::from_usize(raw & Self::TAG_MASK)
-        }
-    }
-
-    pub fn set_tag(&self, tag: B) {
-        unsafe {
-            let old_raw = self.raw.load(Ordering::Relaxed);
-            let new_raw = Self::apply_tag(old_raw, tag);
-
-            self.raw.store(new_raw, Ordering::Relaxed);
-        }
+    pub fn get_tag(&self) -> T {
+        let raw = self.raw.load(Ordering::Relaxed);
+        T::from_usize(raw & Self::TAG_MASK).expect("Invalid tag value")
     }
 
     pub fn get_raw(&self) -> Option<usize> {
@@ -107,29 +105,21 @@ impl<A: GcPointer, B: Tag> Tagged<A, B> {
             return None;
         }
 
-        unsafe {
-            Some(self.raw.load(Ordering::Relaxed))
-        }
+        Some(Self::strip_tag(self.raw.load(Ordering::Relaxed)))
     }
 
-    pub fn set_tagged_raw(&self, value: usize, tag: B) {
-        let new_raw = Self::apply_tag(value, tag);
-
-        unsafe {
-            self.raw.store(new_raw, Ordering::Relaxed);
-        }
-    }
-
-    pub unsafe fn set_ptr(&self, ptr: A) {
-        self.ptr.set(ptr);
-    }
-
-    pub fn apply_tag(n: usize, tag: B) -> usize {
+    pub fn apply_tag(n: usize, tag: T) -> usize {
         Self::strip_tag(n) | tag.into_usize()
     }
 
     pub fn strip_tag(n: usize) -> usize {
         n & !Self::TAG_MASK
+    }
+
+    pub unsafe fn set(&self, value: Self) {
+        let new_val = value.raw.load(Ordering::Relaxed);
+
+        self.raw.store(new_val, Ordering::Relaxed);
     }
 }
 
@@ -141,57 +131,57 @@ mod tests {
 
     #[derive(Tag)]
     enum MyTag {
-        A,
-        B,
-        C,
+        #[ptr(usize)]
+        Usize,
+        #[ptr(isize)]
+        Isize,
+        RawData,
     }
 
     #[test]
-    fn test_into_pointer() {
+    fn test_pointer_variant() {
         let _: Arena<Root![_]> = Arena::new(|mu| {
-            let ptr = Gc::new(mu, 69);
-            let tag = Tagged::<Gc<usize>, MyTag>::from(ptr.clone());
-            let untagged_pointer = tag.get_ptr().unwrap();
-
-            assert!(ptr.as_thin() == untagged_pointer.as_thin());
+            let ptr = Gc::new(mu, 69usize);
+            let tagged = MyTag::from_usize(ptr.clone());
+            
+            assert!(tagged.is_ptr());
+            assert!(matches!(tagged.get_tag(), MyTag::Usize));
+            
+            let extracted = tagged.get_usize().unwrap();
+            assert_eq!(*extracted, 69);
         });
     }
 
 
     #[test]
-    fn test_into_bytes() {
+    fn test_raw_data_variant() {
         let _: Arena<Root![_]> = Arena::new(|_| {
-            let tagged_bytes = 1;
-            let tag = Tagged::<Gc<usize>, MyTag>::try_from(tagged_bytes).unwrap();
-            let bytes = tag.get_raw();
-
-            assert!(tagged_bytes == bytes.unwrap());
+            let tagged = Tagged::from_raw(2048, MyTag::RawData);
+            
+            assert!(!tagged.is_ptr());
+            assert!(matches!(tagged.get_tag(), MyTag::RawData));
+            assert_eq!(tagged.get_raw().unwrap(), 2048);
         });
     }
 
     #[test]
-    fn test_setting_tag() {
+    fn test_wrong_extraction() {
         let _: Arena<Root![_]> = Arena::new(|mu| {
-            let ptr = GcOpt::new(mu, 69);
-            let tagged_bytes = Tagged::<GcOpt<usize>, MyTag>::apply_tag(2592345111, MyTag::A);
-            let tag = Tagged::<GcOpt<usize>, MyTag>::from(ptr);
-            tag.set_tagged_raw(tagged_bytes, MyTag::A);
-            let bytes = tag.get_raw();
-
-            assert!(tagged_bytes == bytes.unwrap());
+            let ptr = Gc::new(mu, 69usize);
+            let tagged = MyTag::from_usize(ptr);
+            
+            // Should return None when trying to extract as wrong type
+            assert!(tagged.get_isize().is_none());
         });
     }
 
     #[test]
-    fn test_invalid_tag() {
-        assert!(Tagged::<Gc<usize>, MyTag>::try_from(124879).is_err());
-    }
-
-    #[test]
-    fn test_slice_of_tagged_pointers() {
+    fn test_size_preservation() {
         let _: Arena<Root![_]> = Arena::new(|_| {
-            assert!(std::mem::size_of::<Gc<()>>() == std::mem::size_of::<Tagged<Gc<()>, MyTag>>());
-            assert!(std::mem::size_of::<GcOpt<()>>() == std::mem::size_of::<Tagged<GcOpt<()>, MyTag>>());
+            assert_eq!(
+                std::mem::size_of::<*const u8>(), 
+                std::mem::size_of::<Tagged<MyTag>>()
+            );
         });
     }
 }

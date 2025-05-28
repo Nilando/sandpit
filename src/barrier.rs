@@ -208,11 +208,9 @@ unsafe impl<T: Trace> Trace for InnerBarrier<T> {
     }
 }
 
-impl<'gc, T: GcPointer, B: Tag> WriteBarrier<'gc, Tagged<T, B>> {
-    pub fn set(&self, gc_ptr: T) {
-        unsafe {
-            self.inner.set_ptr(gc_ptr);
-        }
+impl<'gc, B: Tag> WriteBarrier<'gc, Tagged<B>> {
+    pub fn set(&self, tagged_ptr: Tagged<B>) {
+        unsafe { self.inner.set(tagged_ptr) };
     }
 }
 

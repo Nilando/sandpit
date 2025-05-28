@@ -243,7 +243,7 @@ fn add_leaf(mut generics: Generics) -> Generics {
     generics
 }
 
-#[proc_macro_derive(Tag)]
+#[proc_macro_derive(Tag, attributes(ptr))]
 pub fn tag(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
@@ -251,19 +251,81 @@ pub fn tag(input: TokenStream) -> TokenStream {
 
     let mut from_usize_arms = vec![];
     let mut into_usize_arms = vec![];
+    let mut is_ptr_arms = vec![];
+    let mut trace_arms = vec![];
+    let mut extraction_methods = vec![];
+    let mut creation_methods = vec![];
+    let mut pointer_types = vec![];
     let num_variants;
 
     match input.data {
         Data::Enum(DataEnum { variants, .. }) => {
             num_variants = variants.len();
             for (idx, variant) in variants.iter().enumerate() {
-                let name = variant.ident.clone();
-                let idx = idx + 1;
+                let variant_name = variant.ident.clone();
+                let tag_value = idx;
 
                 match &variant.fields {
                     Fields::Unit => {
-                        from_usize_arms.push(quote! { #idx => Some(Self::#name), });
-                        into_usize_arms.push(quote! { Self::#name => #idx, });
+                        // Check for #[ptr(Type)] attribute
+                        let ptr_type = variant.attrs.iter()
+                            .find(|attr| attr.path().is_ident("ptr"))
+                            .map(|attr| {
+                                attr.parse_args::<syn::Type>()
+                                    .expect("Expected type in #[ptr(Type)] attribute")
+                            });
+
+                        from_usize_arms.push(quote! { #tag_value => Some(Self::#variant_name), });
+                        into_usize_arms.push(quote! { Self::#variant_name => #tag_value, });
+
+                        if let Some(ptr_type) = ptr_type {
+                            // This is a pointer variant
+                            pointer_types.push(ptr_type.clone());
+                            is_ptr_arms.push(quote! { Self::#variant_name => true, });
+                            
+                            // Generate trace arm for pointer variant
+                            trace_arms.push(quote! {
+                                Self::#variant_name => {
+                                    unsafe{
+                                        let gc_ptr = tagged_ptr.cast_to_gc::<#ptr_type>();
+
+                                        sandpit::Trace::trace(&gc_ptr, tracer);
+                                    }
+                                }
+                            });
+
+                            // Generate creation method for this pointer type
+                            let method_name = Ident::new(&format!("from_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
+                            creation_methods.push(quote! {
+                                pub fn #method_name(ptr: sandpit::gc::Gc<#ptr_type>) -> sandpit::Tagged<#name> {
+                                    unsafe { sandpit::Tagged::from_ptr(ptr, #name::#variant_name) }
+                                }
+                            });
+
+                            // Generate extraction method for this pointer type  
+                            let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
+                            extraction_methods.push(quote! {
+                                pub fn #extract_method_name(&self) -> Option<sandpit::gc::Gc<#ptr_type>> {
+                                    if matches!(self.get_tag(), #name::#variant_name) {
+                                        unsafe {
+                                            Some(self.cast_to_gc())
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                }
+                            });
+                        } else {
+                            // This is a non-pointer variant
+                            is_ptr_arms.push(quote! { Self::#variant_name => false, });
+                            
+                            // Generate trace arm for non-pointer variant (no tracing needed)
+                            trace_arms.push(quote! {
+                                Self::#variant_name => {
+                                    // Non-pointer variant, nothing to trace
+                                }
+                            });
+                        }
                     }
                     _ => panic!("Tag can only be derived for fieldless enums"),
                 }
@@ -272,11 +334,28 @@ pub fn tag(input: TokenStream) -> TokenStream {
         _ => panic!("Tag can only be derived for fieldless enums"),
     }
 
+    // Calculate minimum alignment from all pointer types
+    let min_alignment_calculation = if pointer_types.is_empty() {
+        // No pointer types, use a reasonable default
+        quote! { 1 }
+    } else {
+        quote! {
+            {
+                let mut min_align = usize::MAX;
+                #(
+                    let align = std::mem::align_of::<sandpit::gc::Gc<#pointer_types>>();
+                    if align < min_align { min_align = align; }
+                )*
+                min_align
+            }
+        }
+    };
 
     let expanded = quote! {
         #[automatically_derived]
         unsafe impl #impl_generics sandpit::Tag for #name #ty_generics #where_clause {
             const VARIANTS: usize = #num_variants;
+            const MIN_ALIGNMENT: usize = #min_alignment_calculation;
 
             fn into_usize(&self) -> usize {
                 match self {
@@ -290,6 +369,26 @@ pub fn tag(input: TokenStream) -> TokenStream {
                     _ => None,
                 }
             }
+
+            fn is_ptr(&self) -> bool {
+                match self {
+                    #(#is_ptr_arms)*
+                }
+            }
+
+            fn trace_tagged(tagged_ptr: &sandpit::Tagged<Self>, tracer: &mut sandpit::Tracer) {
+                match tagged_ptr.get_tag() {
+                    #(#trace_arms)*
+                }
+            }
+        }
+
+        impl #impl_generics #name #ty_generics #where_clause {
+            #(#creation_methods)*
+        }
+
+        impl #impl_generics sandpit::Tagged<#name> #ty_generics #where_clause {
+            #(#extraction_methods)*
         }
     };
 

@@ -19,11 +19,8 @@ impl<'gc, T: Trace> GcSync<'gc> for GcOpt<'gc, T> {
     }
 }
 
-impl<'gc, T: GcPointer + 'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<T, B> {
+impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<B> {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        match value.get_ptr() {
-            Some(ptr) => array.write_barrier(mu, |barrier| barrier.at(index).set(ptr)),
-            None => array[index].set_tagged_raw(value.get_raw().unwrap(), value.get_tag().unwrap()),
-        }
+        array.write_barrier(mu, |barrier| barrier.at(index).set(value));
     }
 }

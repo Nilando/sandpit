@@ -404,28 +404,6 @@ impl<'gc, T: Trace> GcPointer for GcOpt<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace, B: Tag> TryFrom<Tagged<Gc<'gc, T>, B>> for Gc<'gc, T> {
-    type Error = ();
-
-    fn try_from(value: Tagged<Gc<'gc, T>, B>) -> Result<Self, Self::Error> {
-        match value.get_ptr() {
-            Some(ptr) => Ok(ptr),
-            None => Err(())
-        }
-    }
-}
-
-impl<'gc, T: Trace, B: Tag> TryFrom<Tagged<GcOpt<'gc, T>, B>> for GcOpt<'gc, T> {
-    type Error = ();
-
-    fn try_from(value: Tagged<GcOpt<'gc, T>, B>) -> Result<Self, Self::Error> {
-        match value.get_ptr() {
-            Some(ptr) => Ok(ptr),
-            None => Err(())
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
