@@ -15,26 +15,26 @@ pub unsafe trait Tag: Sized {
     fn into_usize(&self) -> usize;
     fn from_usize(tag: usize) -> Option<Self>;
     fn is_ptr(&self) -> bool;
-    fn trace_tagged(tagged_ptr: &Tagged<Self>, tracer: &mut crate::Tracer);
+    fn trace_tagged<'gc>(tagged_ptr: &Tagged<'gc, Self>, tracer: &mut crate::Tracer);
 }
 
-pub struct Tagged<T: Tag> {
+pub struct Tagged<'gc, T: Tag> {
     raw: ManuallyDrop<AtomicUsize>,
-    _tag_type: PhantomData<T>
+    _tag_type: PhantomData<&'gc T>
 } 
 
-impl<T: Tag> Clone for Tagged<T> {
+impl<'gc, T: Tag> Clone for Tagged<'gc, T> {
     fn clone(&self) -> Self {
         let raw = self.raw.load(Ordering::Relaxed);
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(raw)),
-            _tag_type: PhantomData::<T>
+            _tag_type: PhantomData::<&'gc T>
         }
     }
 }
 
-impl<T: Tag> TryFrom<usize> for Tagged<T> {
+impl<'gc, T: Tag> TryFrom<usize> for Tagged<'gc, T> {
     type Error = ();
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
@@ -43,21 +43,21 @@ impl<T: Tag> TryFrom<usize> for Tagged<T> {
             Some(_) => {
                 Ok(Self {
                     raw: ManuallyDrop::new(AtomicUsize::new(value)),
-                    _tag_type: PhantomData::<T>
+                    _tag_type: PhantomData::<&'gc T>
                 })
             }
         }
     }
 }
 
-impl<T: Tag> Tagged<T> {
+impl<'gc, T: Tag> Tagged<'gc, T> {
     const TAG_MASK: usize = T::MIN_ALIGNMENT - 1;
 
     fn const_assert() {
         const { assert!(T::VARIANTS <= T::MIN_ALIGNMENT) };
     }
 
-    pub unsafe fn cast_to_gc<'gc, A: Trace>(&self) -> Gc<'gc, A> {
+    pub unsafe fn cast_to_gc<A: Trace>(&self) -> Gc<'gc, A> {
         Self::const_assert();
         assert!(self.is_ptr(), "Tag must be a pointer variant");
 
@@ -66,7 +66,7 @@ impl<T: Tag> Tagged<T> {
         Gc::from_ptr(tagged_value as *const _)
     }
 
-    pub unsafe fn from_ptr<'gc, A: Trace>(value: Gc<'gc, A>, tag: T) -> Self {
+    pub unsafe fn from_ptr<A: Trace>(value: Gc<'gc, A>, tag: T) -> Self {
         Self::const_assert();
 
         assert!(tag.is_ptr(), "Tag must be a pointer variant");
@@ -75,7 +75,7 @@ impl<T: Tag> Tagged<T> {
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
-            _tag_type: PhantomData::<T>
+            _tag_type: PhantomData::<&'gc T>
         }
     }
 
@@ -87,7 +87,7 @@ impl<T: Tag> Tagged<T> {
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
-            _tag_type: PhantomData::<T>
+            _tag_type: PhantomData::<&'gc T>
         }
     }
 

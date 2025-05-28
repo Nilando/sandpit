@@ -112,7 +112,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     }
 }
 
-unsafe impl<T: Tag> Trace for Tagged<T> {
+unsafe impl<'gc, T: Tag> Trace for Tagged<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut crate::Tracer) {

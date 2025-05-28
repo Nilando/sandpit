@@ -1,6 +1,6 @@
 use super::mutator::Mutator;
 use super::trace::Trace;
-use super::gc::{Gc, GcOpt, GcPointer};
+use super::gc::{Gc, GcOpt};
 use super::tagged::{Tagged, Tag};
 
 pub trait GcSync<'gc>: Trace + Clone + 'gc {
@@ -19,7 +19,7 @@ impl<'gc, T: Trace> GcSync<'gc> for GcOpt<'gc, T> {
     }
 }
 
-impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<B> {
+impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<'gc, B> {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
         array.write_barrier(mu, |barrier| barrier.at(index).set(value));
     }

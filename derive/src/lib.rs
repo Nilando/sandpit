@@ -297,7 +297,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // Generate creation method for this pointer type
                             let method_name = Ident::new(&format!("from_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             creation_methods.push(quote! {
-                                pub fn #method_name(ptr: sandpit::Gc<#ptr_type>) -> sandpit::Tagged<#name> {
+                                pub fn #method_name<'gc>(ptr: sandpit::Gc<'gc, #ptr_type>) -> sandpit::Tagged<'gc, #name> {
                                     unsafe { sandpit::Tagged::from_ptr(ptr, #name::#variant_name) }
                                 }
                             });
@@ -305,7 +305,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // Generate extraction method for this pointer type  
                             let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             extraction_methods.push(quote! {
-                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<Self>) -> Option<sandpit::Gc<'a, #ptr_type>> {
+                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<'a, Self>) -> Option<sandpit::Gc<'a, #ptr_type>> {
                                     if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
                                         unsafe {
                                             Some(tagged_ptr.cast_to_gc())
@@ -376,7 +376,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                 }
             }
 
-            fn trace_tagged(tagged_ptr: &sandpit::Tagged<Self>, tracer: &mut sandpit::Tracer) {
+            fn trace_tagged<'gc>(tagged_ptr: &sandpit::Tagged<'gc, Self>, tracer: &mut sandpit::Tracer) {
                 match tagged_ptr.get_tag() {
                     #(#trace_arms)*
                 }
