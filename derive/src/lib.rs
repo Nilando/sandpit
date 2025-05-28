@@ -297,7 +297,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // Generate creation method for this pointer type
                             let method_name = Ident::new(&format!("from_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             creation_methods.push(quote! {
-                                pub fn #method_name(ptr: sandpit::gc::Gc<#ptr_type>) -> sandpit::Tagged<#name> {
+                                pub fn #method_name(ptr: sandpit::Gc<#ptr_type>) -> sandpit::Tagged<#name> {
                                     unsafe { sandpit::Tagged::from_ptr(ptr, #name::#variant_name) }
                                 }
                             });
@@ -305,7 +305,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // Generate extraction method for this pointer type  
                             let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
                             extraction_methods.push(quote! {
-                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<Self>) -> Option<sandpit::gc::Gc<'a, #ptr_type>> {
+                                pub fn #extract_method_name<'a>(tagged_ptr: sandpit::Tagged<Self>) -> Option<sandpit::Gc<'a, #ptr_type>> {
                                     if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
                                         unsafe {
                                             Some(tagged_ptr.cast_to_gc())
@@ -343,7 +343,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
             {
                 let mut min_align = usize::MAX;
                 #(
-                    let align = std::mem::align_of::<sandpit::gc::Gc<#pointer_types>>();
+                    let align = std::mem::align_of::<sandpit::Gc<#pointer_types>>();
                     if align < min_align { min_align = align; }
                 )*
                 min_align
