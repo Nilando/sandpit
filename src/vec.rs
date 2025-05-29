@@ -66,6 +66,7 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
     }
 
     pub fn as_slice(&mut self) -> &[T] {
+        // BAD!!!! => self.items.inner().unwrap().scoped_deref()
         todo!()
     }
 
@@ -77,6 +78,16 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
         let items_ptr = self.items.inner().unwrap();
 
         Some(items_ptr[idx].clone())
+    }
+
+    pub fn set(&self, mu: &'gc Mutator, value: T, idx: usize) {
+        if idx >= self.len() {
+            panic!("out of bounds access on gc vec");
+        }
+
+        let items_ptr = self.items.inner().unwrap();
+
+        <T as GcSync<'gc>>::update_array(mu, items_ptr, idx, value);
     }
 
     pub fn push(&self, mu: &'gc Mutator, value: T) {
