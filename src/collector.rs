@@ -7,6 +7,7 @@ use super::trace::{Trace, TracerController};
 
 use higher_kinded_types::ForLt;
 
+use std::env::var;
 use std::sync::{
     atomic::{AtomicUsize, AtomicU64, Ordering},
     Arc, Mutex,
@@ -66,38 +67,63 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn major_collect(&self) {
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: MAJOR COLLECTION TRIGGERED!")
+        }
+
         let _collection_lock = self.collection_lock.lock().unwrap();
         let mutation_lock = self.mutation_lock.lock().unwrap();
+
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG:\tRotating Trace Mark")
+        }
+
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
         self.collect();
 
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Sweeping...")
+        }
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
             self.heap.sweep(self.get_current_mark(), || {
                 drop(mutation_lock);
             });
+        }
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Sweeping complete!")
         }
 
         self.major_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
-        let elapsed_time = start_time.elapsed().as_millis() as usize;
+        let elapsed_time = start_time.elapsed().as_millis();
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Collection completed in {}", elapsed_time)
+        }
         self.update_collection_time(
             &self.major_collect_avg_time,
-            elapsed_time,
+            elapsed_time as usize,
             self.get_major_collections(),
         );
     }
 
     fn minor_collect(&self) {
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: MINOR COLLECTION TRIGGERED!")
+        }
+
         let _collection_lock = self.collection_lock.lock().unwrap();
         let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
 
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Sweeping...")
+        }
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
@@ -105,14 +131,20 @@ where
                 drop(mutation_lock);
             });
         }
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Sweeping complete!")
+        }
 
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
-        let elapsed_time = start_time.elapsed().as_millis() as usize;
+        let elapsed_time = start_time.elapsed().as_millis();
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Collection completed in {}", elapsed_time)
+        }
         self.update_collection_time(
             &self.minor_collect_avg_time,
-            elapsed_time,
+            elapsed_time as usize,
             self.get_minor_collections(),
         );
     }
@@ -239,10 +271,18 @@ where
     }
 
     fn collect(&self) {
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG:\tBegining trace...")
+        }
+
         self.tracer
             .clone()
             .trace(&self.root, self.old_objects.clone(), || {
                 self.time_slicer.run();
             });
+
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG:\tTrace complete!")
+        }
     }
 }
