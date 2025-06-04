@@ -4,10 +4,10 @@ use super::tracer::Tracer;
 use crate::config::Config;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
-use std::sync::{
-    atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
+use std::{env::var, sync::{
+    atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
     Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
-};
+}};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -132,11 +132,21 @@ impl TracerController {
 
         if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
             // The tracers are out of work, raise this flag to stop the mutators.
+            if var("GC_DEBUG").is_ok() {
+                if !self.yield_flag() {
+                    println!("GC_DEBUG: Yield Flag Raised")
+                }
+            }
+
             self.raise_yield_flag();
 
             if self.mutators_stopped() {
                 // Let the other tracers know they should stop by raising this flag
                 self.trace_end_flag.store(true, Ordering::SeqCst);
+
+                if var("GC_DEBUG").is_ok() {
+                    println!("GC_DEBUG: Mutators Have Exited. Finishing Trace...")
+                }
                 return true;
             }
         }

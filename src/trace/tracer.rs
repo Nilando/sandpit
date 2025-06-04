@@ -5,6 +5,7 @@ use crate::heap::Heap;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
 use std::cell::Cell;
+use std::env::var;
 use std::sync::Arc;
 
 /// Internal type used by the GC to perform tracing.
@@ -81,6 +82,10 @@ impl Tracer {
 
             self.do_work();
             self.share_work();
+        }
+
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Tracer Exited Successfully")
         }
 
         debug_assert_eq!(self.work.len(), 0);
