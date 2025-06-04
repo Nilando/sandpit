@@ -271,18 +271,10 @@ where
     }
 
     fn collect(&self) {
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG:\tBegining trace...")
-        }
-
         self.tracer
             .clone()
             .trace(&self.root, self.old_objects.clone(), || {
                 self.time_slicer.run();
             });
-
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG:\tTrace complete!")
-        }
     }
 }
