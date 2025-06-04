@@ -1,7 +1,7 @@
-use std::sync::{
+use std::{env::var, sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
-};
+}};
 use std::thread;
 use std::time;
 
@@ -86,11 +86,26 @@ impl<T: Collect + 'static> Monitor<T> {
         }
     }
 
+    fn debug(&self) {
+        let current_old = self.collector.get_old_objects_count() as u64;
+        let max_old = self.max_old_objects.load(Ordering::Relaxed);
+        let size = self.collector.get_arena_size();
+        let prev_size = self.prev_arena_size.load(Ordering::Relaxed);
+        println!("GC_DEBUG: max_old: {}, current_old: {}, prev_size: {}, size: {}", max_old, current_old, prev_size, size);
+    }
+
     fn test_triggers(&self) {
         if self.minor_trigger() {
+            if var("GC_DEBUG").is_ok() {
+                self.debug();
+            }
+            // monitor collection {old max} {found old objects} {arena size}
             self.collector.minor_collect();
 
             if self.major_trigger() {
+                if var("GC_DEBUG").is_ok() {
+                    self.debug();
+                }
                 self.collector.major_collect();
 
                 self.update_old_max();
