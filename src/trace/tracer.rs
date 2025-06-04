@@ -38,12 +38,21 @@ impl Tracer {
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
+        if var("GC_DEBUG").is_ok() {
+            println!("MARK: ptr\t{:#x}", gc.as_thin().as_ptr() as usize);
+            println!("MARK: header\t{:#x}", gc.get_header_ptr() as usize);
+        }
+
         let header = gc.get_header();
         let alloc_ptr = gc.get_header_ptr();
         let alloc_layout = gc.get_layout();
 
         if header.get_mark() == self.mark {
             return false;
+        }
+
+        if var("GC_DEBUG").is_ok() {
+            println!("MARK: marked!");
         }
 
         header.set_mark(self.mark);

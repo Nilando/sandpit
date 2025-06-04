@@ -70,7 +70,11 @@ impl<T: Trace> GcPointee for [T] {
 pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let header_layout = Layout::new::<SizedHeader<T>>();
     let val_layout = Layout::new::<T>();
-    let (unpadded_layout, offset) = header_layout.extend(val_layout).expect("GC BAD LAYOUT");
+    let (unpadded_layout, offset) = header_layout.extend(val_layout).unwrap_or_else(|err| {
+        println!("GC_ERROR: {err}");
+
+        std::process::abort();
+    });
     let layout = unpadded_layout.pad_to_align();
 
     (layout, offset)
@@ -79,7 +83,11 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
 pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
     let header_layout = Layout::new::<SliceHeader<T>>();
     let slice_layout = Layout::array::<T>(len).expect("GC BAD LAYOUT");
-    let (unpadded_layout, offset) = header_layout.extend(slice_layout).expect("GC BAD LAYOUT");
+    let (unpadded_layout, offset) = header_layout.extend(slice_layout).unwrap_or_else(|err| {
+        println!("GC_ERROR: {err}");
+
+        std::process::abort();
+    });
     let layout = unpadded_layout.pad_to_align();
 
     (layout, offset)

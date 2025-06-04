@@ -160,6 +160,10 @@ impl TracerController {
         old_object_count: Arc<AtomicU64>,
         trace_callback: F,
     ) {
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG:\tBegining trace...")
+        }
+
         self.clone().trace_root(root, old_object_count.clone());
         let join_handles = self.clone().spawn_tracers(old_object_count);
 
@@ -167,9 +171,13 @@ impl TracerController {
 
         for jh in join_handles.into_iter() {
             jh.join().unwrap_or_else(|_| {
-                println!("GC Tracer Panic");
+                println!("GC Tracer Panicked");
                 std::process::abort();
             });
+        }
+
+        if var("GC_DEBUG").is_ok() {
+            println!("GC_DEBUG: Trace Complete!")
         }
 
         self.clean_up();
@@ -229,6 +237,11 @@ impl TracerController {
             let jh = thread
                 .spawn(move || {
                     let mut tracer = controller.clone().new_tracer(i);
+
+                    if var("GC_DEBUG").is_ok() {
+                        println!("GC_DEBUG: Tracer Thread Spawned")
+                    }
+
                     let marked_objects = tracer.trace_loop() as u64;
 
                     object_count.fetch_add(marked_objects, Ordering::SeqCst);
