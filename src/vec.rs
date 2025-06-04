@@ -58,6 +58,10 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
         self.len.load(Ordering::Relaxed)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn cap(&self) -> usize {
         match self.items.inner().as_option() {
             Some(gc) => gc.len(),
