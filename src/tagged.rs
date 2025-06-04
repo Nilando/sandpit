@@ -119,7 +119,7 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
     pub unsafe fn set(&self, value: Self) {
         let new_val = value.raw.load(Ordering::Relaxed);
 
-        self.raw.store(new_val, Ordering::Relaxed);
+        self.raw.store(new_val, Ordering::Release);
     }
 }
 
