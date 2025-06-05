@@ -2,7 +2,6 @@ use super::gc::{Gc, GcOpt};
 use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
 use super::tagged::{Tagged, Tag};
-use super::gc::GcPointer;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Allows for the mutation of [`Gc`] and [`GcOpt`] pointers.
@@ -160,7 +159,7 @@ pub struct InnerBarrier<T: Trace> {
 impl<T: Trace> InnerBarrier<T> {
     pub fn new(mu: &Mutator, inner: T) -> Self {
         Self {
-            mark: AtomicU8::new(mu.get_mark().into()),
+            mark: AtomicU8::new(mu.get_prev_mark().into()),
             inner
         }
     }

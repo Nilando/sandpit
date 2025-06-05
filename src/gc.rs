@@ -6,8 +6,7 @@
 //!
 //! [`Gc`] and [`GcOpt`] may be updated via a [`crate::WriteBarrier`] to point
 //! at different values.
-use super::trace::{Trace, TraceLeaf};
-use super::tagged::{Tagged, Tag};
+use super::trace::Trace;
 use crate::barrier::WriteBarrier;
 use crate::header::GcHeader;
 use crate::mutator::Mutator;
@@ -397,6 +396,7 @@ impl<'gc, T: Trace + ?Sized> GcOpt<'gc, T> {
     }
 }
 
+/*
 pub trait GcPointer: Trace + Clone {
     const POINTEE_ALIGNMENT: usize;
 
@@ -418,6 +418,7 @@ impl<'gc, T: Trace> GcPointer for GcOpt<'gc, T> {
         self.set(value)
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

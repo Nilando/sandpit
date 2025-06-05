@@ -273,6 +273,10 @@ impl<'gc> Mutator<'gc> {
        self.tracer_controller.get_current_mark()
     }
 
+    pub(crate) fn get_prev_mark(&self) -> GcMark {
+       self.tracer_controller.get_current_mark().rotate().rotate()
+    }
+
     pub(crate) fn retrace<T: Trace + ?Sized>(&self, obj: &T) {
         let ptr: NonNull<Thin<T>> = NonNull::from(obj).cast(); // safe b/c of implicit Sized bound
         let trace_job = TraceJob::new(ptr);

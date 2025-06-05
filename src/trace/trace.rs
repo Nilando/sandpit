@@ -1,6 +1,6 @@
 use super::tracer::Tracer;
 use crate::tagged::{Tagged, Tag};
-use crate::gc::{Gc, GcOpt, GcPointer};
+use crate::gc::{Gc, GcOpt};
 use crate::pointee::{GcPointee, Thin};
 use std::cell::*;
 use std::ptr::NonNull;
