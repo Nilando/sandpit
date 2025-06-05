@@ -93,16 +93,13 @@ where
                 drop(mutation_lock);
             });
         }
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Sweeping complete!")
-        }
 
         self.major_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis();
         if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Collection completed in {}", elapsed_time)
+            println!("GC_DEBUG: Collection completed in {}ms", elapsed_time)
         }
         self.update_collection_time(
             &self.major_collect_avg_time,
@@ -131,16 +128,13 @@ where
                 drop(mutation_lock);
             });
         }
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Sweeping complete!")
-        }
 
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis();
         if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Collection completed in {}", elapsed_time)
+            println!("GC_DEBUG: Collection completed in {}ms", elapsed_time)
         }
         self.update_collection_time(
             &self.minor_collect_avg_time,

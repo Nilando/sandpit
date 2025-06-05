@@ -161,7 +161,7 @@ impl TracerController {
         trace_callback: F,
     ) {
         if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG:\tBegining trace...")
+            println!("GC_DEBUG: Begining trace...")
         }
 
         self.clone().trace_root(root, old_object_count.clone());

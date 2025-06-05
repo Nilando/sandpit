@@ -27,7 +27,7 @@ impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<'gc, B> {
 }
 
 impl<'gc, T: TraceLeaf + Copy + 'gc> GcSync<'gc> for Cell<T> {
-    fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
+    fn update_array(_: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
         array[index].swap(&value);
     }
 }

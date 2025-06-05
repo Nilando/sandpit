@@ -71,7 +71,8 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let header_layout = Layout::new::<SizedHeader<T>>();
     let val_layout = Layout::new::<T>();
     let (unpadded_layout, offset) = header_layout.extend(val_layout).unwrap_or_else(|err| {
-        println!("GC_ERROR: {err}");
+        println!("GC_ERROR (./pointee.rs:74): {err}");
+        println!("type: {}", std::any::type_name::<T>());
 
         std::process::abort();
     });
@@ -82,9 +83,15 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
 
 pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
     let header_layout = Layout::new::<SliceHeader<T>>();
-    let slice_layout = Layout::array::<T>(len).expect("GC BAD LAYOUT");
+    let slice_layout = Layout::array::<T>(len).unwrap_or_else(|err| {
+        println!("GC_ERROR (./pointee.rs:87): {err}");
+        println!("type: {}, len: {}", std::any::type_name::<T>(), len);
+
+        std::process::abort();
+    });
     let (unpadded_layout, offset) = header_layout.extend(slice_layout).unwrap_or_else(|err| {
-        println!("GC_ERROR: {err}");
+        println!("GC_ERROR (./pointee.rs:93): {err}");
+        println!("type: {}, len: {}", std::any::type_name::<T>(), len);
 
         std::process::abort();
     });

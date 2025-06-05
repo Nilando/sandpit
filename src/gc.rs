@@ -216,12 +216,27 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     {
         // SAFETY: Its safe to create a writebarrier over this pointer b/c it is guaranteed
         // to be retraced after the closure ends.
-        let barrier = unsafe { WriteBarrier::new(&**self) };
+        let barrier = unsafe { WriteBarrier::new(self.scoped_deref()) };
 
         f(&barrier);
 
-        if mu.has_marked(&self.clone().into()) {
-            mu.retrace(&*self);
+        if mu.has_marked(self) {
+            // HERE LIES THE BUG, WHEN WE INSERT AN ELEMENT INTO A GC<[T]>
+            // we don't want to retrace the whole thing!
+            // 
+            // Hypothesis: 
+            // This retrace is triggered when we add an element to a GcVec<T>.
+            // The GcVec<[T]> contains a GcOpt<[T: GcSync]>; GcSync allows you
+            // to call the update array which will call this write_barrier method
+            // on a Gc<[T]>, this cause the underlying GcVec array which has
+            // zero initialized. So we will hit a loop via the Trace for [T] impl
+            // which will try to trace every index, which when it reaches the
+            // uninitialized parts it fails. 
+            // This could explain the crashes of a bad GC mark, bad layout, or segmentation fault.
+            //
+            // However something that I would expect is that
+            
+            mu.retrace(self.scoped_deref());
         }
     }
 }

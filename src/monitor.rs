@@ -91,7 +91,7 @@ impl<T: Collect + 'static> Monitor<T> {
         let max_old = self.max_old_objects.load(Ordering::Relaxed);
         let size = self.collector.get_arena_size();
         let prev_size = self.prev_arena_size.load(Ordering::Relaxed);
-        println!("GC_DEBUG: max_old: {}, current_old: {}, prev_size: {}, size: {}", max_old, current_old, prev_size, size);
+        println!("GC_DEBUG: max_old: {}, current_old: {}, prev_size: {} kb, size: {} kb", max_old, current_old, (prev_size/1024), (size/1024));
     }
 
     fn test_triggers(&self) {
@@ -102,11 +102,18 @@ impl<T: Collect + 'static> Monitor<T> {
             // monitor collection {old max} {found old objects} {arena size}
             self.collector.minor_collect();
 
+            if var("GC_DEBUG").is_ok() {
+                self.debug();
+            }
+
             if self.major_trigger() {
                 if var("GC_DEBUG").is_ok() {
                     self.debug();
                 }
                 self.collector.major_collect();
+                if var("GC_DEBUG").is_ok() {
+                    self.debug();
+                }
 
                 self.update_old_max();
             }
