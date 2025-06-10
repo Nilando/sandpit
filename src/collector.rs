@@ -75,7 +75,7 @@ where
         let mutation_lock = self.mutation_lock.lock().unwrap();
 
         if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG:\tRotating Trace Mark")
+            println!("GC_DEBUG: Rotating Trace Mark")
         }
 
         let start_time = Instant::now();

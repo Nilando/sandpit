@@ -209,7 +209,7 @@ unsafe impl<T: Trace> Trace for InnerBarrier<T> {
 
 impl<'gc, B: Tag> WriteBarrier<'gc, Tagged<'gc, B>> {
     pub fn set(&self, tagged_ptr: Tagged<'gc, B>) {
-        unsafe { self.inner.set(tagged_ptr) };
+        unsafe { self.inner.set(tagged_ptr.get_raw()) };
     }
 }
 

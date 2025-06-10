@@ -57,13 +57,18 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
         const { assert!(T::VARIANTS <= T::MIN_ALIGNMENT) };
     }
 
-    pub unsafe fn cast_to_gc<A: Trace>(&self) -> Gc<'gc, A> {
+    pub unsafe fn as_gc<A: Trace>(&self) -> Option<Gc<'gc, A>> {
         Self::const_assert();
-        assert!(self.is_ptr(), "Tag must be a pointer variant");
 
-        let tagged_value = Self::strip_tag(self.raw.load(Ordering::Relaxed));
+        let raw = self.raw.load(Ordering::Acquire);
 
-        Gc::from_ptr(tagged_value as *const _)
+        if !Self::get_raw_tag(raw).is_ptr() {
+            return None;
+        }
+
+        let tagged_value = Self::strip_tag(raw);
+
+        Some(Gc::from_ptr(tagged_value as *const _))
     }
 
     pub unsafe fn from_ptr<A: Trace>(value: Gc<'gc, A>, tag: T) -> Self {
@@ -92,20 +97,25 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
     }
 
     pub fn is_ptr(&self) -> bool {
-        self.get_tag().is_ptr()
+        let raw = self.get_raw();
+
+        Self::get_raw_tag(raw).is_ptr()
     }
 
     pub fn get_tag(&self) -> T {
-        let raw = self.raw.load(Ordering::Relaxed);
+        T::from_usize(self.get_raw() & Self::TAG_MASK).expect("Invalid tag value")
+    }
+
+    pub fn get_raw_tag(raw: usize) -> T {
         T::from_usize(raw & Self::TAG_MASK).expect("Invalid tag value")
     }
 
-    pub fn get_raw(&self) -> Option<usize> {
-        if self.is_ptr() {
-            return None;
-        }
+    pub fn get_stripped_raw(&self) -> usize {
+        Self::strip_tag(self.raw.load(Ordering::Relaxed))
+    }
 
-        Some(Self::strip_tag(self.raw.load(Ordering::Relaxed)))
+    pub fn get_raw(&self) -> usize {
+        self.raw.load(Ordering::Relaxed)
     }
 
     pub fn apply_tag(n: usize, tag: T) -> usize {
@@ -116,9 +126,17 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
         n & !Self::TAG_MASK
     }
 
-    pub unsafe fn set(&self, value: Self) {
-        let new_val = value.raw.load(Ordering::Relaxed);
+    pub fn set_raw(&self, value: usize, tag: T) {
+        Self::const_assert();
 
+        assert!(!tag.is_ptr(), "Tag must be a non-pointer variant");
+
+        let tagged_value = Self::apply_tag(value, tag);
+
+        self.raw.store(tagged_value, Ordering::Relaxed);
+    }
+
+    pub unsafe fn set(&self, new_val: usize) {
         self.raw.store(new_val, Ordering::Release);
     }
 }
@@ -126,7 +144,7 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{gc::{Gc, GcOpt}, Arena, Root};
+    use crate::{gc::Gc, Arena, Root};
     use sandpit_derive::Tag;
 
     #[derive(Tag)]
@@ -171,7 +189,7 @@ mod tests {
             
             assert!(!tagged.is_ptr());
             assert!(matches!(tagged.get_tag(), MyTag::RawData));
-            assert_eq!(tagged.get_raw().unwrap(), 2048);
+            assert_eq!(tagged.get_raw(), 2048);
         });
     }
 

@@ -286,7 +286,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             trace_arms.push(quote! {
                                 Self::#variant_name => {
                                     unsafe{
-                                        let gc_ptr = tagged_ptr.cast_to_gc::<#ptr_type>();
+                                        let gc_ptr = tagged_ptr.as_gc::<#ptr_type>();
 
                                         sandpit::Trace::trace(&gc_ptr, tracer);
                                     }
@@ -309,7 +309,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                                 pub fn #extract_method_name<'gc>(tagged_ptr: sandpit::Tagged<'gc, Self>) -> Option<sandpit::Gc<'gc, #ptr_type>> {
                                     if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
                                         unsafe {
-                                            Some(tagged_ptr.cast_to_gc())
+                                            tagged_ptr.as_gc()
                                         }
                                     } else {
                                         None
