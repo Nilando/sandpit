@@ -1,5 +1,6 @@
 use super::heap::Heap;
 use super::trace::TracerController;
+use std::env::var;
 use std::sync::Arc;
 use std::time::Duration;
 // The time slicer's job is to slow down aggresively allocating mutators so
@@ -83,6 +84,10 @@ impl TimeSlicer {
                     }
                 }
                 None => {
+                    if var("GC_DEBUG").is_ok() {
+                        println!("GC_DEBUG: MAX HEADROOM REACHED!")
+                    }
+
                     self.tracer_controller.raise_yield_flag();
                     break;
                 }
