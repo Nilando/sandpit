@@ -38,11 +38,11 @@ impl Tracer {
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
-        if var("GC_DEBUG").is_ok() {
-            //let type_name = std::any::type_name::<T>();
-            //println!("MARK: {}", type_name);
-            //println!("MARK: ptr\t{:#x}", gc.as_thin().as_ptr() as usize);
-            //println!("MARK: header\t{:#x}", gc.get_header_ptr() as usize);
+        if var("GC_TRACE").is_ok() {
+            let type_name = std::any::type_name::<T>();
+            println!("GC_TRACE: marking\t{}", type_name);
+            println!("GC_TRACE: ptr\t{:#x}", gc.as_thin().as_ptr() as usize);
+            println!("GC_TRACE: header\t{:#x}", gc.get_header_ptr() as usize);
         }
 
         let header = gc.get_header();

@@ -1,9 +1,6 @@
 use rand::prelude::*;
 use sandpit::{
-    field,
-    Gc, GcOpt,
-    Arena, Mutator, Root, Trace, TraceLeaf,
-    InnerBarrier,
+    field, Arena, Gc, GcOpt, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf
 };
 
 fn alloc_rand_garbage(mu: &Mutator) {
@@ -734,3 +731,72 @@ fn change_array_size_with_inner_barrier() {
         assert!(root.inner().len() == 10);
     });
 }
+
+use sandpit::GcVec;
+use sandpit::Tagged;
+
+#[derive(Tag)]
+enum TestTag {
+    Raw,
+    #[ptr(usize)]
+    Ptr,
+}
+
+#[test]
+fn gc_vec_of_tagged_pointers() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> =
+        Arena::new(|mu| GcVec::new(mu));
+
+    fn push_to_vec<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Tagged<'gc, TestTag>>) {
+        for i in 0..1000 {
+            if i % 2 == 0 {
+                let gc_ptr = Gc::new(mu, 123);
+                let tag_ptr = TestTag::from_ptr(gc_ptr);
+
+                vec.push(mu, tag_ptr);
+            } else {
+                let tag_ptr = Tagged::from_raw(1024, TestTag::Raw);
+
+                vec.push(mu, tag_ptr);
+            }
+        }
+
+        for i in 0..vec.len() {
+            let tag_ptr = vec.get_idx(i).unwrap();
+            if i % 2 == 0 {
+                let gc_ptr = TestTag::get_ptr(tag_ptr).unwrap();
+
+                assert!(*gc_ptr == 123);
+            } else {
+                let raw = tag_ptr.get_stripped_raw();
+
+                assert_eq!(raw, 1024);
+            }
+        }
+    }
+
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+}
+
+#[test]
+fn retracing_tagged_ptrs() {
+    let arena: Arena<Root![()]> =
+        Arena::new(|_| ());
+
+    fn mutate<'gc>(mu: &'gc Mutator) {
+        let gc_ptr = Gc::new(mu, 123);
+        let tag_ptr = TestTag::from_ptr(gc_ptr);
+
+        //println!("retrace_ptr: {}", tag_ptr.as_ptr() as *const usize as usize);
+        mu.retrace(&*Gc::new(mu, tag_ptr));
+    }
+
+    arena.mutate(|mu, ()| mutate(mu));
+    arena.major_collect();
+}
+

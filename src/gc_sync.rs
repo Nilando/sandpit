@@ -10,19 +10,41 @@ pub trait GcSync<'gc>: Trace + Clone + 'gc {
 
 impl<'gc, T: Trace> GcSync<'gc> for Gc<'gc, T> {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        array.write_barrier(mu, |barrier| barrier.at(index).set(value));
+        unsafe { 
+            array[index].set(value.clone()); 
+        }
+
+        if mu.has_marked(&array) {
+            mu.retrace(&array[index]); 
+        }
     }
 }
 
 impl<'gc, T: Trace> GcSync<'gc> for GcOpt<'gc, T> {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        array.write_barrier(mu, |barrier| barrier.at(index).set(value));
+        unsafe { 
+            array[index].set(value.clone()); 
+        }
+
+        if mu.has_marked(&array) {
+            if value.is_some() {
+                mu.retrace(&array[index]); 
+            }
+        }
     }
 }
 
 impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<'gc, B> {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        array.write_barrier(mu, |barrier| barrier.at(index).set(value));
+        unsafe { 
+            array[index].set(value.get_raw()); 
+        }
+
+        if mu.has_marked(&array) {
+            if value.is_ptr() {
+                mu.retrace(&array[index]); 
+            }
+        }
     }
 }
 
