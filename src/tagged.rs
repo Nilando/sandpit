@@ -2,9 +2,8 @@ use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::Trace;
 
-use super::gc::{Gc};
+use super::gc::Gc;
 use std::marker::PhantomData;
-
 
 // TODO: Add a TaggedUsize<T: Tag> type
 
@@ -97,9 +96,7 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
     }
 
     pub fn is_ptr(&self) -> bool {
-        let raw = self.get_raw();
-
-        Self::get_raw_tag(raw).is_ptr()
+        self.get_tag().is_ptr()
     }
 
     pub fn get_tag(&self) -> T {
@@ -175,9 +172,10 @@ mod tests {
     #[test]
     fn test_gc_data_variant() {
         let _: Arena<Root![_]> = Arena::new(|mu| {
-            let tagged = MyTag::from_gc(Gc::new(mu, Gc::new(mu, 100usize)));
-            
+            let gc_ptr = Gc::new(mu, Gc::new(mu, 100usize));
+            let tagged = MyTag::from_gc(gc_ptr);
             let extracted: Gc<Gc<usize>> = MyTag::get_gc(tagged).unwrap();
+
             assert_eq!(**extracted, 100);
         });
     }
@@ -189,7 +187,7 @@ mod tests {
             
             assert!(!tagged.is_ptr());
             assert!(matches!(tagged.get_tag(), MyTag::RawData));
-            assert_eq!(tagged.get_raw(), 2048);
+            assert_eq!(tagged.get_stripped_raw(), 2048);
         });
     }
 
