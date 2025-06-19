@@ -11,21 +11,14 @@ unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        //println!("Tracing GcVec! len {}, cap {}", self.len(), self.cap());
-        // mark the inner barrier
         if !self.items.mark(tracer) {
-            //println!("inner barrier already marked");
-            // if its already marked dont trace it
             return;
         }
 
-        // mark the array holding all the items
         if let Some(ptr) = self.items.inner().as_option() {
             tracer.mark(ptr);
-            //println!("Tracing GcVec! marked raw array");
         }
 
-        // trace every item
         let mut i = 0;
         let len = self.len.load(Ordering::Acquire);
 
@@ -33,7 +26,6 @@ unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
             if len <= i {
                 break;
             }
-            //println!("Tracing GcVec! idx {}, len {}", i, len);
 
             let items_ptr: Gc<'_, [T]> = self.items.inner().unwrap();
             let item: &T = &items_ptr[i];
@@ -42,8 +34,6 @@ unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
 
             i += 1;
         }
-
-        //println!("Done Tracing GcVec!");
     }
 }
 
