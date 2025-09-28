@@ -229,6 +229,15 @@ where
         f(&mutator, root);
     }
 
+    pub fn view<F>(&self, f: F)
+    where
+        F: for<'gc> FnOnce(&'gc R::Of<'gc>),
+    {
+        let root = unsafe { self.scoped_root() };
+
+        f(root);
+    }
+
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
         std::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
     }

@@ -151,6 +151,15 @@ where
         self.collector.mutate(f)
     }
 
+    /// you can view the root but you don't have a mutator, therefore collection
+    /// can happen while viewing
+    pub fn view<F>(&self, f: F)
+    where
+        F: for<'gc> FnOnce(&'gc R::Of<'gc>),
+    {
+        self.collector.view(f)
+    }
+
     /// Synchronously trigger a major collection. A major collection means that
     /// the trace will trace *ALL* objects reachable from the root. This will free
     /// as much memory as possible but may take longer than a minor collection
