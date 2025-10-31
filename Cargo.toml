@@ -25,6 +25,10 @@ readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["std"]
+std = []
+
 [dependencies]
 nimix = "=0.1.2"
 sandpit_derive = { path = "./derive", version = "0.3.0" }

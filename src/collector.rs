@@ -3,7 +3,6 @@ use super::config::Config;
 use super::debug::gc_debug;
 use super::header::GcMark;
 use super::mutator::Mutator;
-use super::time_slicer::TimeSlicer;
 use super::trace::{Trace, TracerController};
 
 use higher_kinded_types::ForLt;
@@ -56,8 +55,9 @@ where
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
-
-    time_slicer: TimeSlicer,
+    max_headroom_ratio: f64,
+    timeslice_size: f64,
+    timeslice_min: f64,
 }
 
 impl<R: ForLt> Collect for Collector<R>
@@ -180,13 +180,6 @@ where
             unsafe { &*(&mutator as *const Mutator<'static>) };
 
         let root: R::Of<'static> = f(mutator_ref);
-        let time_slicer = TimeSlicer::new(
-            tracer.clone(),
-            heap.clone(),
-            config.collector_max_headroom_ratio,
-            config.collector_timeslice_size,
-            config.collector_slice_min,
-        );
 
         Self {
             heap,
@@ -199,7 +192,9 @@ where
             major_collect_avg_time: AtomicUsize::new(0),
             minor_collect_avg_time: AtomicUsize::new(0),
             old_objects: Arc::new(AtomicU64::new(0)),
-            time_slicer,
+            max_headroom_ratio: config.collector_max_headroom_ratio,
+            timeslice_size: config.collector_timeslice_size,
+            timeslice_min: config.collector_slice_min,
         }
     }
 
@@ -261,7 +256,14 @@ where
         self.tracer
             .clone()
             .trace(&self.root, self.old_objects.clone(), || {
-                self.time_slicer.run();
+                #[cfg(feature = "std")]
+                super::time_slicer::time_slice(
+                    &self.tracer, 
+                    &self.heap, 
+                    self.max_headroom_ratio,
+                    self.timeslice_size,
+                    self.timeslice_min,
+                );
             });
     }
 }

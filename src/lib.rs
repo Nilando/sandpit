@@ -136,14 +136,17 @@ mod config;
 mod debug;
 mod header;
 mod metrics;
-mod monitor;
 mod mutator;
 mod pointee;
-mod time_slicer;
 mod trace;
 mod tagged;
 mod vec;
 mod gc_sync;
+
+#[cfg(feature = "std")]
+mod monitor;
+#[cfg(feature = "std")]
+mod time_slicer;
 
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;

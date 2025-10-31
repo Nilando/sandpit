@@ -1,6 +1,7 @@
 use super::collector::{Collect, Collector};
 use super::config::Config;
 use super::metrics::Metrics;
+#[cfg(feature = "std")]
 use super::monitor::Monitor;
 use super::mutator::Mutator;
 use super::trace::Trace;
@@ -29,6 +30,8 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     collector: Arc<Collector<R>>,
+
+    #[cfg(feature = "std")]
     monitor: Arc<Monitor<Collector<R>>>,
     // In the future it would be cool to allow for editing the config
     _config: Config,
@@ -39,6 +42,7 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn drop(&mut self) {
+        #[cfg(feature = "std")]
         self.monitor.stop();
     }
 }
@@ -86,15 +90,18 @@ where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
         let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, &config));
+        #[cfg(feature = "std")]
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 
-        //if config.monitor_on {
+        #[cfg(feature = "std")]
         monitor.clone().start();
-        //}
 
         Self {
             collector,
+
+            #[cfg(feature = "std")]
             monitor,
+
             _config: config,
         }
     }
@@ -233,9 +240,17 @@ where
             // How many old objects must exist before a major collection is triggered.
             // If you divide this number by the monitor's 'MAX_OLD_GROWTH_RATE, you get the number
             // of old objects at the end of the last major collection
+            #[cfg(feature = "std")]
             max_old_objects: self.monitor.get_max_old_objects(),
             // The size of the arena at the end of the last collection.
+            #[cfg(feature = "std")]
             prev_arena_size: self.monitor.get_prev_arena_size(),
+
+            #[cfg(not(feature = "std"))]
+            max_old_objects: 0,
+
+            #[cfg(not(feature = "std"))]
+            prev_arena_size: 0
         }
     }
 }
