@@ -47,9 +47,6 @@ where
     }
 }
 
-unsafe impl<R: ForLt + Send + 'static> Send for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
-unsafe impl<R: ForLt + Sync + 'static> Sync for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
-
 impl<R: ForLt + 'static> Arena<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,

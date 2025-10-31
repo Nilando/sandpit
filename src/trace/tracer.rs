@@ -5,36 +5,24 @@ use crate::debug::{gc_debug, gc_trace};
 use crate::heap::Heap;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
-use core::cell::Cell;
-use alloc::sync::Arc;
 
 /// Internal type used by the GC to perform tracing.
-pub struct Tracer {
+pub struct Tracer<'a> {
     // sometimes ID might be helpful in debugging, but currently not used anywhere
-    _id: usize,
-    controller: Arc<TracerController>,
+    controller: &'a TracerController,
     mark: GcMark,
-    mark_count: Cell<usize>,
+    mark_count: usize,
     work: Vec<TraceJob>,
 }
 
-impl Tracer {
-    pub(crate) fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
+impl<'a> Tracer<'a> {
+    pub(crate) fn new(controller: &'a TracerController, mark: GcMark) -> Self {
         Self {
-            _id: id,
             controller,
             mark,
-            mark_count: Cell::new(0),
+            mark_count: 0,
             work: vec![],
         }
-    }
-
-    pub(crate) fn get_mark_count(&self) -> usize {
-        self.mark_count.get()
-    }
-
-    pub(crate) fn get_mark(&self) -> GcMark {
-        self.mark
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
@@ -88,13 +76,14 @@ impl Tracer {
 
             self.do_work();
             self.share_work();
+            self.controller.raise_yield_flag();
         }
 
         gc_debug("Tracer Exited Successfully");
 
         debug_assert_eq!(self.work.len(), 0);
 
-        self.mark_count.get()
+        self.mark_count
     }
 
     fn do_work(&mut self) {
@@ -119,7 +108,15 @@ impl Tracer {
         }
     }
 
-    fn increment_mark_count(&self) {
-        self.mark_count.set(self.mark_count.get() + 1);
+    fn increment_mark_count(&mut self) {
+        self.mark_count += 1;
+    }
+
+    pub(crate) fn get_mark_count(&self) -> usize {
+        self.mark_count
+    }
+
+    pub(crate) fn get_mark(&self) -> GcMark {
+        self.mark
     }
 }

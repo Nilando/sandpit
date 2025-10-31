@@ -260,7 +260,6 @@ impl<'gc> Mutator<'gc> {
         if self.tracer_controller.yield_flag() {
             true
         } else {
-            let _lock = self.tracer_controller.get_time_slice_lock();
             self.tracer_controller.yield_flag()
         }
     }

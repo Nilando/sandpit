@@ -5,11 +5,10 @@ use crate::config::Config;
 use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
-use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use alloc::sync::Arc;
 
-use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
-use std::thread::JoinHandle;
+use std::sync::{RwLock, RwLockReadGuard};
 use std::time::Instant;
 
 pub struct TracerController {
@@ -22,13 +21,7 @@ pub struct TracerController {
     // this will be tricky since then tracing will require
     // access to a mutator, or at least the arena in some way
     // or should this be some kind of channel?
-    tracers_waiting: AtomicUsize,
-    work_sent: AtomicUsize,
-    work_received: AtomicUsize,
     current_mark: AtomicU8,
-
-    // This lock is set by time slicer to elongate the period in which mutators yield
-    time_slice_lock: Mutex<()>,
 
     // mutators hold a ReadGuard of this lock preventing
     // the tracers from declaring the trace complete until
@@ -55,10 +48,6 @@ impl TracerController {
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
             trace_end_flag: AtomicBool::new(false),
-            tracers_waiting: AtomicUsize::new(0),
-            work_sent: AtomicUsize::new(0),
-            work_received: AtomicUsize::new(0),
-            time_slice_lock: Mutex::new(()),
             current_mark: AtomicU8::new(GcMark::Red.into()),
 
             num_tracers: config.tracer_threads,
@@ -70,55 +59,67 @@ impl TracerController {
         }
     }
 
-    pub fn yield_flag(&self) -> bool {
-        self.yield_flag.load(Ordering::SeqCst)
+    pub fn trace<T: Trace>(
+        &self,
+        root: &T,
+        old_object_count: Arc<AtomicU64>,
+    ) {
+        gc_debug("Begining trace...");
+
+        self.trace_root(root, old_object_count.clone());
+        self.spawn_tracers(old_object_count);
+
+        gc_debug("Trace Complete!");
+
+        self.clean_up();
     }
 
-    pub fn raise_yield_flag(&self) {
-        self.yield_flag.store(true, Ordering::SeqCst);
+    fn spawn_tracers(&self, old_object_count: Arc<AtomicU64>) {
+        let object_count = old_object_count.clone();
+
+        std::thread::scope(|scope| {
+            for _ in 0..self.num_tracers {
+                scope.spawn(|| {
+                    let mut tracer = self.new_tracer();
+
+                    gc_debug("Tracer Thread Spawned");
+
+                    let marked_objects = tracer.trace_loop() as u64;
+
+                    object_count.fetch_add(marked_objects, Ordering::SeqCst);
+                });
+            }
+        });
     }
 
-    pub fn yield_lock(&self) -> RwLockReadGuard<()> {
-        self.yield_lock.read().unwrap()
+    fn trace_root<T: Trace>(&self, root: &T, old_object_count: Arc<AtomicU64>) {
+        let mut tracer = self.new_tracer();
+        root.trace(&mut tracer);
+        tracer.flush_work();
+        old_object_count.fetch_add(tracer.get_mark_count() as u64, Ordering::SeqCst);
     }
 
-    pub fn get_time_slice_lock(&self) -> MutexGuard<()> {
-        self.time_slice_lock.lock().unwrap()
-    }
+    fn new_tracer(&self) -> Tracer {
+        let mark = self.get_current_mark();
 
-    pub fn get_trace_share_ratio(&self) -> f32 {
-        self.trace_share_ratio
-    }
-
-    pub fn has_work(&self) -> bool {
-        !self.receiver.is_empty()
-    }
-
-    pub fn incr_recv(&self) {
-        self.work_received.fetch_add(1, Ordering::Release);
+        Tracer::new(self, mark)
     }
 
     pub fn send_work(&self, work: Vec<TraceJob>) {
-        self.work_sent.fetch_add(1, Ordering::Release);
         self.sender.send(work).unwrap();
     }
 
     pub fn recv_work(&self) -> Option<Vec<TraceJob>> {
-        self.start_waiting();
-
         let duration = std::time::Duration::from_millis(self.trace_wait_time);
         let deadline = Instant::now().checked_add(duration).unwrap();
 
         loop {
             match self.receiver.recv_deadline(deadline) {
                 Ok(work) => {
-                    self.stop_waiting();
-                    self.incr_recv();
                     return Some(work);
                 }
                 Err(_) => {
                     if self.is_trace_completed() {
-                        self.stop_waiting();
                         return None;
                     }
                 }
@@ -127,52 +128,15 @@ impl TracerController {
     }
 
     pub fn is_trace_completed(&self) -> bool {
-        if self.trace_end_flag.load(Ordering::SeqCst) {
-            return true;
-        }
-
-        if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
-            // The tracers are out of work, raise this flag to stop the mutators.
-            if !self.yield_flag() {
-                gc_debug("Yield Flag Raised");
+        if self.receiver.is_empty() {
+            if self.mutators_stopped() {
+                return true;
             }
 
             self.raise_yield_flag();
-
-            if self.mutators_stopped() {
-                // Let the other tracers know they should stop by raising this flag
-                self.trace_end_flag.store(true, Ordering::SeqCst);
-
-                gc_debug("Mutators Have Exited. Finishing Trace...");
-                return true;
-            }
         }
 
         false
-    }
-
-    pub fn trace<T: Trace, F: FnOnce()>(
-        self: Arc<Self>,
-        root: &T,
-        old_object_count: Arc<AtomicU64>,
-        trace_callback: F,
-    ) {
-        gc_debug("Begining trace...");
-
-        self.clone().trace_root(root, old_object_count.clone());
-        let join_handles = self.clone().spawn_tracers(old_object_count);
-
-        trace_callback();
-
-        for jh in join_handles.into_iter() {
-            jh.join().unwrap_or_else(|_| {
-                panic!("GC Tracer Panicked");
-            });
-        }
-
-        gc_debug("Trace Complete!");
-
-        self.clean_up();
     }
 
     pub fn rotate_mark(&self) -> GcMark {
@@ -192,78 +156,28 @@ impl TracerController {
     }
 
     fn clean_up(&self) {
-        debug_assert_eq!(self.sent(), self.received());
-        debug_assert_eq!(self.sender.len(), 0);
-        debug_assert_eq!(self.tracers_waiting(), 0);
-        debug_assert!(self.is_trace_completed());
-        debug_assert!(self.mutators_stopped());
-
         self.yield_flag.store(false, Ordering::SeqCst);
         self.trace_end_flag.store(false, Ordering::SeqCst);
-        self.work_received.store(0, Ordering::SeqCst);
-        self.work_sent.store(0, Ordering::SeqCst);
-        self.tracers_waiting.store(0, Ordering::SeqCst);
     }
 
-    fn trace_root<T: Trace>(self: Arc<Self>, root: &T, old_object_count: Arc<AtomicU64>) {
-        let mut tracer = self.new_tracer(0);
-        root.trace(&mut tracer);
-        tracer.flush_work();
-        old_object_count.fetch_add(tracer.get_mark_count() as u64, Ordering::SeqCst);
+    pub fn yield_flag(&self) -> bool {
+        self.yield_flag.load(Ordering::SeqCst)
     }
 
-    fn new_tracer(self: Arc<Self>, id: usize) -> Tracer {
-        let mark = self.get_current_mark();
-
-        Tracer::new(self.clone(), mark, id)
+    pub fn raise_yield_flag(&self) {
+        self.yield_flag.store(true, Ordering::SeqCst);
     }
 
-    fn spawn_tracers(self: Arc<Self>, old_object_count: Arc<AtomicU64>) -> Vec<JoinHandle<()>> {
-        let mut join_handles = vec![];
-
-        for i in 0..self.num_tracers {
-            let thread_name: String = format!("GC_TRACER_{i}");
-            let thread = std::thread::Builder::new().name(thread_name);
-            let object_count = old_object_count.clone();
-            let controller = self.clone();
-            let jh = thread
-                .spawn(move || {
-                    let mut tracer = controller.clone().new_tracer(i);
-
-                    gc_debug("Tracer Thread Spawned");
-
-                    let marked_objects = tracer.trace_loop() as u64;
-
-                    object_count.fetch_add(marked_objects, Ordering::SeqCst);
-                })
-                .unwrap_or_else(|_| {
-                    panic!("Failed to start GC Thread");
-                });
-
-            join_handles.push(jh);
-        }
-
-        join_handles
+    pub fn yield_lock(&self) -> RwLockReadGuard<()> {
+        self.yield_lock.read().unwrap()
     }
 
-    fn tracers_waiting(&self) -> usize {
-        self.tracers_waiting.load(Ordering::Acquire)
+    pub fn get_trace_share_ratio(&self) -> f32 {
+        self.trace_share_ratio
     }
 
-    fn start_waiting(&self) -> usize {
-        self.tracers_waiting.fetch_add(1, Ordering::Acquire)
-    }
-
-    fn stop_waiting(&self) {
-        self.tracers_waiting.fetch_sub(1, Ordering::Release);
-    }
-
-    fn sent(&self) -> usize {
-        self.work_sent.load(Ordering::Acquire)
-    }
-
-    fn received(&self) -> usize {
-        self.work_received.load(Ordering::Acquire)
+    pub fn has_work(&self) -> bool {
+        !self.receiver.is_empty()
     }
 
     fn mutators_stopped(&self) -> bool {

@@ -39,7 +39,7 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     heap: Heap,
-    tracer: Arc<TracerController>,
+    tracer_controller: TracerController,
 
     // this lock is held while a collection is happening.
     // It is used to ensure that we don't start a collection while a collection
@@ -55,8 +55,6 @@ where
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
     max_headroom_ratio: f64,
-    timeslice_size: f64,
-    timeslice_min: f64,
 }
 
 impl<R: ForLt> Collect for Collector<R>
@@ -66,14 +64,15 @@ where
     fn major_collect(&self) {
         gc_debug("MAJOR COLLECTION TRIGGERED!");
 
-        let collection_lock = self.collection_lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
 
         gc_debug("Rotating Trace Mark");
 
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
-        self.collect();
+                            
+        self.trace();
 
         gc_debug("Sweeping...");
         // SAFETY: at this point there are no mutators and all garbage collected
@@ -97,9 +96,11 @@ where
     fn minor_collect(&self) {
         gc_debug("MINOR COLLECTION TRIGGERED!");
 
-        let collection_lock = self.collection_lock.lock().unwrap();
+        let _collection_lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
-        self.collect();
+
+        // no mutators should be able to be made between trace finish and sweep
+        self.trace();
 
         gc_debug("Sweeping...");
         // SAFETY: at this point there are no mutators and all garbage collected
@@ -147,7 +148,7 @@ where
     fn get_state(&self) -> GcState {
         if self.collection_lock.try_lock().is_ok() {
             GcState::Waiting
-        } else if self.tracer.yield_flag() {
+        } else if self.tracer_controller.yield_flag() {
             GcState::Finishing
         } else {
             GcState::Marking
@@ -163,10 +164,15 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
+
+        // This is function is extremely sketchy.
+        //
+        // I have a very fragile understanding of whats going on here, and
+        // I truly don't know whether this is safe.
         let heap = Heap::new();
-        let tracer = Arc::new(TracerController::new(config));
+        let tracer_controller = TracerController::new(config);
         let tracer_ref: &'static TracerController =
-            unsafe { &*(&*tracer as *const TracerController) };
+            unsafe { &*(&tracer_controller as *const TracerController) };
         let lock = tracer_ref.yield_lock();
         let mutator = Mutator::new(heap.clone(), tracer_ref, lock);
         let mutator_ref: &'static Mutator<'static> =
@@ -174,9 +180,11 @@ where
 
         let root: R::Of<'static> = f(mutator_ref);
 
+        drop(mutator);
+
         Self {
             heap,
-            tracer,
+            tracer_controller,
             root,
             collection_lock: Mutex::new(()),
             major_collections: AtomicUsize::new(0),
@@ -185,8 +193,6 @@ where
             minor_collect_avg_time: AtomicUsize::new(0),
             old_objects: Arc::new(AtomicU64::new(0)),
             max_headroom_ratio: config.collector_max_headroom_ratio,
-            timeslice_size: config.collector_timeslice_size,
-            timeslice_min: config.collector_slice_min,
         }
     }
 
@@ -214,9 +220,10 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        let yield_lock = self.tracer.yield_lock();
+        let _collection_lock = self.collection_lock.lock();
+        let yield_lock = self.tracer_controller.yield_lock();
 
-        Mutator::new(self.heap.clone(), self.tracer.as_ref(), yield_lock)
+        Mutator::new(self.heap.clone(), &self.tracer_controller, yield_lock)
     }
 
     fn update_collection_time(
@@ -236,25 +243,14 @@ where
     }
 
     fn rotate_mark(&self) -> GcMark {
-        self.tracer.rotate_mark()
+        self.tracer_controller.rotate_mark()
     }
 
     fn get_current_mark(&self) -> GcMark {
-        self.tracer.get_current_mark()
+        self.tracer_controller.get_current_mark()
     }
 
-    fn collect(&self) {
-        self.tracer
-            .clone()
-            .trace(&self.root, self.old_objects.clone(), || {
-                #[cfg(feature = "std")]
-                super::time_slicer::time_slice(
-                    &self.tracer, 
-                    &self.heap, 
-                    self.max_headroom_ratio,
-                    self.timeslice_size,
-                    self.timeslice_min,
-                );
-            });
+    fn trace(&self) {
+        self.tracer_controller.trace(&self.root, self.old_objects.clone());
     }
 }

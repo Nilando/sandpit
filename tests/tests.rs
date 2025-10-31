@@ -486,6 +486,7 @@ fn trace_tuple_struct() {
     });
 }
 
+/*
 #[test]
 fn multi_threaded_allocating() {
     use std::sync::Arc;
@@ -512,6 +513,7 @@ fn multi_threaded_allocating() {
         });
     });
 }
+*/
 
 #[test]
 fn cyclic_graph() {
