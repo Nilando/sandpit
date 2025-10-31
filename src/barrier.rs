@@ -2,7 +2,7 @@ use super::gc::{Gc, GcOpt};
 use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
 use super::tagged::{Tagged, Tag};
-use std::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU8, Ordering};
 
 /// Allows for the mutation of [`Gc`] and [`GcOpt`] pointers.
 ///

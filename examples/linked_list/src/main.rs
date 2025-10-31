@@ -5,7 +5,7 @@ use sandpit::{
     Gc, GcOpt, Mutator, Trace,
 };
 
-use std::cell::Cell;
+use core::cell::Cell;
 
 struct LinkedListIter<'gc, T: Trace> {
     next: Option<&'gc Node<'gc, T>>,

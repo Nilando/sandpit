@@ -252,7 +252,7 @@ fn alloc_result() {
 #[test]
 fn alloc_sized_array() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, usize>; 100]>]> = Arena::new(|mu| {
-        let arr = std::array::from_fn(|idx| Gc::new(mu, idx));
+        let arr = core::array::from_fn(|idx| Gc::new(mu, idx));
 
         Gc::new(mu, arr)
     });
@@ -452,7 +452,7 @@ fn derive_empty_enums() {
 
 #[test]
 fn traceleaf_tuple_struct() {
-    use std::cell::Cell;
+    use core::cell::Cell;
 
     #[derive(TraceLeaf, Copy, Clone)]
     struct Foo(u8, u8);
@@ -521,7 +521,7 @@ fn cyclic_graph() {
     }
 
     impl<'gc> Node<'gc> {
-        fn new(mu: &'gc Mutator) -> Self {
+        fn new(_: &'gc Mutator) -> Self {
             Self {
                 ptr: GcOpt::new_none(),
             }

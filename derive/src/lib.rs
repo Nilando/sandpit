@@ -353,7 +353,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
             {
                 let mut min_align = usize::MAX;
                 #(
-                    let align = std::mem::align_of::<sandpit::Gc<#pointer_types>>();
+                    let align = core::mem::align_of::<sandpit::Gc<#pointer_types>>();
                     if align < min_align { min_align = align; }
                 )*
                 min_align

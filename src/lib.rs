@@ -125,6 +125,7 @@
 //! the yield signal, memory cannot be freed!
 //!
 extern crate self as sandpit;
+extern crate alloc;
 
 mod gc;
 mod heap;

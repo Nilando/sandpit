@@ -4,8 +4,8 @@ use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::trace::{Trace, TraceJob, TracerController};
-use std::cell::RefCell;
-use std::ptr::{write, copy, NonNull};
+use core::cell::RefCell;
+use core::ptr::{write, copy, NonNull};
 use std::sync::RwLockReadGuard;
 
 /// Allows for allocation and mutation within the GC arena.
@@ -152,7 +152,7 @@ impl<'gc> Mutator<'gc> {
                 write(slice_ptr.add(i), value);
             }
 
-            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, len);
             write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
 
             Gc::from_ptr(slice)
@@ -185,7 +185,7 @@ impl<'gc> Mutator<'gc> {
 
             copy(slice.as_ptr(), slice_ptr, slice.len());
 
-            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, slice.len());
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, slice.len());
             write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
 
             Gc::from_ptr(slice)
@@ -225,7 +225,7 @@ impl<'gc> Mutator<'gc> {
                 write(slice_ptr.add(i), item);
             }
 
-            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, len);
             write(header_ptr, SliceHeader::<T>::new(self.mark, len));
 
             Gc::from_ptr(slice)

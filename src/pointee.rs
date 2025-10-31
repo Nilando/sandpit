@@ -1,9 +1,9 @@
 use super::trace::Trace;
 use crate::header::{GcHeader, SizedHeader, SliceHeader};
 
-use std::alloc::Layout;
-use std::marker::PhantomData;
-use std::ptr::NonNull;
+use alloc::alloc::Layout;
+use core::marker::PhantomData;
+use core::ptr::{NonNull, slice_from_raw_parts};
 
 // Gc pointer types are capable of pointing to [T]. However, you can not
 // have an AtomicPtr<T> where T: ?Sized b/c atomic operations can only operate
@@ -54,7 +54,7 @@ impl<T: Trace> GcPointee for [T] {
         let header: &SliceHeader<T> = Self::get_header(thin_ptr);
         let len = header.len();
 
-        std::ptr::slice_from_raw_parts(thin_ptr.cast().as_ptr(), len)
+        slice_from_raw_parts(thin_ptr.cast().as_ptr(), len)
     }
 
     fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
@@ -70,12 +70,7 @@ impl<T: Trace> GcPointee for [T] {
 pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let header_layout = Layout::new::<SizedHeader<T>>();
     let val_layout = Layout::new::<T>();
-    let (unpadded_layout, offset) = header_layout.extend(val_layout).unwrap_or_else(|err| {
-        println!("GC_ERROR (./pointee.rs:74): {err}");
-        println!("type: {}", std::any::type_name::<T>());
-
-        std::process::abort();
-    });
+    let (unpadded_layout, offset) = header_layout.extend(val_layout).unwrap();
     let layout = unpadded_layout.pad_to_align();
 
     (layout, offset)
@@ -83,18 +78,8 @@ pub fn sized_alloc_layout<T>() -> (Layout, usize) {
 
 pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
     let header_layout = Layout::new::<SliceHeader<T>>();
-    let slice_layout = Layout::array::<T>(len).unwrap_or_else(|err| {
-        println!("GC_ERROR (./pointee.rs:87): {err}");
-        println!("type: {}, len: {}", std::any::type_name::<T>(), len);
-
-        std::process::abort();
-    });
-    let (unpadded_layout, offset) = header_layout.extend(slice_layout).unwrap_or_else(|err| {
-        println!("GC_ERROR (./pointee.rs:93): {err}");
-        println!("type: {}, len: {}", std::any::type_name::<T>(), len);
-
-        std::process::abort();
-    });
+    let slice_layout = Layout::array::<T>(len).unwrap();
+    let (unpadded_layout, offset) = header_layout.extend(slice_layout).unwrap();
     let layout = unpadded_layout.pad_to_align();
 
     (layout, offset)

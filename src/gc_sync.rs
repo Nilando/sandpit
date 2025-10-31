@@ -2,7 +2,7 @@ use super::mutator::Mutator;
 use super::trace::{Trace, TraceLeaf};
 use super::gc::{Gc, GcOpt};
 use super::tagged::{Tagged, Tag};
-use std::cell::Cell;
+use core::cell::Cell;
 
 pub trait GcSync<'gc>: Trace + Clone + 'gc {
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self);

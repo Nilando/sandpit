@@ -4,9 +4,9 @@ use super::tracer_controller::TracerController;
 use crate::heap::Heap;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
-use std::cell::Cell;
+use core::cell::Cell;
 use std::env::var;
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 /// Internal type used by the GC to perform tracing.
 pub struct Tracer {
@@ -39,7 +39,7 @@ impl Tracer {
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
         if var("GC_TRACE").is_ok() {
-            let type_name = std::any::type_name::<T>();
+            let type_name = core::any::type_name::<T>();
             println!("GC_TRACE: marking\t{}", type_name);
             println!("GC_TRACE: ptr\t{:#x}", gc.as_thin().as_ptr() as usize);
             println!("GC_TRACE: header\t{:#x}", gc.get_header_ptr() as usize);
@@ -77,7 +77,7 @@ impl Tracer {
     pub(crate) fn flush_work(&mut self) {
         let mut work = vec![];
 
-        std::mem::swap(&mut work, &mut self.work);
+        core::mem::swap(&mut work, &mut self.work);
 
         self.controller.send_work(work);
     }

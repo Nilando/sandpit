@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::Gc;
 
 use super::mutator::Mutator;
@@ -130,7 +130,7 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
             if i < old_cap {
                 self.get_idx(i).unwrap()
             } else {
-                unsafe { std::mem::MaybeUninit::zeroed().assume_init() }
+                unsafe { core::mem::MaybeUninit::zeroed().assume_init() }
             }
         });
 

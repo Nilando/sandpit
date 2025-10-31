@@ -1,9 +1,9 @@
-use std::mem::ManuallyDrop;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use core::mem::ManuallyDrop;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use core::marker::PhantomData;
 use crate::Trace;
 
 use super::gc::Gc;
-use std::marker::PhantomData;
 
 // TODO: Add a TaggedUsize<T: Tag> type
 
@@ -206,8 +206,8 @@ mod tests {
     fn test_size_preservation() {
         let _: Arena<Root![_]> = Arena::new(|_| {
             assert_eq!(
-                std::mem::size_of::<*const u8>(), 
-                std::mem::size_of::<Tagged<MyTag>>()
+                core::mem::size_of::<*const u8>(), 
+                core::mem::size_of::<Tagged<MyTag>>()
             );
         });
     }

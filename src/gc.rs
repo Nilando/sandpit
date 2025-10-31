@@ -12,11 +12,11 @@ use crate::header::GcHeader;
 use crate::mutator::Mutator;
 use crate::pointee::{GcPointee, Thin};
 
-use std::alloc::Layout;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::ptr::{null_mut, NonNull};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use alloc::alloc::Layout;
+use core::marker::PhantomData;
+use core::ops::Deref;
+use core::ptr::{null_mut, NonNull};
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 // A Gc points to a valid T within a GC Arena which is also succeeded by its
 // GC header which may or may not be padded.
@@ -389,7 +389,7 @@ pub trait GcPointer: Trace + Clone {
 }
 
 impl<'gc, T: Trace> GcPointer for Gc<'gc, T> {
-    const POINTEE_ALIGNMENT: usize = std::mem::align_of::<T>();
+    const POINTEE_ALIGNMENT: usize = core::mem::align_of::<T>();
 
     unsafe fn set(&self, value: Self) {
         self.set(value)
@@ -397,7 +397,7 @@ impl<'gc, T: Trace> GcPointer for Gc<'gc, T> {
 }
 
 impl<'gc, T: Trace> GcPointer for GcOpt<'gc, T> {
-    const POINTEE_ALIGNMENT: usize = std::mem::align_of::<T>();
+    const POINTEE_ALIGNMENT: usize = core::mem::align_of::<T>();
 
     unsafe fn set(&self, value: Self) {
         self.set(value)

@@ -6,7 +6,7 @@ use super::mutator::Mutator;
 use super::trace::Trace;
 
 use higher_kinded_types::ForLt;
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 /// A concurrently garbage collected arena with a single root type.
 ///

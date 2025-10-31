@@ -1,7 +1,7 @@
-use std::{env::var, sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc, Mutex,
-}};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use alloc::sync::Arc;
+use std::env::var;
+use std::sync::Mutex;
 use std::thread;
 use std::time;
 

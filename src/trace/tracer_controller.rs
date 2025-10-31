@@ -4,10 +4,11 @@ use super::tracer::Tracer;
 use crate::config::Config;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
-use std::{env::var, sync::{
-    atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-    Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
-}};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use alloc::sync::Arc;
+
+use std::env::var;
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::Instant;
 

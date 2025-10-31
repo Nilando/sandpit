@@ -7,12 +7,10 @@ use super::trace::{Trace, TracerController};
 
 use higher_kinded_types::ForLt;
 
-use std::env::var;
-use std::sync::{
-    atomic::{AtomicUsize, AtomicU64, Ordering},
-    Arc, Mutex,
-};
+use core::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
 use std::time::Instant;
+use std::env::var;
+use std::sync::{Arc, Mutex};
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
@@ -239,7 +237,7 @@ where
     }
 
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
-        std::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
+        core::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
     }
 
     fn new_mutator(&self) -> Mutator {

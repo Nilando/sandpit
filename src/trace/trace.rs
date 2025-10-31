@@ -2,9 +2,9 @@ use super::tracer::Tracer;
 use crate::tagged::{Tagged, Tag};
 use crate::gc::{Gc, GcOpt};
 use crate::pointee::{GcPointee, Thin};
-use std::cell::*;
-use std::ptr::NonNull;
-use std::sync::atomic::*;
+use core::cell::*;
+use core::ptr::NonNull;
+use core::sync::atomic::*;
 
 /// Indicates a type contains no Gc references internally.
 ///
@@ -23,7 +23,7 @@ use std::sync::atomic::*;
 ///
 /// ## Example
 /// ```rust
-/// # use std::cell::Cell;
+/// # use core::cell::Cell;
 /// # use sandpit::TraceLeaf;
 /// # #[derive(TraceLeaf)]
 /// # struct Bar;

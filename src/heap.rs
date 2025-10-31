@@ -1,6 +1,6 @@
 use super::header::GcMark;
 use nimix::Heap as NimixHeap;
-use std::alloc::Layout;
+use alloc::alloc::Layout;
 
 #[derive(Clone)]
 pub struct Heap {
