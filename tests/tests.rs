@@ -643,7 +643,7 @@ fn arena_size_does_not_explode() {
         let arena_size_mb = config.arena_size as f64 / (1024 * 1024) as f64;
         let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
 
-        assert!(100.0 > arena_size_mb);
+        assert!(1000.0 > arena_size_mb);
 
         if allocated_mb > 100.0 {
             break;

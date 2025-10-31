@@ -45,7 +45,6 @@ where
     // It is used to ensure that we don't start a collection while a collection
     // is happening. TODO: could we possibly start a collection while one is happening?
     collection_lock: Mutex<()>,
-    mutation_lock: Mutex<()>,
 
     root: R::Of<'static>,
     major_collections: AtomicUsize,
@@ -67,8 +66,7 @@ where
     fn major_collect(&self) {
         gc_debug("MAJOR COLLECTION TRIGGERED!");
 
-        let _collection_lock = self.collection_lock.lock().unwrap();
-        let mutation_lock = self.mutation_lock.lock().unwrap();
+        let collection_lock = self.collection_lock.lock().unwrap();
 
         gc_debug("Rotating Trace Mark");
 
@@ -81,9 +79,7 @@ where
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
-            self.heap.sweep(self.get_current_mark(), || {
-                drop(mutation_lock);
-            });
+            self.heap.sweep(self.get_current_mark(), || {});
         }
 
         self.major_collections.fetch_add(1, Ordering::Relaxed);
@@ -101,8 +97,7 @@ where
     fn minor_collect(&self) {
         gc_debug("MINOR COLLECTION TRIGGERED!");
 
-        let _collection_lock = self.collection_lock.lock().unwrap();
-        let mutation_lock = self.mutation_lock.lock().unwrap();
+        let collection_lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
 
@@ -110,9 +105,7 @@ where
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
-            self.heap.sweep(self.get_current_mark(), || {
-                drop(mutation_lock);
-            });
+            self.heap.sweep(self.get_current_mark(), || {});
         }
 
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
@@ -186,7 +179,6 @@ where
             tracer,
             root,
             collection_lock: Mutex::new(()),
-            mutation_lock: Mutex::new(()),
             major_collections: AtomicUsize::new(0),
             minor_collections: AtomicUsize::new(0),
             major_collect_avg_time: AtomicUsize::new(0),
@@ -222,7 +214,6 @@ where
     }
 
     fn new_mutator(&self) -> Mutator {
-        let _mutation_lock = self.mutation_lock.lock().unwrap();
         let yield_lock = self.tracer.yield_lock();
 
         Mutator::new(self.heap.clone(), self.tracer.as_ref(), yield_lock)
