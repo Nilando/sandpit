@@ -1,11 +1,11 @@
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
+use crate::debug::{gc_debug, gc_trace};
 use crate::heap::Heap;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
 use core::cell::Cell;
-use std::env::var;
 use alloc::sync::Arc;
 
 /// Internal type used by the GC to perform tracing.
@@ -38,12 +38,11 @@ impl Tracer {
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
-        if var("GC_TRACE").is_ok() {
-            let type_name = core::any::type_name::<T>();
-            println!("GC_TRACE: marking\t{}", type_name);
-            println!("GC_TRACE: ptr\t{:#x}", gc.as_thin().as_ptr() as usize);
-            println!("GC_TRACE: header\t{:#x}", gc.get_header_ptr() as usize);
-        }
+        let type_name = core::any::type_name::<T>();
+        gc_trace(&format!("marking\t{}\tptr\t{:#x}\theader\t{:#x}",
+            type_name,
+            gc.as_thin().as_ptr() as usize,
+            gc.get_header_ptr() as usize));
 
         let header = gc.get_header();
         let alloc_ptr = gc.get_header_ptr();
@@ -51,10 +50,6 @@ impl Tracer {
 
         if header.get_mark() == self.mark {
             return false;
-        }
-
-        if var("GC_DEBUG").is_ok() {
-            //println!("MARK: marked!");
         }
 
         header.set_mark(self.mark);
@@ -95,9 +90,7 @@ impl Tracer {
             self.share_work();
         }
 
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Tracer Exited Successfully")
-        }
+        gc_debug("Tracer Exited Successfully");
 
         debug_assert_eq!(self.work.len(), 0);
 

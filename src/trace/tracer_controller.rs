@@ -2,12 +2,12 @@ use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::Tracer;
 use crate::config::Config;
+use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crossbeam_channel::{Receiver, Sender};
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use alloc::sync::Arc;
 
-use std::env::var;
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -133,10 +133,8 @@ impl TracerController {
 
         if self.tracers_waiting() == self.num_tracers && self.sent() == self.received() {
             // The tracers are out of work, raise this flag to stop the mutators.
-            if var("GC_DEBUG").is_ok() {
-                if !self.yield_flag() {
-                    println!("GC_DEBUG: Yield Flag Raised")
-                }
+            if !self.yield_flag() {
+                gc_debug("Yield Flag Raised");
             }
 
             self.raise_yield_flag();
@@ -145,9 +143,7 @@ impl TracerController {
                 // Let the other tracers know they should stop by raising this flag
                 self.trace_end_flag.store(true, Ordering::SeqCst);
 
-                if var("GC_DEBUG").is_ok() {
-                    println!("GC_DEBUG: Mutators Have Exited. Finishing Trace...")
-                }
+                gc_debug("Mutators Have Exited. Finishing Trace...");
                 return true;
             }
         }
@@ -161,9 +157,7 @@ impl TracerController {
         old_object_count: Arc<AtomicU64>,
         trace_callback: F,
     ) {
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Begining trace...")
-        }
+        gc_debug("Begining trace...");
 
         self.clone().trace_root(root, old_object_count.clone());
         let join_handles = self.clone().spawn_tracers(old_object_count);
@@ -172,14 +166,11 @@ impl TracerController {
 
         for jh in join_handles.into_iter() {
             jh.join().unwrap_or_else(|_| {
-                println!("GC Tracer Panicked");
-                std::process::abort();
+                panic!("GC Tracer Panicked");
             });
         }
 
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Trace Complete!")
-        }
+        gc_debug("Trace Complete!");
 
         self.clean_up();
     }
@@ -239,17 +230,14 @@ impl TracerController {
                 .spawn(move || {
                     let mut tracer = controller.clone().new_tracer(i);
 
-                    if var("GC_DEBUG").is_ok() {
-                        println!("GC_DEBUG: Tracer Thread Spawned")
-                    }
+                    gc_debug("Tracer Thread Spawned");
 
                     let marked_objects = tracer.trace_loop() as u64;
 
                     object_count.fetch_add(marked_objects, Ordering::SeqCst);
                 })
                 .unwrap_or_else(|_| {
-                    println!("Failed to start GC Thread");
-                    std::process::abort();
+                    panic!("Failed to start GC Thread");
                 });
 
             join_handles.push(jh);

@@ -1,5 +1,6 @@
 use super::heap::Heap;
 use super::config::Config;
+use super::debug::gc_debug;
 use super::header::GcMark;
 use super::mutator::Mutator;
 use super::time_slicer::TimeSlicer;
@@ -9,7 +10,6 @@ use higher_kinded_types::ForLt;
 
 use core::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
 use std::time::Instant;
-use std::env::var;
 use std::sync::{Arc, Mutex};
 
 #[repr(u8)]
@@ -65,25 +65,19 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     fn major_collect(&self) {
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: MAJOR COLLECTION TRIGGERED!")
-        }
+        gc_debug("MAJOR COLLECTION TRIGGERED!");
 
         let _collection_lock = self.collection_lock.lock().unwrap();
         let mutation_lock = self.mutation_lock.lock().unwrap();
 
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Rotating Trace Mark")
-        }
+        gc_debug("Rotating Trace Mark");
 
         let start_time = Instant::now();
         self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
         self.collect();
 
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Sweeping...")
-        }
+        gc_debug("Sweeping...");
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
@@ -96,9 +90,7 @@ where
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis();
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Collection completed in {}ms", elapsed_time)
-        }
+        gc_debug(&format!("Collection completed in {}ms", elapsed_time));
         self.update_collection_time(
             &self.major_collect_avg_time,
             elapsed_time as usize,
@@ -107,18 +99,14 @@ where
     }
 
     fn minor_collect(&self) {
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: MINOR COLLECTION TRIGGERED!")
-        }
+        gc_debug("MINOR COLLECTION TRIGGERED!");
 
         let _collection_lock = self.collection_lock.lock().unwrap();
         let mutation_lock = self.mutation_lock.lock().unwrap();
         let start_time = Instant::now();
         self.collect();
 
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Sweeping...")
-        }
+        gc_debug("Sweeping...");
         // SAFETY: at this point there are no mutators and all garbage collected
         // values have been marked with the current_mark
         unsafe {
@@ -131,9 +119,7 @@ where
 
         // update collection time
         let elapsed_time = start_time.elapsed().as_millis();
-        if var("GC_DEBUG").is_ok() {
-            println!("GC_DEBUG: Collection completed in {}ms", elapsed_time)
-        }
+        gc_debug(&format!("Collection completed in {}ms", elapsed_time));
         self.update_collection_time(
             &self.minor_collect_avg_time,
             elapsed_time as usize,

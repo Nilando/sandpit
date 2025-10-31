@@ -253,8 +253,6 @@ fn main() {
     arena.mutate(|mutator, arena| {
 
     });
-
-    println!("hello example");
 }
 
 // TESTS BELOW

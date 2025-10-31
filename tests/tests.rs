@@ -588,7 +588,6 @@ fn alloc_after_collect_test() {
 
     for i in (1..LIST_SIZE).rev() {
         arena.mutate(|mu, root| {
-            println!("pushing node: {i}");
 
             let new_node = Gc::new(
                 mu,
@@ -645,8 +644,6 @@ fn arena_size_does_not_explode() {
         let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
 
         assert!(100.0 > arena_size_mb);
-        println!("Arena MB(s): {}", arena_size_mb);
-        println!("Allocated MB(s): {}", allocated_mb);
 
         if allocated_mb > 100.0 {
             break;
@@ -792,7 +789,6 @@ fn retracing_tagged_ptrs() {
         let gc_ptr = Gc::new(mu, 123);
         let tag_ptr = TestTag::from_ptr(gc_ptr);
 
-        //println!("retrace_ptr: {}", tag_ptr.as_ptr() as *const usize as usize);
         mu.retrace(&*Gc::new(mu, tag_ptr));
     }
 

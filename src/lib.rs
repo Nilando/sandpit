@@ -133,6 +133,7 @@ mod arena;
 mod barrier;
 mod collector;
 mod config;
+mod debug;
 mod header;
 mod metrics;
 mod monitor;

@@ -1,12 +1,12 @@
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use alloc::sync::Arc;
-use std::env::var;
 use std::sync::Mutex;
 use std::thread;
 use std::time;
 
 use super::collector::Collect;
 use super::config::Config;
+use super::debug::gc_debug;
 
 // The monitor is responsible for automatically triggering garbage collections.
 // It determines when to make a major and or minor collection by considering,
@@ -86,34 +86,26 @@ impl<T: Collect + 'static> Monitor<T> {
         }
     }
 
-    fn debug(&self) {
+    fn print_debug_info(&self) {
         let current_old = self.collector.get_old_objects_count() as u64;
         let max_old = self.max_old_objects.load(Ordering::Relaxed);
         let size = self.collector.get_arena_size();
         let prev_size = self.prev_arena_size.load(Ordering::Relaxed);
-        println!("GC_DEBUG: max_old: {}, current_old: {}, prev_size: {} kb, size: {} kb", max_old, current_old, (prev_size/1024), (size/1024));
+        gc_debug(&format!("max_old: {}, current_old: {}, prev_size: {} kb, size: {} kb", max_old, current_old, (prev_size/1024), (size/1024)));
     }
 
     fn test_triggers(&self) {
         if self.minor_trigger() {
-            if var("GC_DEBUG").is_ok() {
-                self.debug();
-            }
+            self.print_debug_info();
             // monitor collection {old max} {found old objects} {arena size}
             self.collector.minor_collect();
 
-            if var("GC_DEBUG").is_ok() {
-                self.debug();
-            }
+            self.print_debug_info();
 
             if self.major_trigger() {
-                if var("GC_DEBUG").is_ok() {
-                    self.debug();
-                }
+                self.print_debug_info();
                 self.collector.major_collect();
-                if var("GC_DEBUG").is_ok() {
-                    self.debug();
-                }
+                self.print_debug_info();
 
                 self.update_old_max();
             }
