@@ -19,11 +19,6 @@ pub struct TracerController {
     heap: Heap,
 
     yield_flag: AtomicBool,
-    trace_end_flag: AtomicBool,
-    // TODO: store in GcArray instead of vec?
-    // this will be tricky since then tracing will require
-    // access to a mutator, or at least the arena in some way
-    // or should this be some kind of channel?
     current_mark: AtomicU8,
 
     // mutators hold a ReadGuard of this lock preventing
@@ -52,7 +47,6 @@ impl TracerController {
 
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
-            trace_end_flag: AtomicBool::new(false),
             current_mark: AtomicU8::new(GcMark::Red.into()),
 
             num_tracers: config.tracer_threads,
@@ -175,7 +169,6 @@ impl TracerController {
 
     fn clean_up(&self) {
         self.yield_flag.store(false, Ordering::SeqCst);
-        self.trace_end_flag.store(false, Ordering::SeqCst);
     }
 
     pub fn yield_flag(&self) -> bool {
