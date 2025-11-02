@@ -2,7 +2,7 @@ use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer_controller::TracerController;
 use crate::debug::{gc_debug, gc_trace};
-use crate::heap::Heap;
+use crate::heap::mark;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
 
@@ -44,7 +44,7 @@ impl<'a> Tracer<'a> {
 
         self.increment_mark_count();
 
-        unsafe { Heap::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
+        unsafe { mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
 
         return true;
     }

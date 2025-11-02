@@ -4,6 +4,7 @@ use super::tracer::Tracer;
 use crate::config::Config;
 use crate::debug::gc_debug;
 use crate::header::GcMark;
+use crate::heap::{Allocator, Heap};
 use crossbeam_channel::{Receiver, Sender};
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use alloc::sync::Arc;
@@ -14,6 +15,8 @@ use std::time::Instant;
 pub struct TracerController {
     sender: Sender<Vec<TraceJob>>,
     receiver: Receiver<Vec<TraceJob>>,
+
+    heap: Heap,
 
     yield_flag: AtomicBool,
     trace_end_flag: AtomicBool,
@@ -40,8 +43,10 @@ pub struct TracerController {
 impl TracerController {
     pub fn new(config: &Config) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
+        let heap = Heap::new();
 
         Self {
+            heap,
             sender,
             receiver,
 
@@ -59,7 +64,20 @@ impl TracerController {
         }
     }
 
-    pub fn trace<T: Trace>(
+    pub fn new_allocator(&self) -> Allocator {
+        Allocator::from(&self.heap)
+    }
+
+    pub fn trace_and_sweep<T: Trace>(
+        &self,
+        root: &T,
+        old_object_count: Arc<AtomicU64>,
+    ) {
+        self.trace(root, old_object_count);
+        unsafe { self.sweep(); }
+    }
+
+    fn trace<T: Trace>(
         &self,
         root: &T,
         old_object_count: Arc<AtomicU64>,
@@ -182,5 +200,16 @@ impl TracerController {
 
     fn mutators_stopped(&self) -> bool {
         self.yield_lock.try_write().is_ok()
+    }
+
+    pub fn get_arena_size(&self) -> u64 {
+        self.heap.get_size()
+    }
+
+    // SAFETY: at this point there are no mutators and all garbage collected
+    // values have been marked with the current_mark
+    unsafe fn sweep(&self) {
+        gc_debug("Sweeping...");
+        self.heap.sweep(self.get_current_mark());
     }
 }

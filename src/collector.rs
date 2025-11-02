@@ -38,7 +38,6 @@ pub struct Collector<R: ForLt>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    heap: Heap,
     tracer_controller: TracerController,
 
     // this lock is held while a collection is happening.
@@ -72,14 +71,7 @@ where
         self.old_objects.store(0, Ordering::Relaxed);
         self.rotate_mark(); // major collection rotates the mark!
                             
-        self.trace();
-
-        gc_debug("Sweeping...");
-        // SAFETY: at this point there are no mutators and all garbage collected
-        // values have been marked with the current_mark
-        unsafe {
-            self.heap.sweep(self.get_current_mark(), || {});
-        }
+        self.trace_and_sweep();
 
         self.major_collections.fetch_add(1, Ordering::Relaxed);
 
@@ -99,15 +91,7 @@ where
         let _collection_lock = self.collection_lock.lock().unwrap();
         let start_time = Instant::now();
 
-        // no mutators should be able to be made between trace finish and sweep
-        self.trace();
-
-        gc_debug("Sweeping...");
-        // SAFETY: at this point there are no mutators and all garbage collected
-        // values have been marked with the current_mark
-        unsafe {
-            self.heap.sweep(self.get_current_mark(), || {});
-        }
+        self.trace_and_sweep();
 
         self.minor_collections.fetch_add(1, Ordering::Relaxed);
 
@@ -130,7 +114,7 @@ where
     }
 
     fn get_arena_size(&self) -> u64 {
-        self.heap.get_size()
+        self.tracer_controller.get_arena_size()
     }
 
     fn get_old_objects_count(&self) -> u64 {
@@ -169,12 +153,11 @@ where
         //
         // I have a very fragile understanding of whats going on here, and
         // I truly don't know whether this is safe.
-        let heap = Heap::new();
         let tracer_controller = TracerController::new(config);
         let tracer_ref: &'static TracerController =
             unsafe { &*(&tracer_controller as *const TracerController) };
         let lock = tracer_ref.yield_lock();
-        let mutator = Mutator::new(heap.clone(), tracer_ref, lock);
+        let mutator = Mutator::new(tracer_ref, lock);
         let mutator_ref: &'static Mutator<'static> =
             unsafe { &*(&mutator as *const Mutator<'static>) };
 
@@ -183,7 +166,6 @@ where
         drop(mutator);
 
         Self {
-            heap,
             tracer_controller,
             root,
             collection_lock: Mutex::new(()),
@@ -223,7 +205,7 @@ where
         let _collection_lock = self.collection_lock.lock();
         let yield_lock = self.tracer_controller.yield_lock();
 
-        Mutator::new(self.heap.clone(), &self.tracer_controller, yield_lock)
+        Mutator::new(&self.tracer_controller, yield_lock)
     }
 
     fn update_collection_time(
@@ -250,7 +232,7 @@ where
         self.tracer_controller.get_current_mark()
     }
 
-    fn trace(&self) {
-        self.tracer_controller.trace(&self.root, self.old_objects.clone());
+    fn trace_and_sweep(&self) {
+        self.tracer_controller.trace_and_sweep(&self.root, self.old_objects.clone());
     }
 }

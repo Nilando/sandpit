@@ -1,3 +1,5 @@
+use crate::heap::Allocator;
+
 use super::heap::Heap;
 use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
@@ -57,7 +59,7 @@ use std::sync::RwLockReadGuard;
 /// which point the Gc will free memory and then allow for mutation to resume.
 pub struct Mutator<'gc> {
     tracer_controller: &'gc TracerController,
-    heap: Heap,
+    allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: RwLockReadGuard<'gc, ()>,
     mark: GcMark,
@@ -72,14 +74,14 @@ impl<'gc> Drop for Mutator<'gc> {
 
 impl<'gc> Mutator<'gc> {
     pub(crate) fn new(
-        heap: Heap,
         tracer_controller: &'gc TracerController,
         _lock: RwLockReadGuard<'gc, ()>,
     ) -> Self {
         let mark = tracer_controller.prev_mark();
+        let allocator = tracer_controller.new_allocator();
 
         Self {
-            heap,
+            allocator,
             tracer_controller,
             rescan: RefCell::new(vec![]),
             mark,
@@ -106,12 +108,13 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
         unsafe {
-            let ptr = self.heap.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             // SAFETY: the alloc layout was extended to have capacity
             // for the header and object to be written into.
 
             // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
             // the Gc invariant that a Gc<T> points to a T with a padded header.
+            
             let val_ptr = ptr.add(val_offset).cast();
             let header_ptr = ptr.cast();
 
@@ -144,7 +147,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
         unsafe {
-            let ptr = self.heap.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 
@@ -179,7 +182,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(slice.len());
 
         unsafe {
-            let ptr = self.heap.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 
@@ -216,7 +219,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
         unsafe {
-            let ptr = self.heap.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 

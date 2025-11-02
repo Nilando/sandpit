@@ -1,8 +1,28 @@
 use super::header::GcMark;
-use nimix::Heap as NimixHeap;
+use nimix::{Heap as NimixHeap, Allocator as NimixAllocator, mark as nimix_mark};
 use alloc::alloc::Layout;
 
-#[derive(Clone)]
+
+pub struct Allocator {
+    allocator: NimixAllocator
+}
+
+impl From<&Heap> for Allocator {
+    fn from(value: &Heap) -> Self {
+        Allocator {
+            allocator: NimixAllocator::from(&value.heap)
+        }
+    }
+}
+
+impl Allocator {
+    pub fn alloc(&self, layout: Layout) -> *const u8 {
+        unsafe {
+            self.allocator.alloc(layout).expect("Failed to allocate")
+        }
+    }
+}
+
 pub struct Heap {
     heap: NimixHeap,
 }
@@ -14,19 +34,15 @@ impl Heap {
         }
     }
 
-    pub unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.heap.alloc(layout).expect("GC Failed Alloc") as *mut u8
-    }
-
-    pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) {
-        NimixHeap::mark(ptr, layout, mark.into()).expect("GC Failed Marking Obj")
-    }
-
-    pub unsafe fn sweep<F: FnOnce()>(&self, live_mark: GcMark, cb: F) {
-        self.heap.sweep(live_mark.into(), cb)
+    pub unsafe fn sweep(&self, live_mark: GcMark) {
+        self.heap.sweep(live_mark.into())
     }
 
     pub fn get_size(&self) -> u64 {
         self.heap.size() as u64
     }
+}
+
+pub unsafe fn mark(ptr: *mut u8, layout: Layout, mark: GcMark) {
+    nimix_mark(ptr, layout, mark.into()).expect("GC Failed Marking Obj")
 }
