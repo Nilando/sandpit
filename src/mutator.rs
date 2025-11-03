@@ -1,6 +1,5 @@
 use crate::heap::Allocator;
 
-use super::heap::Heap;
 use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
@@ -285,7 +284,7 @@ impl<'gc> Mutator<'gc> {
 
         self.rescan.borrow_mut().push(trace_job);
 
-        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
+        if self.rescan.borrow().len() >= self.tracer_controller.config.mutator_share_min {
             let work = self.rescan.take();
             self.tracer_controller.send_work(work);
         }

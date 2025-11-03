@@ -86,7 +86,7 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, &config));
+        let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, config.clone()));
         #[cfg(feature = "std")]
         let monitor = Arc::new(Monitor::new(collector.clone(), &config));
 

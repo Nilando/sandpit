@@ -1,4 +1,3 @@
-use super::collector::GcState;
 /// A 'snapshot' of the metrics relevant to the GC's internal triggers.
 ///
 /// Obtained by calling [`crate::Arena::metrics`].
@@ -32,4 +31,11 @@ pub struct Metrics {
 
     /// The current state of the GC.
     pub state: GcState,
+}
+
+#[derive(Clone, Debug)]
+pub enum GcState {
+    Waiting,
+    Marking,
+    Finishing,
 }

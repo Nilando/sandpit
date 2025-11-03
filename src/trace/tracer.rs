@@ -87,7 +87,7 @@ impl<'a> Tracer<'a> {
     }
 
     fn do_work(&mut self) {
-        for _ in 0..self.controller.trace_chunk_size {
+        for _ in 0..self.controller.config.trace_chunk_size {
             match self.work.pop() {
                 Some(job) => job.trace(self),
                 None => break,
@@ -96,7 +96,7 @@ impl<'a> Tracer<'a> {
     }
 
     fn share_work(&mut self) {
-        if self.controller.trace_share_min >= self.work.len() || self.controller.has_work() {
+        if self.controller.config.trace_share_min >= self.work.len() || self.controller.has_work() {
             return;
         }
 

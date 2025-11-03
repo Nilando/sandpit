@@ -5,6 +5,7 @@ use crate::config::Config;
 use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crate::heap::{Allocator, Heap};
+use crate::Metrics;
 use crossbeam_channel::{Receiver, Sender};
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use alloc::sync::Arc;
@@ -19,24 +20,19 @@ pub struct TracerController {
     heap: Heap,
 
     yield_flag: AtomicBool,
+    yield_lock: RwLock<()>,
     current_mark: AtomicU8,
 
     // mutators hold a ReadGuard of this lock preventing
     // the tracers from declaring the trace complete until
     // all mutators are stopped.
-    yield_lock: RwLock<()>,
 
-    // config vars
-    pub num_tracers: usize,
-    pub trace_share_min: usize,
-    pub trace_chunk_size: usize,
-    pub trace_share_ratio: f32,
-    pub trace_wait_time: u64,
-    pub mutator_share_min: usize,
+    pub config: Config,
+    // pub metrics: Metrics,
 }
 
 impl TracerController {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: Config) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
         let heap = Heap::new();
 
@@ -49,12 +45,7 @@ impl TracerController {
             yield_lock: RwLock::new(()),
             current_mark: AtomicU8::new(GcMark::Red.into()),
 
-            num_tracers: config.tracer_threads,
-            trace_share_min: config.trace_share_min,
-            trace_chunk_size: config.trace_chunk_size,
-            trace_share_ratio: config.trace_share_ratio,
-            trace_wait_time: config.trace_wait_time,
-            mutator_share_min: config.mutator_share_min,
+            config
         }
     }
 
@@ -90,7 +81,7 @@ impl TracerController {
         let object_count = old_object_count.clone();
 
         std::thread::scope(|scope| {
-            for _ in 0..self.num_tracers {
+            for _ in 0..self.config.tracer_threads {
                 scope.spawn(|| {
                     let mut tracer = self.new_tracer();
 
@@ -122,7 +113,7 @@ impl TracerController {
     }
 
     pub fn recv_work(&self) -> Option<Vec<TraceJob>> {
-        let duration = std::time::Duration::from_millis(self.trace_wait_time);
+        let duration = std::time::Duration::from_millis(self.config.trace_wait_time);
         let deadline = Instant::now().checked_add(duration).unwrap();
 
         loop {
@@ -184,7 +175,7 @@ impl TracerController {
     }
 
     pub fn get_trace_share_ratio(&self) -> f32 {
-        self.trace_share_ratio
+        self.config.trace_share_ratio
     }
 
     pub fn has_work(&self) -> bool {

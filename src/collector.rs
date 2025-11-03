@@ -1,4 +1,4 @@
-use super::heap::Heap;
+use super::metrics::GcState;
 use super::config::Config;
 use super::debug::gc_debug;
 use super::header::GcMark;
@@ -11,13 +11,6 @@ use core::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
 
-#[repr(u8)]
-#[derive(Clone, Debug)]
-pub enum GcState {
-    Waiting,
-    Marking,
-    Finishing,
-}
 
 // collect trait is nice so that monitor does not need
 // to be generic on Root type, and just needs a type that impls collect
@@ -53,7 +46,6 @@ where
     // time stored in milisceonds
     minor_collect_avg_time: AtomicUsize,
     major_collect_avg_time: AtomicUsize,
-    max_headroom_ratio: f64,
 }
 
 impl<R: ForLt> Collect for Collector<R>
@@ -144,7 +136,7 @@ impl<R: ForLt> Collector<R>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    pub fn new<F>(f: F, config: &Config) -> Self
+    pub fn new<F>(f: F, config: Config) -> Self
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
@@ -174,7 +166,6 @@ where
             major_collect_avg_time: AtomicUsize::new(0),
             minor_collect_avg_time: AtomicUsize::new(0),
             old_objects: Arc::new(AtomicU64::new(0)),
-            max_headroom_ratio: config.collector_max_headroom_ratio,
         }
     }
 
