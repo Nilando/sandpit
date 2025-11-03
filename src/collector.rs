@@ -1,3 +1,5 @@
+use crate::Metrics;
+
 use super::metrics::GcState;
 use super::config::Config;
 use super::debug::gc_debug;
@@ -219,8 +221,8 @@ where
         self.tracer_controller.rotate_mark()
     }
 
-    fn get_current_mark(&self) -> GcMark {
-        self.tracer_controller.get_current_mark()
+    pub fn get_metrics(&self) -> Metrics {
+        self.tracer_controller.get_metrics()
     }
 
     fn trace_and_sweep(&self) {

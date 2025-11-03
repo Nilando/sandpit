@@ -51,6 +51,10 @@ impl TracerController {
         }
     }
 
+    pub fn get_metrics(&self) -> Metrics {
+        self.metrics.clone()
+    }
+
     pub fn new_allocator(&self) -> Allocator {
         Allocator::from(&self.heap)
     }
