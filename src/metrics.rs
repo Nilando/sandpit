@@ -31,6 +31,29 @@ pub struct Metrics {
 
     /// The current state of the GC.
     pub state: GcState,
+
+    pub max_yield_time: u64,
+    pub avg_yield_time: u64,
+    pub max_arena_size: u64,
+}
+
+impl Metrics {
+    pub fn new() -> Self {
+        Self {
+            major_collections: 0,
+            minor_collections: 0,
+            major_collect_avg_time: 0,
+            minor_collect_avg_time: 0,
+            max_yield_time: 0,
+            avg_yield_time: 0,
+            max_old_objects: 0,
+            old_objects_count: 0,
+            arena_size: 0,
+            max_arena_size: 0,
+            prev_arena_size: 0,
+            state: GcState::Waiting
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

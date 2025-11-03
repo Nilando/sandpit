@@ -28,13 +28,14 @@ pub struct TracerController {
     // all mutators are stopped.
 
     pub config: Config,
-    // pub metrics: Metrics,
+    pub metrics: Metrics,
 }
 
 impl TracerController {
     pub fn new(config: Config) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
         let heap = Heap::new();
+        let metrics = Metrics::new();
 
         Self {
             heap,
@@ -45,6 +46,7 @@ impl TracerController {
             yield_lock: RwLock::new(()),
             current_mark: AtomicU8::new(GcMark::Red.into()),
 
+            metrics,
             config
         }
     }
