@@ -77,12 +77,12 @@ impl<'a> Tracer<'a> {
 
             self.do_work();
             self.share_work();
+
+            // TODO: Remove this
             self.controller.raise_yield_flag();
         }
 
         gc_debug("Tracer Exited Successfully");
-
-        debug_assert_eq!(self.work.len(), 0);
 
         self.mark_count
     }

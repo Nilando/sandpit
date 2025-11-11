@@ -9,7 +9,7 @@ use crate::Metrics;
 use crossbeam_channel::{Receiver, Sender};
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-use std::sync::{RwLock, RwLockReadGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::{Instant, SystemTime};
 
 pub struct TracerController {
@@ -19,6 +19,7 @@ pub struct TracerController {
     current_mark: AtomicU8,
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
+    collection_lock: Mutex<()>,
     pub config: Config,
     pub metrics: Metrics,
 }
@@ -36,6 +37,7 @@ impl TracerController {
 
             yield_flag: AtomicBool::new(false),
             yield_lock: RwLock::new(()),
+            collection_lock: Mutex::new(()),
             current_mark: AtomicU8::new(GcMark::Red.into()),
 
             metrics,
@@ -48,6 +50,7 @@ impl TracerController {
     }
 
     pub fn new_allocator(&self) -> Allocator {
+        let _guard = self.collection_lock.lock().unwrap();
         Allocator::from(&self.heap)
     }
 
@@ -55,6 +58,8 @@ impl TracerController {
         &self,
         root: &T,
     ) {
+        let _guard = self.collection_lock.lock().unwrap();
+
         gc_debug("Starting Major Collection");
 
         self.metrics.old_objects_count.store(0, Ordering::Relaxed);
@@ -64,6 +69,19 @@ impl TracerController {
         self.timed_collection(true, || self.trace_and_sweep(root));
 
         self.metrics.major_collections.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn minor_collect<T: Trace>(
+        &self,
+        root: &T,
+    ) {
+        let _guard = self.collection_lock.lock().unwrap();
+
+        gc_debug("Starting Minor Collection");
+
+        self.timed_collection(false, || self.trace_and_sweep(root));
+
+        self.metrics.minor_collections.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn timed_collection(&self, is_major: bool, f: impl FnOnce() -> ()) {
@@ -80,17 +98,6 @@ impl TracerController {
         }
     }
 
-
-    pub fn minor_collect<T: Trace>(
-        &self,
-        root: &T,
-    ) {
-        gc_debug("Starting Major Collection");
-
-        self.timed_collection(false, || self.trace_and_sweep(root));
-
-        self.metrics.minor_collections.fetch_add(1, Ordering::Relaxed);
-    }
 
     pub fn trace_and_sweep<T: Trace>(
         &self,
