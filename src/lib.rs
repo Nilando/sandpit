@@ -131,7 +131,6 @@ mod gc;
 mod heap;
 mod arena;
 mod barrier;
-mod collector;
 mod config;
 mod debug;
 mod header;
@@ -142,9 +141,6 @@ mod trace;
 mod tagged;
 mod vec;
 mod gc_sync;
-
-#[cfg(feature = "std")]
-mod monitor;
 
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;

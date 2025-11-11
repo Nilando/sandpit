@@ -8,10 +8,9 @@ use crate::header::{GcHeader, GcMark};
 
 /// Internal type used by the GC to perform tracing.
 pub struct Tracer<'a> {
-    // sometimes ID might be helpful in debugging, but currently not used anywhere
     controller: &'a TracerController,
     mark: GcMark,
-    mark_count: usize,
+    pub mark_count: usize,
     work: Vec<TraceJob>,
 }
 
@@ -57,12 +56,14 @@ impl<'a> Tracer<'a> {
         self.work.push(TraceJob::new(gc.as_thin()));
     }
 
-    pub(crate) fn flush_work(&mut self) {
+    pub(crate) fn flush_work(&mut self) -> usize {
         let mut work = vec![];
+        let result = self.work.len();
 
         core::mem::swap(&mut work, &mut self.work);
 
         self.controller.send_work(work);
+        result
     }
 
     pub(crate) fn trace_loop(&mut self) -> usize {

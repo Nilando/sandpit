@@ -1,8 +1,6 @@
-use super::collector::{Collect, Collector};
+use crate::trace::TracerController;
 use super::config::Config;
 use super::metrics::Metrics;
-#[cfg(feature = "std")]
-use super::monitor::Monitor;
 use super::mutator::Mutator;
 use super::trace::Trace;
 
@@ -29,22 +27,8 @@ pub struct Arena<R: ForLt + 'static>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    collector: Arc<Collector<R>>,
-
-    #[cfg(feature = "std")]
-    monitor: Arc<Monitor<Collector<R>>>,
-    // In the future it would be cool to allow for editing the config
-    _config: Config,
-}
-
-impl<R: ForLt> Drop for Arena<R>
-where
-    for<'a> <R as ForLt>::Of<'a>: Trace,
-{
-    fn drop(&mut self) {
-        #[cfg(feature = "std")]
-        self.monitor.stop();
-    }
+    tracer_controller: Arc<TracerController>,
+    root: R::Of<'static>,
 }
 
 impl<R: ForLt + 'static> Arena<R>
@@ -86,20 +70,25 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, config.clone()));
-        #[cfg(feature = "std")]
-        let monitor = Arc::new(Monitor::new(collector.clone(), &config));
+        // This is function is extremely sketchy.
+        //
+        // I have a very fragile understanding of whats going on here, and
+        // I truly don't know whether this is safe.
+        let tracer_controller = Arc::new(TracerController::new(config));
+        let tracer_ref: &'static TracerController =
+            unsafe { &*(&*tracer_controller as *const TracerController) };
+        let lock = tracer_ref.yield_lock();
+        let mutator = Mutator::new(tracer_ref, lock);
+        let mutator_ref: &'static Mutator<'static> =
+            unsafe { &*(&mutator as *const Mutator<'static>) };
 
-        #[cfg(feature = "std")]
-        monitor.clone().start();
+        let root: R::Of<'static> = f(mutator_ref);
+
+        drop(mutator);
 
         Self {
-            collector,
-
-            #[cfg(feature = "std")]
-            monitor,
-
-            _config: config,
+            tracer_controller,
+            root,
         }
     }
 
@@ -152,7 +141,10 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>),
     {
-        self.collector.mutate(f)
+        let mutator = self.new_mutator();
+        let root = unsafe { self.scoped_root() };
+
+        f(&mutator, root);
     }
 
     /// you can view the root but you don't have a mutator, therefore collection
@@ -161,7 +153,9 @@ where
     where
         F: for<'gc> FnOnce(&'gc R::Of<'gc>),
     {
-        self.collector.view(f)
+        let root = unsafe { self.scoped_root() };
+
+        f(root);
     }
 
     /// Synchronously trigger a major collection. A major collection means that
@@ -172,7 +166,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn major_collect(&self) {
-        self.collector.major_collect();
+        self.tracer_controller.major_collect(&self.root);
     }
 
     /// Synchronously trigger a minor collection. A minor collection will only
@@ -184,7 +178,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn minor_collect(&self) {
-        self.collector.minor_collect();
+        self.tracer_controller.minor_collect(&self.root);
     }
 
     /// Starts a monitor in a separate thread if it is not already started.
@@ -212,7 +206,17 @@ where
 
     /// Returns a snap short of the GC's current metrics that provide information
     /// about how the GC is running.
-    pub fn metrics(&self) -> Metrics {
-        self.collector.get_metrics()
+    pub fn metrics(&self) -> &Metrics {
+        self.tracer_controller.get_metrics()
+    }
+
+    unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
+        core::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
+    }
+
+    fn new_mutator(&self) -> Mutator {
+        let yield_lock = self.tracer_controller.yield_lock();
+
+        Mutator::new(&self.tracer_controller, yield_lock)
     }
 }

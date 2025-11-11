@@ -58,7 +58,7 @@ fn objects_counted_should_be_one() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
@@ -72,9 +72,9 @@ fn counts_collections() {
 
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.major_collections, 100);
-    assert_eq!(metrics.minor_collections, 100);
-    assert_eq!(metrics.old_objects_count, 1);
+    assert_eq!(metrics.get_major_collections(), 100);
+    assert_eq!(metrics.get_minor_collections(), 100);
+    assert_eq!(metrics.get_old_objects_count(), 1);
 }
 
 #[test]
@@ -82,12 +82,12 @@ fn empty_gc_metrics() {
     let arena: Arena<Root![()]> = Arena::new(|_| ());
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.major_collections, 0);
-    assert_eq!(metrics.minor_collections, 0);
-    assert_eq!(metrics.old_objects_count, 0);
-    assert_eq!(metrics.max_old_objects, 0);
-    assert_eq!(metrics.arena_size, 0);
-    assert_eq!(metrics.prev_arena_size, 0);
+    assert_eq!(metrics.get_major_collections(), 0);
+    assert_eq!(metrics.get_minor_collections(), 0);
+    assert_eq!(metrics.get_old_objects_count(), 0);
+    assert_eq!(metrics.get_max_old_objects(), 0);
+    assert_eq!(metrics.get_arena_size(), 0);
+    assert_eq!(metrics.get_prev_arena_size(), 0);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn nested_root() {
 
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.old_objects_count, 3);
+    assert_eq!(metrics.get_old_objects_count(), 3);
 
     arena.mutate(|_, root| assert_eq!(****root, 69));
 }
@@ -114,7 +114,7 @@ fn trace_gc_null_mut() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
     arena.mutate(|_, root| {
         root.set_none();
@@ -122,7 +122,7 @@ fn trace_gc_null_mut() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 0);
+    assert_eq!(arena.metrics().get_old_objects_count(), 0);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn old_objects_count_stays_constant() {
 
     for _ in 0..5 {
         arena.major_collect();
-        assert_eq!(arena.metrics().old_objects_count, 1);
+        assert_eq!(arena.metrics().get_old_objects_count(), 1);
     }
 }
 
@@ -156,7 +156,7 @@ fn write_barrier() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|mu, root| {
         let new = Gc::new(mu, 420);
@@ -170,7 +170,7 @@ fn write_barrier() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 }
 
 #[test]
@@ -193,13 +193,13 @@ fn resets_old_object_count() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
     arena.mutate(|_mu, root| root.set_none());
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 0);
+    assert_eq!(arena.metrics().get_old_objects_count(), 0);
 }
 
 #[test]
@@ -210,7 +210,7 @@ fn alloc_option() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
     arena.mutate(|mu, root| {
         assert!(root.is_none());
@@ -222,7 +222,7 @@ fn alloc_option() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 3);
+    assert_eq!(arena.metrics().get_old_objects_count(), 3);
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn alloc_result() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 3);
+    assert_eq!(arena.metrics().get_old_objects_count(), 3);
 
     arena.mutate(|mu, root| {
         let n = root.as_ref().unwrap();
@@ -246,7 +246,7 @@ fn alloc_result() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 }
 
 #[test]
@@ -259,7 +259,7 @@ fn alloc_sized_array() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -288,7 +288,7 @@ fn alloc_array() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|_mu, root| {
         for x in root.iter() {
@@ -300,7 +300,7 @@ fn alloc_array() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn alloc_array_from_fn() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|_mu, root| {
         for (i, x) in root.iter().enumerate() {
@@ -328,7 +328,7 @@ fn alloc_array_from_slice() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|mu, root| {
         let root_copy = mu.alloc_array_from_slice(root);
@@ -344,7 +344,7 @@ fn alloc_array_of_static_gc() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -359,7 +359,7 @@ fn alloc_array_of_updated_gc() {
         Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)).into());
 
     arena.major_collect();
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
@@ -373,7 +373,7 @@ fn alloc_array_of_updated_gc() {
 
     arena.major_collect();
     arena.major_collect();
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -558,7 +558,7 @@ fn cyclic_graph() {
     arena.major_collect();
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 5);
+    assert_eq!(arena.metrics().get_old_objects_count(), 5);
 }
 
 // test idea
@@ -642,7 +642,7 @@ fn arena_size_does_not_explode() {
         //
         // i.e. its possible that changing the allocator could cause this test to fail
         let config = arena.metrics();
-        let arena_size_mb = config.arena_size as f64 / (1024 * 1024) as f64;
+        let arena_size_mb = config.get_arena_size() as f64 / (1024 * 1024) as f64;
         let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
 
         assert!(1000.0 > arena_size_mb);
@@ -659,7 +659,7 @@ fn gc_opt_from_gc() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
@@ -690,7 +690,7 @@ fn gc_scoped_deref() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]

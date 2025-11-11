@@ -7,26 +7,18 @@ use crate::header::GcMark;
 use crate::heap::{Allocator, Heap};
 use crate::Metrics;
 use crossbeam_channel::{Receiver, Sender};
-use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use alloc::sync::Arc;
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use std::sync::{RwLock, RwLockReadGuard};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 pub struct TracerController {
     sender: Sender<Vec<TraceJob>>,
     receiver: Receiver<Vec<TraceJob>>,
-
     heap: Heap,
-
+    current_mark: AtomicU8,
     yield_flag: AtomicBool,
     yield_lock: RwLock<()>,
-    current_mark: AtomicU8,
-
-    // mutators hold a ReadGuard of this lock preventing
-    // the tracers from declaring the trace complete until
-    // all mutators are stopped.
-
     pub config: Config,
     pub metrics: Metrics,
 }
@@ -51,41 +43,79 @@ impl TracerController {
         }
     }
 
-    pub fn get_metrics(&self) -> Metrics {
-        self.metrics.clone()
+    pub fn get_metrics(&self) -> &Metrics {
+        &self.metrics
     }
 
     pub fn new_allocator(&self) -> Allocator {
         Allocator::from(&self.heap)
     }
 
+    pub fn major_collect<T: Trace>(
+        &self,
+        root: &T,
+    ) {
+        gc_debug("Starting Major Collection");
+
+        self.metrics.old_objects_count.store(0, Ordering::Relaxed);
+
+        self.rotate_mark();
+
+        self.timed_collection(true, || self.trace_and_sweep(root));
+
+        self.metrics.major_collections.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn timed_collection(&self, is_major: bool, f: impl FnOnce() -> ()) {
+        let start_time = SystemTime::now();
+
+        f();
+
+        let collection_duration: u64 = start_time.elapsed().unwrap().as_millis() as u64;
+
+        if is_major {
+            self.metrics.update_minor_collection_avg_time(collection_duration);
+        } else {
+            self.metrics.update_major_collection_avg_time(collection_duration);
+        }
+    }
+
+
+    pub fn minor_collect<T: Trace>(
+        &self,
+        root: &T,
+    ) {
+        gc_debug("Starting Major Collection");
+
+        self.timed_collection(false, || self.trace_and_sweep(root));
+
+        self.metrics.minor_collections.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn trace_and_sweep<T: Trace>(
         &self,
         root: &T,
-        old_object_count: Arc<AtomicU64>,
     ) {
-        self.trace(root, old_object_count);
+        self.trace(root);
         unsafe { self.sweep(); }
+        self.print_debug_info();
     }
 
     fn trace<T: Trace>(
         &self,
         root: &T,
-        old_object_count: Arc<AtomicU64>,
     ) {
         gc_debug("Begining trace...");
 
-        self.trace_root(root, old_object_count.clone());
-        self.spawn_tracers(old_object_count);
+        self.trace_root(root);
+        self.spawn_tracers();
 
         gc_debug("Trace Complete!");
 
         self.clean_up();
     }
 
-    fn spawn_tracers(&self, old_object_count: Arc<AtomicU64>) {
-        let object_count = old_object_count.clone();
-
+    fn spawn_tracers(&self) {
         std::thread::scope(|scope| {
             for _ in 0..self.config.tracer_threads {
                 scope.spawn(|| {
@@ -95,17 +125,18 @@ impl TracerController {
 
                     let marked_objects = tracer.trace_loop() as u64;
 
-                    object_count.fetch_add(marked_objects, Ordering::SeqCst);
+                    self.metrics.old_objects_count.fetch_add(marked_objects, Ordering::SeqCst);
                 });
             }
         });
     }
 
-    fn trace_root<T: Trace>(&self, root: &T, old_object_count: Arc<AtomicU64>) {
+    fn trace_root<T: Trace>(&self, root: &T) {
         let mut tracer = self.new_tracer();
         root.trace(&mut tracer);
         tracer.flush_work();
-        old_object_count.fetch_add(tracer.get_mark_count() as u64, Ordering::SeqCst);
+        let mark_count = tracer.mark_count as u64;
+        self.metrics.old_objects_count.fetch_add(mark_count, Ordering::SeqCst);
     }
 
     fn new_tracer(&self) -> Tracer {
@@ -189,17 +220,91 @@ impl TracerController {
     }
 
     fn mutators_stopped(&self) -> bool {
+        // if the yield lock can write
+        //  write the stopped value
+        //  and return true
+        // else if we can read
+        //  if the value is the stopped value
+        //      return true
+        //  else
+        //      return false
         self.yield_lock.try_write().is_ok()
-    }
-
-    pub fn get_arena_size(&self) -> u64 {
-        self.heap.get_size()
     }
 
     // SAFETY: at this point there are no mutators and all garbage collected
     // values have been marked with the current_mark
     unsafe fn sweep(&self) {
-        gc_debug("Sweeping...");
         self.heap.sweep(self.get_current_mark());
+        gc_debug("Sweep Complete!");
+    }
+
+    fn print_debug_info(&self) {
+        let current_old_objects_count = self.metrics.old_objects_count.load(Ordering::Relaxed);
+        let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
+        let arena_size = self.metrics.arena_size.load(Ordering::Relaxed);
+        let prev_arena_size = self.metrics.prev_arena_size.load(Ordering::Relaxed);
+
+        gc_debug(
+            &format!(
+                "max_old: {}, current_old: {}, prev_size: {} kb, size: {} kb", 
+                max_old_objects_count, 
+                current_old_objects_count, 
+                (prev_arena_size/1024), 
+                (arena_size/1024)
+            )
+        );
+    }
+
+    fn major_trigger(&self) -> bool {
+        let current_old_objects_count = self.metrics.old_objects_count.load(Ordering::Relaxed);
+        let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
+
+        current_old_objects_count > max_old_objects_count
+    }
+
+    fn minor_trigger(&self) -> bool {
+        let arena_size = self.metrics.arena_size.load(Ordering::Relaxed);
+        let prev_arena_size = self.metrics.prev_arena_size.load(Ordering::Relaxed);
+        let arena_size_ratio_trigger = self.config.monitor_arena_size_ratio_trigger;
+
+        arena_size as f32 > (prev_arena_size as f32 * arena_size_ratio_trigger)
+    }
+}
+
+pub mod monitor {
+    use crate::Trace;
+
+    use super::TracerController;
+    use alloc::sync::Arc;
+    use higher_kinded_types::ForLt;
+
+    pub fn spawn_monitor<R: ForLt + 'static>(mut tc: Arc<TracerController>, root: R::Of<'static>)
+    where
+        for<'a> <R as ForLt>::Of<'a>: Trace
+    {
+        // TODO: if monitor is on? do nothing
+       
+        loop {
+            monitor_sleep(&tc);
+
+            if tc.minor_trigger() {
+                tc.minor_collect(&root);
+
+                if tc.major_trigger() {
+                    tc.major_collect(&root);
+                }
+            }
+
+            match Arc::<TracerController>::try_unwrap(tc) {
+                Ok(_) => return,
+                Err(err) => tc = err,
+            }
+        }
+    }
+
+    fn monitor_sleep(tc: &TracerController) {
+        let duration = std::time::Duration::from_millis(tc.config.monitor_wait_time);
+
+        std::thread::sleep(duration);
     }
 }

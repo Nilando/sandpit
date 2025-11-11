@@ -30,7 +30,7 @@ default = ["std"]
 std = []
 
 [dependencies]
-nimix = "=0.1.2"
+nimix = { git = "https://github.com/Nilando/nimix" }
 sandpit_derive = { path = "./derive", version = "0.3.0" }
 crossbeam-channel = "0.5.13"
 higher-kinded-types = "0.1.1"
