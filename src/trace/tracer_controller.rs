@@ -83,7 +83,8 @@ pub struct TracerController {
     current_mark: AtomicU8,
     yield_flag: AtomicBool,
     locks: ControllerLocks,
-    root_jobs: Option<TraceJob>,
+    #[cfg(feature = "multi_threaded")]
+    shutdown_flag: AtomicBool,
     pub config: Config,
     pub metrics: Metrics,
 }
@@ -102,29 +103,33 @@ impl TracerController {
             yield_flag: AtomicBool::new(false),
             locks: ControllerLocks::new(),
             current_mark: AtomicU8::new(GcMark::Red.into()),
-            root_jobs: None,
+            #[cfg(feature = "multi_threaded")]
+            shutdown_flag: AtomicBool::new(false),
 
             metrics,
             config
         }
     }
 
-    pub fn get_metrics(&self) -> &Metrics {
-        &self.metrics
+    #[cfg(feature = "multi_threaded")]
+    pub fn shutdown(&self) {
+        self.shutdown_flag.store(true, Ordering::SeqCst);
     }
 
-    pub fn set_root_job<T: Trace + ?Sized>(&mut self, root: &T) {
-        let ptr: NonNull<Thin<T>> = NonNull::from(root).cast();
-        let trace_job = TraceJob::new(ptr);
+    #[cfg(feature = "multi_threaded")]
+    pub fn should_shutdown(&self) -> bool {
+        self.shutdown_flag.load(Ordering::SeqCst)
+    }
 
-        self.root_jobs = Some(trace_job);
+    pub fn get_metrics(&self) -> &Metrics {
+        &self.metrics
     }
 
     pub fn new_allocator(&self) -> Allocator {
         Allocator::from(&self.heap)
     }
 
-    pub fn major_collect(&self) {
+    pub fn major_collect<T: Trace + ?Sized>(&self, root: &T) {
         let _guard = self.locks.lock_collection();
 
         gc_debug("Starting Major Collection");
@@ -133,7 +138,7 @@ impl TracerController {
 
         self.rotate_mark();
 
-        self.timed_collection(true, || self.trace_and_sweep());
+        self.timed_collection(true, || self.trace_and_sweep(root));
 
         self.metrics.major_collections.fetch_add(1, Ordering::Relaxed);
         self.metrics.prev_arena_size.store(self.get_arena_size(), Ordering::Relaxed);
@@ -146,12 +151,12 @@ impl TracerController {
         self.metrics.state.store(GC_STATE_SLEEPING, Ordering::Relaxed);
     }
 
-    pub fn minor_collect(&self) {
+    pub fn minor_collect<T: Trace + ?Sized>(&self, root: &T) {
         let _guard = self.locks.lock_collection();
 
         gc_debug("Starting Minor Collection");
 
-        self.timed_collection(false, || self.trace_and_sweep());
+        self.timed_collection(false, || self.trace_and_sweep(root));
 
         self.metrics.minor_collections.fetch_add(1, Ordering::Relaxed);
         self.metrics.prev_arena_size.store(self.get_arena_size(), Ordering::Relaxed);
@@ -179,8 +184,8 @@ impl TracerController {
         f();
     }
 
-    pub fn trace_and_sweep(&self) {
-        self.trace();
+    pub fn trace_and_sweep<T: Trace + ?Sized>(&self, root: &T) {
+        self.trace(root);
 
         self.metrics.state.store(GC_STATE_SWEEPING, Ordering::Relaxed);
         // SAFETY: We just completed a trace, and we checked that all mutators
@@ -197,10 +202,10 @@ impl TracerController {
         self.print_debug_info();
     }
 
-    fn trace(&self) {
+    fn trace<T: Trace + ?Sized>(&self, root: &T) {
         gc_debug("Begining trace...");
         self.metrics.state.store(GC_STATE_TRACING, Ordering::Relaxed);
-        self.trace_root();
+        self.trace_root(root);
         self.spawn_tracers();
         self.clean_up();
         gc_debug("Trace Complete!");
@@ -229,11 +234,11 @@ impl TracerController {
         self.run_tracer();
     }
 
-    fn trace_root(&self) {
-        // Send the stored root jobs to kick off the trace
-        if let Some(jobs) = &self.root_jobs {
-            self.sender.send(vec![jobs.clone()]).unwrap();
-        }
+    fn trace_root<T: Trace + ?Sized>(&self, root: &T) {
+        // Create the root trace job from the provided reference
+        let ptr: NonNull<Thin<T>> = NonNull::from(root).cast();
+        let trace_job = TraceJob::new(ptr);
+        self.sender.send(vec![trace_job]).unwrap();
     }
 
     fn new_tracer(&self) -> Tracer<'_> {
@@ -380,24 +385,47 @@ impl TracerController {
 
 #[cfg(feature = "multi_threaded")]
 pub mod monitor {
-    use super::TracerController;
+    use super::{TracerController, Trace};
     use alloc::sync::Arc;
+    use core::ptr::NonNull;
 
-    pub fn spawn_monitor(mut tc: Arc<TracerController>) {
+    // SAFETY: This wrapper makes a raw pointer Send + Sync.
+    // The caller must ensure that:
+    // 1. The pointer remains valid for the lifetime of the monitor thread
+    // 2. No mutable access occurs while the monitor thread is running
+    // 3. The pointer is properly aligned and points to initialized memory
+    struct SendSyncPtr<T: ?Sized>(NonNull<T>);
+
+    unsafe impl<T: ?Sized> Send for SendSyncPtr<T> {}
+    unsafe impl<T: ?Sized> Sync for SendSyncPtr<T> {}
+
+    pub fn spawn_monitor<T: Trace + ?Sized>(tc: Arc<TracerController>, root_ptr: *const T) {
         // TODO: if monitor is on? do nothing
 
-        loop {
-            monitor_sleep(&tc);
+        // Wrap the raw pointer in a Send + Sync wrapper
+        let root_ptr = SendSyncPtr(unsafe { NonNull::new_unchecked(root_ptr as *mut T) });
 
-            if tc.major_trigger() {
-                tc.major_collect();
-            } else if tc.minor_trigger() {
-                tc.minor_trigger();
+        loop {
+            // Check shutdown flag first
+            if tc.should_shutdown() {
+                return;
             }
 
-            match Arc::<TracerController>::try_unwrap(tc) {
-                Ok(_) => return,
-                Err(err) => tc = err,
+            monitor_sleep(&tc);
+
+            // Check again after sleep
+            if tc.should_shutdown() {
+                return;
+            }
+
+            // SAFETY: The root pointer is guaranteed to be valid for the lifetime
+            // of the Arena, which outlives the monitor thread
+            let root_ref = unsafe { root_ptr.0.as_ref() };
+
+            if tc.major_trigger() {
+                tc.major_collect(root_ref);
+            } else if tc.minor_trigger() {
+                tc.minor_collect(root_ref);
             }
         }
     }
