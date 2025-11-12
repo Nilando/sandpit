@@ -139,6 +139,11 @@ impl TracerController {
 
         self.metrics.major_collections.fetch_add(1, Ordering::Relaxed);
         self.metrics.prev_arena_size.store(self.get_arena_size(), Ordering::Relaxed);
+        let old_objects = self.metrics.get_old_objects_count();
+        self.metrics.max_old_objects.store(
+            (old_objects as f32 * self.config.monitor_max_old_growth_rate).floor() as u64,
+            Ordering::Relaxed,
+        );
     }
 
     pub fn minor_collect(&self) {
@@ -340,7 +345,9 @@ impl TracerController {
         let current_old_objects_count = self.metrics.old_objects_count.load(Ordering::Relaxed);
         let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
 
-        current_old_objects_count > max_old_objects_count
+        let result = current_old_objects_count > max_old_objects_count;
+        if result { println!("curr: {}, max {}", current_old_objects_count, max_old_objects_count) };
+        result
     }
 
     pub fn minor_trigger(&self) -> bool {
