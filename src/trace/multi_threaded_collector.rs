@@ -5,7 +5,10 @@ use crate::config::Config;
 use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crate::heap::{Allocator, Heap};
-use crate::metrics::{GC_STATE_SLEEPING, GC_STATE_SWEEPING, GC_STATE_TRACING, GC_STATE_WAITING_ON_MUTATORS};
+use crate::metrics::{
+    GC_STATE_SLEEPING, GC_STATE_SWEEPING, GC_STATE_TRACING, GC_STATE_WAITING_ON_MUTATORS,
+};
+use crate::pointee::Thin;
 use crate::Metrics;
 use alloc::format;
 use alloc::vec;
@@ -15,7 +18,6 @@ use core::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime};
-use crate::pointee::Thin;
 
 pub struct MultiThreadedCollector {
     sender: Sender<Vec<TraceJob>>,
@@ -212,9 +214,7 @@ impl MultiThreadedCollector {
 
     fn get_arena_size(&self) -> u64 {
         let arena_size = self.heap.get_size();
-        self.metrics
-            .arena_size
-            .store(arena_size, Ordering::Relaxed);
+        self.metrics.arena_size.store(arena_size, Ordering::Relaxed);
         arena_size
     }
 }

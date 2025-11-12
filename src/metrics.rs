@@ -37,7 +37,7 @@ pub struct Metrics {
     pub max_yield_time: AtomicU64,
     pub avg_yield_time: AtomicU64,
     pub max_arena_size: AtomicU64,
-    pub monitor_is_on: bool
+    pub monitor_is_on: bool,
 }
 
 impl Metrics {
@@ -55,7 +55,7 @@ impl Metrics {
             max_arena_size: AtomicU64::new(0),
             prev_arena_size: AtomicU64::new(0),
             state: AtomicU8::new(GC_STATE_SLEEPING),
-            monitor_is_on: true
+            monitor_is_on: true,
         }
     }
 
@@ -70,8 +70,8 @@ impl Metrics {
     pub fn update_minor_collection_avg_time(&self, new_value: u64) {
         update_avg_u64(
             &self.minor_collect_avg_time,
-            new_value, 
-            self.minor_collections.load(Ordering::Relaxed)
+            new_value,
+            self.minor_collections.load(Ordering::Relaxed),
         );
     }
 
@@ -79,7 +79,7 @@ impl Metrics {
         update_avg_u64(
             &self.major_collect_avg_time,
             new_value,
-            self.major_collections.load(Ordering::Relaxed)
+            self.major_collections.load(Ordering::Relaxed),
         );
     }
 

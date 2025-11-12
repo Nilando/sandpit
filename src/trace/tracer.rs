@@ -1,13 +1,13 @@
+use super::collector::Collector;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
-use super::collector::Collector;
 use crate::debug::{gc_debug, gc_trace};
-use crate::heap::mark;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
-use alloc::vec::Vec;
-use alloc::vec;
+use crate::heap::mark;
 use alloc::format;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// Internal type used by the GC to perform tracing.
 pub struct Tracer<'a> {
@@ -28,10 +28,12 @@ impl<'a> Tracer<'a> {
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
-        gc_trace(&format!("marking\t{}\tptr\t{:#x}\theader\t{:#x}",
+        gc_trace(&format!(
+            "marking\t{}\tptr\t{:#x}\theader\t{:#x}",
             core::any::type_name::<T>(),
             gc.as_thin().as_ptr() as usize,
-            gc.get_header_ptr() as usize));
+            gc.get_header_ptr() as usize
+        ));
 
         let header = gc.get_header();
         let alloc_ptr = gc.get_header_ptr();
@@ -90,7 +92,8 @@ impl<'a> Tracer<'a> {
             return;
         }
 
-        let split_at = (self.work.len() as f32 * self.collector.get_trace_share_ratio()).floor() as usize;
+        let split_at =
+            (self.work.len() as f32 * self.collector.get_trace_share_ratio()).floor() as usize;
         let share_work = self.work.split_off(split_at);
 
         if !share_work.is_empty() {

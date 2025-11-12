@@ -267,7 +267,9 @@ pub fn tag(input: TokenStream) -> TokenStream {
                 match &variant.fields {
                     Fields::Unit => {
                         // Check for #[ptr(Type)] attribute
-                        let ptr_type = variant.attrs.iter()
+                        let ptr_type = variant
+                            .attrs
+                            .iter()
                             .find(|attr| attr.path().is_ident("ptr"))
                             .map(|attr| {
                                 attr.parse_args::<syn::Type>()
@@ -281,7 +283,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             // This is a pointer variant
                             pointer_types.push(ptr_type.clone());
                             is_ptr_arms.push(quote! { Self::#variant_name => true, });
-                            
+
                             // Generate trace arm for pointer variant
                             trace_arms.push(quote! {
                                 Self::#variant_name => {
@@ -294,7 +296,10 @@ pub fn tag(input: TokenStream) -> TokenStream {
                             });
 
                             // Generate creation method for this pointer type
-                            let method_name = Ident::new(&format!("from_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
+                            let method_name = Ident::new(
+                                &format!("from_{}", variant_name.to_string().to_lowercase()),
+                                Span::mixed_site(),
+                            );
                             creation_methods.push(quote! {
                                 pub fn #method_name<'gc>(ptr: sandpit::Gc<'gc, #ptr_type>) -> sandpit::Tagged<'gc, #name> {
                                     unsafe { 
@@ -303,8 +308,11 @@ pub fn tag(input: TokenStream) -> TokenStream {
                                 }
                             });
 
-                            // Generate extraction method for this pointer type  
-                            let extract_method_name = Ident::new(&format!("get_{}", variant_name.to_string().to_lowercase()), Span::mixed_site());
+                            // Generate extraction method for this pointer type
+                            let extract_method_name = Ident::new(
+                                &format!("get_{}", variant_name.to_string().to_lowercase()),
+                                Span::mixed_site(),
+                            );
                             extraction_methods.push(quote! {
                                 pub fn #extract_method_name<'gc>(tagged_ptr: sandpit::Tagged<'gc, Self>) -> Option<sandpit::Gc<'gc, #ptr_type>> {
                                     if matches!(tagged_ptr.get_tag(), #name::#variant_name) {
@@ -319,7 +327,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
                         } else {
                             // This is a non-pointer variant
                             is_ptr_arms.push(quote! { Self::#variant_name => false, });
-                            
+
                             // Generate trace arm for non-pointer variant (no tracing needed)
                             trace_arms.push(quote! {
                                 Self::#variant_name => {
@@ -342,7 +350,6 @@ pub fn tag(input: TokenStream) -> TokenStream {
             ty
         })
         .collect();
-
 
     // Calculate minimum alignment from all pointer types
     let min_alignment_calculation = if pointer_types.is_empty() {

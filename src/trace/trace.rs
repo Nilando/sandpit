@@ -1,7 +1,7 @@
 use super::tracer::Tracer;
-use crate::tagged::{Tagged, Tag};
 use crate::gc::{Gc, GcOpt};
 use crate::pointee::{GcPointee, Thin};
+use crate::tagged::{Tag, Tagged};
 use core::cell::*;
 use core::ptr::NonNull;
 use core::sync::atomic::*;
@@ -31,10 +31,10 @@ use core::sync::atomic::*;
 /// #[derive(TraceLeaf)]
 /// struct Foo<T> {
 ///     // T is TraceLeaf so can be put in a cell
-///     data: Cell<T>, 
+///     data: Cell<T>,
 ///
 ///     // bar is also traceleaf, so can exist within Foo
-///     bar: Bar 
+///     bar: Bar
 ///
 ///     // Foo cannot contain a Gc pointer, b/c it is trace
 ///     // c: Gc<'_, usize>
@@ -108,7 +108,9 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        if let Some(gc_mut) = self.as_option() { gc_mut.trace(tracer) }
+        if let Some(gc_mut) = self.as_option() {
+            gc_mut.trace(tracer)
+        }
     }
 }
 

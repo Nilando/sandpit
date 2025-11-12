@@ -1,25 +1,22 @@
 use super::header::GcMark;
-use nimix::{Heap as NimixHeap, Allocator as NimixAllocator, mark as nimix_mark};
 use alloc::alloc::Layout;
-
+use nimix::{mark as nimix_mark, Allocator as NimixAllocator, Heap as NimixHeap};
 
 pub struct Allocator {
-    allocator: NimixAllocator
+    allocator: NimixAllocator,
 }
 
 impl From<&Heap> for Allocator {
     fn from(value: &Heap) -> Self {
         Allocator {
-            allocator: NimixAllocator::from(&value.heap)
+            allocator: NimixAllocator::from(&value.heap),
         }
     }
 }
 
 impl Allocator {
     pub fn alloc(&self, layout: Layout) -> *const u8 {
-        unsafe {
-            self.allocator.alloc(layout).expect("Failed to allocate")
-        }
+        unsafe { self.allocator.alloc(layout).expect("Failed to allocate") }
     }
 }
 

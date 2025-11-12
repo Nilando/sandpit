@@ -6,13 +6,13 @@ use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crate::heap::{Allocator, Heap};
 use crate::metrics::{GC_STATE_SLEEPING, GC_STATE_SWEEPING, GC_STATE_TRACING};
+use crate::pointee::Thin;
 use crate::Metrics;
 use alloc::format;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU8, Ordering};
-use core::cell::RefCell;
-use crate::pointee::Thin;
 
 pub struct SingleThreadedCollector {
     work_queue: RefCell<Vec<TraceJob>>,
@@ -39,7 +39,9 @@ impl SingleThreadedCollector {
     fn trace_and_sweep<T: Trace + ?Sized>(&self, root: &T) {
         self.trace(root);
 
-        self.metrics.state.store(GC_STATE_SWEEPING, Ordering::Relaxed);
+        self.metrics
+            .state
+            .store(GC_STATE_SWEEPING, Ordering::Relaxed);
         let current_arena_size = self.heap.get_size();
         let max_arena_size = self.metrics.get_max_arena_size();
         if max_arena_size < current_arena_size {
@@ -109,9 +111,7 @@ impl SingleThreadedCollector {
 
     fn get_arena_size(&self) -> u64 {
         let arena_size = self.heap.get_size();
-        self.metrics
-            .arena_size
-            .store(arena_size, Ordering::Relaxed);
+        self.metrics.arena_size.store(arena_size, Ordering::Relaxed);
         arena_size
     }
 }

@@ -1,11 +1,11 @@
-use crate::trace::Collector;
 use super::config::Config;
 use super::metrics::Metrics;
 use super::mutator::Mutator;
 use super::trace::Trace;
+use crate::trace::Collector;
 
-use higher_kinded_types::ForLt;
 use alloc::sync::Arc;
+use higher_kinded_types::ForLt;
 
 /// A concurrently garbage collected arena with a single root type.
 ///
@@ -79,8 +79,7 @@ where
 
         let collector = Arc::new(Collector::new(config));
 
-        let collector_ref: &'static Collector =
-            unsafe { &*(&*collector as *const Collector) };
+        let collector_ref: &'static Collector = unsafe { &*(&*collector as *const Collector) };
         let mutator = Mutator::new(collector_ref);
         let mutator_ref: &'static Mutator<'static> =
             unsafe { &*(&mutator as *const Mutator<'static>) };
@@ -98,15 +97,11 @@ where
                 root,
                 monitor_thread,
             }
-
         }
 
         #[cfg(not(feature = "multi_threaded"))]
         {
-            Self {
-                collector,
-                root,
-            }
+            Self { collector, root }
         }
     }
 

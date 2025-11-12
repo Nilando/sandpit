@@ -124,36 +124,36 @@
 //! ***WARNING:*** If a mutation continously runs without occasionally checking
 //! the yield signal, memory cannot be freed!
 //!
-extern crate self as sandpit;
 extern crate alloc;
+extern crate self as sandpit;
 
-mod gc;
-mod heap;
 mod arena;
 mod barrier;
 mod config;
 mod debug;
+mod gc;
+mod gc_sync;
 mod header;
+mod heap;
 mod metrics;
 mod mutator;
 mod pointee;
-mod trace;
 mod tagged;
+mod trace;
 mod vec;
-mod gc_sync;
 
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
 
 pub use arena::Arena;
-pub use barrier::{WriteBarrier, InnerBarrier};
+pub use barrier::{InnerBarrier, WriteBarrier};
 pub use config::Config;
+pub use gc::{Gc, GcOpt};
 pub use metrics::Metrics;
 pub use mutator::Mutator;
 pub use sandpit_derive::{Tag, Trace, TraceLeaf};
+pub use tagged::{Tag, Tagged};
 pub use trace::{Trace, TraceLeaf};
-pub use tagged::{Tagged, Tag};
-pub use gc::{Gc, GcOpt};
 pub use vec::GcVec;
 
 #[doc(hidden)]

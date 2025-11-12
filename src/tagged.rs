@@ -1,7 +1,7 @@
+use crate::Trace;
+use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use core::marker::PhantomData;
-use crate::Trace;
 
 use super::gc::Gc;
 
@@ -19,8 +19,8 @@ pub unsafe trait Tag: Sized {
 
 pub struct Tagged<'gc, T: Tag> {
     raw: ManuallyDrop<AtomicUsize>,
-    _tag_type: PhantomData<&'gc T>
-} 
+    _tag_type: PhantomData<&'gc T>,
+}
 
 impl<'gc, T: Tag> Clone for Tagged<'gc, T> {
     fn clone(&self) -> Self {
@@ -28,7 +28,7 @@ impl<'gc, T: Tag> Clone for Tagged<'gc, T> {
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(raw)),
-            _tag_type: PhantomData::<&'gc T>
+            _tag_type: PhantomData::<&'gc T>,
         }
     }
 }
@@ -39,12 +39,10 @@ impl<'gc, T: Tag> TryFrom<usize> for Tagged<'gc, T> {
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         match T::from_usize(value & Self::TAG_MASK) {
             None => Err(()),
-            Some(_) => {
-                Ok(Self {
-                    raw: ManuallyDrop::new(AtomicUsize::new(value)),
-                    _tag_type: PhantomData::<&'gc T>
-                })
-            }
+            Some(_) => Ok(Self {
+                raw: ManuallyDrop::new(AtomicUsize::new(value)),
+                _tag_type: PhantomData::<&'gc T>,
+            }),
         }
     }
 }
@@ -79,7 +77,7 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
-            _tag_type: PhantomData::<&'gc T>
+            _tag_type: PhantomData::<&'gc T>,
         }
     }
 
@@ -91,7 +89,7 @@ impl<'gc, T: Tag> Tagged<'gc, T> {
 
         Self {
             raw: ManuallyDrop::new(AtomicUsize::new(tagged_value)),
-            _tag_type: PhantomData::<&'gc T>
+            _tag_type: PhantomData::<&'gc T>,
         }
     }
 
@@ -160,10 +158,10 @@ mod tests {
         let _: Arena<Root![_]> = Arena::new(|mu| {
             let ptr = Gc::new(mu, 69usize);
             let tagged = MyTag::from_usize(ptr.clone());
-            
+
             assert!(tagged.is_ptr());
             assert!(matches!(tagged.get_tag(), MyTag::Usize));
-            
+
             let extracted = MyTag::get_usize(tagged).unwrap();
             assert_eq!(*extracted, 69);
         });
@@ -184,7 +182,7 @@ mod tests {
     fn test_raw_data_variant() {
         let _: Arena<Root![_]> = Arena::new(|_| {
             let tagged = Tagged::from_raw(2048, MyTag::RawData);
-            
+
             assert!(!tagged.is_ptr());
             assert!(matches!(tagged.get_tag(), MyTag::RawData));
             assert_eq!(tagged.get_stripped_raw(), 2048);
@@ -196,7 +194,7 @@ mod tests {
         let _: Arena<Root![_]> = Arena::new(|mu| {
             let ptr = Gc::new(mu, 69usize);
             let tagged = MyTag::from_usize(ptr);
-            
+
             // Should return None when trying to extract as wrong type
             assert!(MyTag::get_isize(tagged).is_none());
         });
@@ -206,7 +204,7 @@ mod tests {
     fn test_size_preservation() {
         let _: Arena<Root![_]> = Arena::new(|_| {
             assert_eq!(
-                core::mem::size_of::<*const u8>(), 
+                core::mem::size_of::<*const u8>(),
                 core::mem::size_of::<Tagged<MyTag>>()
             );
         });

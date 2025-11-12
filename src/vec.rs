@@ -1,10 +1,10 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::Gc;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
-use super::mutator::Mutator;
 use super::barrier::InnerBarrier;
 use super::gc::GcOpt;
 use super::gc_sync::GcSync;
+use super::mutator::Mutator;
 use super::trace::{Trace, Tracer};
 
 unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
@@ -39,7 +39,7 @@ unsafe impl<'gc, T: GcSync<'gc>> Trace for GcVec<'gc, T> {
 
 pub struct GcVec<'gc, T: GcSync<'gc>> {
     len: AtomicUsize,
-    items: InnerBarrier<GcOpt<'gc, [T]>>
+    items: InnerBarrier<GcOpt<'gc, [T]>>,
 }
 
 impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
@@ -123,7 +123,7 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
         let new_cap = if self.cap() == 0 {
             Self::INIT_CAP
         } else {
-            old_cap * Self::GROW_RATE 
+            old_cap * Self::GROW_RATE
         };
 
         let new_array = mu.alloc_array_from_fn(new_cap, |i| {
@@ -134,7 +134,8 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
             }
         });
 
-        self.items.write_barrier(mu, |barrier| barrier.set(new_array));
+        self.items
+            .write_barrier(mu, |barrier| barrier.set(new_array));
     }
 }
 

@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
-use std::sync::OnceLock;
-#[cfg(feature = "std")]
 use std::env;
+#[cfg(feature = "std")]
+use std::sync::OnceLock;
 
 #[cfg(feature = "std")]
 static GC_DEBUG_ENABLED: OnceLock<bool> = OnceLock::new();

@@ -1,8 +1,4 @@
-use criterion::{
-    criterion_group, 
-    criterion_main, 
-    Criterion, 
-};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use sandpit::{Arena, Gc, Root};
 
@@ -15,7 +11,7 @@ fn mutate_and_alloc(c: &mut Criterion) {
 
     arena.mutate(|mu, _| {
         c.bench_function("alloc usize", |b| {
-                b.iter(|| Gc::new(mu, 123usize));
+            b.iter(|| Gc::new(mu, 123usize));
         });
     });
 

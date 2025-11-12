@@ -3,7 +3,7 @@ use crate::header::{GcHeader, SizedHeader, SliceHeader};
 
 use alloc::alloc::Layout;
 use core::marker::PhantomData;
-use core::ptr::{NonNull, slice_from_raw_parts};
+use core::ptr::{slice_from_raw_parts, NonNull};
 
 // Gc pointer types are capable of pointing to [T]. However, you can not
 // have an AtomicPtr<T> where T: ?Sized b/c atomic operations can only operate
@@ -26,10 +26,7 @@ pub trait GcPointee {
     fn as_fat<'a>(thin_ptr: NonNull<Thin<Self>>) -> *const Self;
     fn deref<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self {
         let fat_ptr = Self::as_fat(thin_ptr);
-        debug_assert!(
-            !fat_ptr.is_null(),
-            "Attempting to dereference null pointer"
-        );
+        debug_assert!(!fat_ptr.is_null(), "Attempting to dereference null pointer");
         unsafe { &*fat_ptr }
     }
     fn get_header<'a>(thin_ptr: NonNull<Thin<Self>>) -> &'a Self::GcHeader {
@@ -56,7 +53,8 @@ impl<T: Trace> GcPointee for T {
     fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
         let (_, item_offset) = sized_alloc_layout::<T>();
 
-        let header_ptr = unsafe { thin_ptr.as_ptr().byte_sub(item_offset) as *const Self::GcHeader };
+        let header_ptr =
+            unsafe { thin_ptr.as_ptr().byte_sub(item_offset) as *const Self::GcHeader };
         debug_assert!(
             header_ptr as usize % core::mem::align_of::<Self::GcHeader>() == 0,
             "Header pointer {:p} is not aligned to {} bytes (required for SizedHeader<{}>)",

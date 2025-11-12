@@ -1,7 +1,5 @@
 use rand::prelude::*;
-use sandpit::{
-    field, Arena, Gc, GcOpt, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf
-};
+use sandpit::{field, Arena, Gc, GcOpt, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf};
 
 fn alloc_rand_garbage(mu: &Mutator) {
     let mut rng = rand::thread_rng();
@@ -204,9 +202,8 @@ fn resets_old_object_count() {
 
 #[test]
 fn alloc_option() {
-    let arena: Arena<Root![Gc<'_, Gc<'_, Option<Gc<'_, usize>>>>]> = Arena::new(|mu| {
-        Gc::new(mu, Gc::new(mu, None))
-    });
+    let arena: Arena<Root![Gc<'_, Gc<'_, Option<Gc<'_, usize>>>>]> =
+        Arena::new(|mu| Gc::new(mu, Gc::new(mu, None)));
 
     arena.major_collect();
 
@@ -227,9 +224,8 @@ fn alloc_option() {
 
 #[test]
 fn alloc_result() {
-    let arena: Arena<Root![Gc<'_, Gc<'_, Result<Gc<'_, usize>, ()>>>]> = Arena::new(|mu| {
-        Gc::new(mu, Gc::new(mu, Ok(Gc::new(mu, 3))))
-    });
+    let arena: Arena<Root![Gc<'_, Gc<'_, Result<Gc<'_, usize>, ()>>>]> =
+        Arena::new(|mu| Gc::new(mu, Gc::new(mu, Ok(Gc::new(mu, 3)))));
 
     arena.major_collect();
 
@@ -270,9 +266,8 @@ fn alloc_sized_array() {
 
 #[test]
 fn alloc_tuple() {
-    let arena: Arena<Root![(Gc<'_, usize>, Gc<'_, usize>)]> = Arena::new(|mu| {
-        (Gc::new(mu, 0), Gc::new(mu, 1))
-    });
+    let arena: Arena<Root![(Gc<'_, usize>, Gc<'_, usize>)]> =
+        Arena::new(|mu| (Gc::new(mu, 0), Gc::new(mu, 1)));
 
     arena.major_collect();
 
@@ -487,9 +482,8 @@ fn trace_tuple_struct() {
     #[derive(Trace)]
     struct Foo<'gc>(Gc<'gc, u8>, Gc<'gc, u8>);
 
-    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
-        Gc::new(mu, Foo(Gc::new(mu, 0), Gc::new(mu, 1)))
-    });
+    let arena: Arena<Root![Gc<'_, Foo<'_>>]> =
+        Arena::new(|mu| Gc::new(mu, Foo(Gc::new(mu, 0), Gc::new(mu, 1))));
 
     arena.major_collect();
 
@@ -662,19 +656,19 @@ fn gc_scoped_deref() {
 
     arena.mutate(|mu, root| {
         struct Foo<'gc> {
-            inner: &'gc usize
+            inner: &'gc usize,
         }
 
         impl<'gc> Foo<'gc> {
             fn set_inner(&mut self, gc: Gc<'gc, usize>) {
-                // DOES NOT COMPILE 
+                // DOES NOT COMPILE
                 // self.inner = &gc;
                 self.inner = &gc.scoped_deref();
             }
         }
 
         let mut foo = Foo {
-            inner: root.scoped_deref()
+            inner: root.scoped_deref(),
         };
 
         let gc = Gc::new(mu, 2);
@@ -689,9 +683,8 @@ fn gc_scoped_deref() {
 
 #[test]
 fn barrier_as_option() {
-    let arena: Arena<Root![Gc<'_, Option<Gc<'_, bool>>>]> = Arena::new(|mu| {
-        Gc::new(mu, Some(Gc::new(mu, false)))
-    });
+    let arena: Arena<Root![Gc<'_, Option<Gc<'_, bool>>>]> =
+        Arena::new(|mu| Gc::new(mu, Some(Gc::new(mu, false))));
 
     arena.mutate(|mu, root| {
         root.write_barrier(mu, |barrier| {
@@ -702,9 +695,7 @@ fn barrier_as_option() {
 
 #[test]
 fn gc_clone() {
-    let arena: Arena<Root![Gc<'_, bool>]> = Arena::new(|mu| {
-        Gc::new(mu, false).clone()
-    });
+    let arena: Arena<Root![Gc<'_, bool>]> = Arena::new(|mu| Gc::new(mu, false).clone());
 
     arena.mutate(|_mu, root| {
         assert!(!**root);
@@ -737,8 +728,7 @@ enum TestTag {
 
 #[test]
 fn gc_vec_of_tagged_pointers() {
-    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> =
-        Arena::new(|mu| GcVec::new(mu));
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| GcVec::new(mu));
 
     fn push_to_vec<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Tagged<'gc, TestTag>>) {
         for i in 0..1000 {
@@ -778,8 +768,7 @@ fn gc_vec_of_tagged_pointers() {
 
 #[test]
 fn retracing_tagged_ptrs() {
-    let arena: Arena<Root![()]> =
-        Arena::new(|_| ());
+    let arena: Arena<Root![()]> = Arena::new(|_| ());
 
     fn mutate<'gc>(mu: &'gc Mutator) {
         let gc_ptr = Gc::new(mu, 123);
@@ -791,4 +780,3 @@ fn retracing_tagged_ptrs() {
     arena.mutate(|mu, ()| mutate(mu));
     arena.major_collect();
 }
-

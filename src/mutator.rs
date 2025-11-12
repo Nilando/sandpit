@@ -4,11 +4,11 @@ use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
-use super::trace::{Trace, TraceJob, Collector};
-use core::cell::RefCell;
-use core::ptr::{write, copy, NonNull};
-use alloc::vec::Vec;
+use super::trace::{Collector, Trace, TraceJob};
 use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::RefCell;
+use core::ptr::{copy, write, NonNull};
 
 /// Allows for allocation and mutation within the GC arena.
 ///
@@ -73,9 +73,7 @@ impl<'gc> Drop for Mutator<'gc> {
 }
 
 impl<'gc> Mutator<'gc> {
-    pub(crate) fn new(
-        collector: &'gc Collector
-    ) -> Self {
+    pub(crate) fn new(collector: &'gc Collector) -> Self {
         let mark = collector.prev_mark();
         let allocator = collector.new_allocator();
         collector.increment_mutators();
@@ -113,7 +111,7 @@ impl<'gc> Mutator<'gc> {
 
             // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
             // the Gc invariant that a Gc<T> points to a T with a padded header.
-            
+
             let val_ptr = ptr.add(val_offset).cast();
             let header_ptr = ptr.cast();
 
@@ -271,11 +269,11 @@ impl<'gc> Mutator<'gc> {
     }
 
     pub(crate) fn get_mark(&self) -> GcMark {
-       self.collector.get_current_mark()
+        self.collector.get_current_mark()
     }
 
     pub(crate) fn get_prev_mark(&self) -> GcMark {
-       self.collector.get_current_mark().rotate().rotate()
+        self.collector.get_current_mark().rotate().rotate()
     }
 
     pub fn retrace<T: Trace + ?Sized>(&self, obj: &'gc T) {

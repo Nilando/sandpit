@@ -1,7 +1,7 @@
 use super::gc::{Gc, GcOpt};
-use super::trace::{Trace, Tracer};
 use super::mutator::Mutator;
-use super::tagged::{Tagged, Tag};
+use super::tagged::{Tag, Tagged};
+use super::trace::{Trace, Tracer};
 use core::sync::atomic::{AtomicU8, Ordering};
 
 /// Allows for the mutation of [`Gc`] and [`GcOpt`] pointers.
@@ -160,7 +160,7 @@ impl<T: Trace> InnerBarrier<T> {
     pub fn new(mu: &Mutator, inner: T) -> Self {
         Self {
             mark: AtomicU8::new(mu.get_prev_mark().into()),
-            inner
+            inner,
         }
     }
 
@@ -219,7 +219,7 @@ impl<'gc, B: Tag> WriteBarrier<'gc, Tagged<'gc, B>> {
 /// ensuring that from one write barrier, further barriers can only be obtained
 /// to fields within the same contiguous allocation/type.
 ///
-/// # Example 
+/// # Example
 /// ```rust
 /// use sandpit::{Arena, Trace, Root, Gc, field};
 ///

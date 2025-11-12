@@ -128,10 +128,8 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
         <T as GcPointee>::get_header_ptr(self.as_thin())
     }
 
-    pub(crate)  fn as_thin(&self) -> NonNull<Thin<T>> {
-        unsafe {
-            NonNull::new_unchecked(self.ptr.load(Ordering::Relaxed))
-        }
+    pub(crate) fn as_thin(&self) -> NonNull<Thin<T>> {
+        unsafe { NonNull::new_unchecked(self.ptr.load(Ordering::Relaxed)) }
     }
 
     /// Get a reference to a garabage collected value with the lifetime of the mutation.
@@ -157,7 +155,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     ///
     ///     impl<'gc> Foo<'gc> {
     ///         fn set_inner(&mut self, gc: Gc<'gc, usize>) {
-    ///             // DOES NOT COMPILE 
+    ///             // DOES NOT COMPILE
     ///             // self.inner = &gc;
     ///             self.inner = &gc.scoped_deref();
     ///         }
@@ -184,7 +182,7 @@ impl<'gc, T: Trace + ?Sized> Gc<'gc, T> {
     /// [`crate::barrier::WriteBarrier`] which allows for mutating `Gc` and
     /// `GcOpt`'s.
     ///
-    /// # Example 
+    /// # Example
     ///
     /// Get a writer barrier to a index of a slice behind write barrier.
     ///
