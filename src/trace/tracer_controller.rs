@@ -71,11 +71,6 @@ impl ControllerLocks {
     fn try_write_yield(&self) -> Result<std::sync::RwLockWriteGuard<()>, std::sync::TryLockError<std::sync::RwLockWriteGuard<()>>> {
         self.yield_lock.try_write()
     }
-
-    #[cfg(not(feature = "multi_threaded"))]
-    fn try_write_yield(&self) -> Result<(), ()> {
-        Ok(())
-    }
 }
 
 pub struct TracerController {
@@ -227,7 +222,7 @@ impl TracerController {
         }
     }
 
-    fn new_tracer(&self) -> Tracer {
+    fn new_tracer(&self) -> Tracer<'_> {
         let mark = self.get_current_mark();
 
         Tracer::new(self, mark)
@@ -261,6 +256,7 @@ impl TracerController {
         self.receiver.try_recv().ok()
     }
 
+    #[cfg(feature = "multi_threaded")]
     pub fn is_trace_completed(&self) -> bool {
         if self.receiver.is_empty() {
             if self.mutators_stopped() {
@@ -297,11 +293,12 @@ impl TracerController {
         self.yield_flag.load(Ordering::SeqCst)
     }
 
+    #[cfg(feature = "multi_threaded")]
     pub fn raise_yield_flag(&self) {
         self.yield_flag.store(true, Ordering::SeqCst);
     }
 
-    pub fn yield_lock(&self) -> YieldLockGuard {
+    pub fn yield_lock(&self) -> YieldLockGuard<'_> {
         let _guard = self.locks.lock_collection();
         self.locks.read_yield()
     }
@@ -314,6 +311,7 @@ impl TracerController {
         !self.receiver.is_empty()
     }
 
+    #[cfg(feature = "multi_threaded")]
     fn mutators_stopped(&self) -> bool {
         self.locks.try_write_yield().is_ok()
     }

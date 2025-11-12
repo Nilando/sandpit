@@ -146,7 +146,7 @@ impl<'gc, T: Trace> WriteBarrier<'gc, [T]> {
 }
 
 impl<'gc, T: Trace> WriteBarrier<'gc, Option<T>> {
-    pub fn into(&self) -> Option<WriteBarrier<T>> {
+    pub fn into(&self) -> Option<WriteBarrier<'_, T>> {
         self.inner.as_ref().map(|inner| WriteBarrier { inner })
     }
 }

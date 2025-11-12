@@ -102,15 +102,7 @@ impl<'a> Tracer<'a> {
         self.mark_count += 1;
     }
 
-    pub(crate) fn get_mark_count(&self) -> usize {
-        self.mark_count
-    }
-
     pub(crate) fn get_mark(&self) -> GcMark {
         self.mark
-    }
-
-    pub(crate) fn take_work(&mut self) -> Vec<TraceJob> {
-        core::mem::take(&mut self.work)
     }
 }
