@@ -135,4 +135,5 @@ pub fn update_avg_u64(running_avg: &AtomicU64, new_value: u64, sample_size: u64)
 pub const GC_STATE_SLEEPING: u8 = 0;
 pub const GC_STATE_TRACING: u8 = 1;
 pub const GC_STATE_SWEEPING: u8 = 2;
+#[cfg(feature = "multi_threaded")]
 pub const GC_STATE_WAITING_ON_MUTATORS: u8 = 3;

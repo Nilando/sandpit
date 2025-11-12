@@ -6,6 +6,9 @@ use crate::debug::gc_debug;
 use crate::header::GcMark;
 use crate::heap::{Allocator, Heap};
 use crate::Metrics;
+use crate::metrics::{GC_STATE_SLEEPING, GC_STATE_TRACING, GC_STATE_SWEEPING};
+#[cfg(feature = "multi_threaded")]
+use crate::metrics::GC_STATE_WAITING_ON_MUTATORS;
 use crate::pointee::Thin;
 use alloc::vec;
 use crossbeam_channel::{Receiver, Sender};
@@ -139,6 +142,8 @@ impl TracerController {
             (old_objects as f32 * self.config.monitor_max_old_growth_rate).floor() as u64,
             Ordering::Relaxed,
         );
+
+        self.metrics.state.store(GC_STATE_SLEEPING, Ordering::Relaxed);
     }
 
     pub fn minor_collect(&self) {
@@ -150,6 +155,8 @@ impl TracerController {
 
         self.metrics.minor_collections.fetch_add(1, Ordering::Relaxed);
         self.metrics.prev_arena_size.store(self.get_arena_size(), Ordering::Relaxed);
+
+        self.metrics.state.store(GC_STATE_SLEEPING, Ordering::Relaxed);
     }
 
     #[cfg(feature = "multi_threaded")]
@@ -175,10 +182,16 @@ impl TracerController {
     pub fn trace_and_sweep(&self) {
         self.trace();
 
+        self.metrics.state.store(GC_STATE_SWEEPING, Ordering::Relaxed);
         // SAFETY: We just completed a trace, and we checked that all mutators
         // have dropped their yield locks, ensuring no mutation contexts exist
-        // and we hold the collectino lock, ensuring no mutation contexts can 
+        // and we hold the collectino lock, ensuring no mutation contexts can
         // be created at this point
+        let current_arena_size = self.heap.get_size();
+        let max_arena_size = self.metrics.get_max_arena_size();
+        if max_arena_size < current_arena_size {
+            self.metrics.max_arena_size.store(current_arena_size, Ordering::Relaxed);
+        }
         unsafe { self.sweep(); }
 
         self.print_debug_info();
@@ -186,6 +199,7 @@ impl TracerController {
 
     fn trace(&self) {
         gc_debug("Begining trace...");
+        self.metrics.state.store(GC_STATE_TRACING, Ordering::Relaxed);
         self.trace_root();
         self.spawn_tracers();
         self.clean_up();
@@ -263,6 +277,7 @@ impl TracerController {
                 return true;
             }
 
+            self.metrics.state.store(GC_STATE_WAITING_ON_MUTATORS, Ordering::Relaxed);
             self.raise_yield_flag();
         }
 
