@@ -90,41 +90,22 @@ where
         drop(mutator);
 
         #[cfg(feature = "multi_threaded")]
-        let monitor_thread = if config.monitor_on {
-            let collector_clone = collector.clone();
-            let root_ptr: *const R::Of<'static> = root.as_ref();
+        {
+            let monitor_thread = collector.clone().spawn_monitor_thread(root.as_ref());
 
-            // SAFETY: The root pointer is valid for the lifetime of the Arena.
-            // We wrap it in usize to make it Send, then convert back in the thread.
-            let root_ptr_usize = root_ptr as usize;
+            Self {
+                collector,
+                root,
+                monitor_thread,
+            }
 
-            let handle = std::thread::spawn(move || {
-                let root_ptr = root_ptr_usize as *const R::Of<'static>;
-                crate::trace::multi_threaded_collector::monitor::spawn_monitor(
-                    collector_clone,
-                    root_ptr
-                );
-            });
-
-            Some(handle)
-        } else {
-            None
-        };
+        }
 
         #[cfg(not(feature = "multi_threaded"))]
         {
             Self {
                 collector,
                 root,
-            }
-        }
-
-        #[cfg(feature = "multi_threaded")]
-        {
-            Self {
-                collector,
-                root,
-                monitor_thread,
             }
         }
     }

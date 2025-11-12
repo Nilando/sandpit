@@ -86,6 +86,31 @@ impl MultiThreadedCollector {
         self.shutdown_flag.load(Ordering::SeqCst)
     }
 
+    /// Spawn a monitor thread for automatic garbage collection.
+    /// Returns Some(JoinHandle) if monitor_on is true in config, None otherwise.
+    ///
+    /// # Safety
+    /// The caller must ensure that root_ptr remains valid for the lifetime of the monitor thread.
+    pub fn spawn_monitor_thread<T: Trace + 'static>(
+        self: alloc::sync::Arc<Self>,
+        root_ptr: *const T,
+    ) -> Option<std::thread::JoinHandle<()>> {
+        if !self.config.monitor_on {
+            return None;
+        }
+
+        // Wrap pointer to make it Send (usize is Send)
+        let root_ptr_addr = root_ptr as usize;
+
+        let handle = std::thread::spawn(move || {
+            // SAFETY: We're reconstructing the pointer that was valid when passed in
+            let root_ptr = root_ptr_addr as *const T;
+            monitor::spawn_monitor(self, root_ptr);
+        });
+
+        Some(handle)
+    }
+
     fn timed_collection(&self, is_major: bool, f: impl FnOnce()) {
         let start_time = SystemTime::now();
 
