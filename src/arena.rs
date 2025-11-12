@@ -66,7 +66,7 @@ where
     }
 
     // eventually it would be cool to allow the user to pass in their own config
-    fn new_with_config<F>(config: Config, f: F) -> Self
+    pub fn new_with_config<F>(config: Config, f: F) -> Self
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
