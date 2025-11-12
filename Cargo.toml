@@ -26,8 +26,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std"]
-std = []
+default = []
+multi_threaded = []
 
 [dependencies]
 nimix = { git = "https://github.com/Nilando/nimix" }

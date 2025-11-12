@@ -6,6 +6,7 @@ use core::ptr::NonNull;
 unsafe impl Send for TraceJob {}
 unsafe impl Sync for TraceJob {}
 
+#[derive(Clone)]
 pub struct TraceJob {
     ptr: NonNull<Thin<()>>,
     dyn_trace: fn(NonNull<Thin<()>>, &mut Tracer),

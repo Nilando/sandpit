@@ -28,7 +28,7 @@ where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
     tracer_controller: Arc<TracerController>,
-    root: R::Of<'static>,
+    root: Box<R::Of<'static>>,
 }
 
 impl<R: ForLt + 'static> Arena<R>
@@ -74,22 +74,36 @@ where
         //
         // I have a very fragile understanding of whats going on here, and
         // I truly don't know whether this is safe.
-        let tracer_controller = Arc::new(TracerController::new(config));
+        let mut tracer_controller = TracerController::new(config);
         let tracer_ref: &'static TracerController =
-            unsafe { &*(&*tracer_controller as *const TracerController) };
-        let lock = tracer_ref.yield_lock();
-        let mutator = Mutator::new(tracer_ref, lock);
+            unsafe { &*(&tracer_controller as *const TracerController) };
+        let mutator = Mutator::new(tracer_ref);
         let mutator_ref: &'static Mutator<'static> =
             unsafe { &*(&mutator as *const Mutator<'static>) };
 
-        let root: R::Of<'static> = f(mutator_ref);
+        let root = Box::new(f(mutator_ref));
 
         drop(mutator);
 
-        Self {
+        // Initialize the root trace job before potentially starting the monitor
+        // The Box ensures the root is heap-allocated at a stable address
+        tracer_controller.set_root_job(root.as_ref());
+
+        let tracer_controller = Arc::new(tracer_controller);
+
+        #[cfg(feature = "multi_threaded")]
+        if config.monitor_on {
+            let tc_clone = tracer_controller.clone();
+            std::thread::spawn(move || {
+                crate::trace::tracer_controller::monitor::spawn_monitor(tc_clone);
+            });
+        }
+
+        let arena = Self {
             tracer_controller,
             root,
-        }
+        };
+        arena
     }
 
     /// Provides a [`crate::mutator::Mutator`] and the arena's root within a
@@ -145,6 +159,9 @@ where
         let root = unsafe { self.scoped_root() };
 
         f(&mutator, root);
+
+        // TODO:
+        // if single threaded mode, collect here on mutation exit
     }
 
     /// you can view the root but you don't have a mutator, therefore collection
@@ -166,7 +183,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn major_collect(&self) {
-        self.tracer_controller.major_collect(&self.root);
+        self.tracer_controller.major_collect();
     }
 
     /// Synchronously trigger a minor collection. A minor collection will only
@@ -178,7 +195,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn minor_collect(&self) {
-        self.tracer_controller.minor_collect(&self.root);
+        self.tracer_controller.minor_collect();
     }
 
     /// Starts a monitor in a separate thread if it is not already started.
@@ -210,13 +227,12 @@ where
         self.tracer_controller.get_metrics()
     }
 
+    // fingers crossed this works! lol
     unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
-        core::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(&self.root)
+        core::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(self.root.as_ref())
     }
 
-    fn new_mutator(&self) -> Mutator {
-        let yield_lock = self.tracer_controller.yield_lock();
-
-        Mutator::new(&self.tracer_controller, yield_lock)
+    fn new_mutator<'a>(&'a self) -> Mutator<'a> {
+        Mutator::new(&self.tracer_controller)
     }
 }

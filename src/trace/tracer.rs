@@ -5,6 +5,9 @@ use crate::debug::{gc_debug, gc_trace};
 use crate::heap::mark;
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
+use alloc::vec::Vec;
+use alloc::vec;
+use alloc::format;
 
 /// Internal type used by the GC to perform tracing.
 pub struct Tracer<'a> {
@@ -25,9 +28,8 @@ impl<'a> Tracer<'a> {
     }
 
     pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
-        let type_name = core::any::type_name::<T>();
         gc_trace(&format!("marking\t{}\tptr\t{:#x}\theader\t{:#x}",
-            type_name,
+            core::any::type_name::<T>(),
             gc.as_thin().as_ptr() as usize,
             gc.get_header_ptr() as usize));
 
@@ -56,16 +58,6 @@ impl<'a> Tracer<'a> {
         self.work.push(TraceJob::new(gc.as_thin()));
     }
 
-    pub(crate) fn flush_work(&mut self) -> usize {
-        let mut work = vec![];
-        let result = self.work.len();
-
-        core::mem::swap(&mut work, &mut self.work);
-
-        self.controller.send_work(work);
-        result
-    }
-
     pub(crate) fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
@@ -77,12 +69,9 @@ impl<'a> Tracer<'a> {
 
             self.do_work();
             self.share_work();
-
-            // TODO: Remove this
-            self.controller.raise_yield_flag();
         }
 
-        gc_debug("Tracer Exited Successfully");
+        gc_debug("Tracer Exiting");
 
         self.mark_count
     }
@@ -119,5 +108,9 @@ impl<'a> Tracer<'a> {
 
     pub(crate) fn get_mark(&self) -> GcMark {
         self.mark
+    }
+
+    pub(crate) fn take_work(&mut self) -> Vec<TraceJob> {
+        core::mem::take(&mut self.work)
     }
 }

@@ -1,7 +1,7 @@
 mod trace;
 mod trace_job;
 mod tracer;
-mod tracer_controller;
+pub mod tracer_controller;
 
 pub use trace::{Trace, TraceLeaf, __MustNotDrop};
 pub use trace_job::TraceJob;

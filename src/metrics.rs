@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 /// A 'snapshot' of the metrics relevant to the GC's internal triggers.
 ///
@@ -126,7 +126,7 @@ impl Metrics {
 
 pub fn update_avg_u64(running_avg: &AtomicU64, new_value: u64, sample_size: u64) {
     let avg = running_avg.load(Ordering::Relaxed);
-    let update = new_value.abs_diff(avg) / sample_size;
+    let update = new_value.abs_diff(avg) / (sample_size + 1);
     let new_avg = avg + update;
 
     running_avg.store(new_avg, Ordering::Relaxed);

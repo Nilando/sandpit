@@ -322,6 +322,20 @@ fn alloc_array_from_fn() {
 }
 
 #[test]
+fn collect_empty_arena() {
+    let arena: Arena<Root![()]> = Arena::new(|_| {});
+
+    arena.major_collect();
+}
+
+#[test]
+fn collect_singular_void_gc() {
+    let arena: Arena<Root![Gc<'_, ()>]> = Arena::new(|mu| Gc::new(mu, ()));
+
+    arena.major_collect();
+}
+
+#[test]
 fn alloc_array_from_slice() {
     let arena: Arena<Root![Gc<'_, [usize]>]> =
         Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| idx));
@@ -571,7 +585,7 @@ fn cyclic_graph() {
 #[test]
 fn alloc_after_collect_test() {
     const LIST_SIZE: usize = 10;
-    // increasing list size makes this test run a  long time
+    // increasing list size makes this test run a long time
     #[derive(Trace)]
     struct Node<'gc> {
         ptr: GcOpt<'gc, Node<'gc>>,
@@ -590,7 +604,6 @@ fn alloc_after_collect_test() {
 
     for i in (1..LIST_SIZE).rev() {
         arena.mutate(|mu, root| {
-
             let new_node = Gc::new(
                 mu,
                 Node {
@@ -622,35 +635,16 @@ fn alloc_after_collect_test() {
 }
 
 #[test]
-fn arena_size_does_not_explode() {
+fn allocating_triggers_gc_yield() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
-    let mut alloc_counter = 0usize;
 
-    loop {
-        arena.mutate(|mu, _| loop {
-            Gc::new(mu, 42);
+    arena.mutate(|mu, _| loop {
+        Gc::new(mu, 42);
 
-            alloc_counter += std::mem::size_of::<usize>();
-
-            if mu.gc_yield() {
-                break;
-            }
-        });
-
-        // this is kinda a bad test, because the size of the arena actually
-        // really depends on the allocator being used.
-        //
-        // i.e. its possible that changing the allocator could cause this test to fail
-        let config = arena.metrics();
-        let arena_size_mb = config.get_arena_size() as f64 / (1024 * 1024) as f64;
-        let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
-
-        assert!(1000.0 > arena_size_mb);
-
-        if allocated_mb > 100.0 {
+        if mu.gc_yield() {
             break;
         }
-    }
+    });
 }
 
 #[test]

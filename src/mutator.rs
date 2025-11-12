@@ -5,9 +5,11 @@ use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
 use super::trace::{Trace, TraceJob, TracerController};
+use super::trace::tracer_controller::YieldLockGuard;
 use core::cell::RefCell;
 use core::ptr::{write, copy, NonNull};
-use std::sync::RwLockReadGuard;
+use alloc::vec::Vec;
+use alloc::vec;
 
 /// Allows for allocation and mutation within the GC arena.
 ///
@@ -60,7 +62,7 @@ pub struct Mutator<'gc> {
     tracer_controller: &'gc TracerController,
     allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
-    _lock: RwLockReadGuard<'gc, ()>,
+    _lock: YieldLockGuard<'gc>,
     mark: GcMark,
 }
 
@@ -73,11 +75,11 @@ impl<'gc> Drop for Mutator<'gc> {
 
 impl<'gc> Mutator<'gc> {
     pub(crate) fn new(
-        tracer_controller: &'gc TracerController,
-        _lock: RwLockReadGuard<'gc, ()>,
+        tracer_controller: &'gc TracerController
     ) -> Self {
         let mark = tracer_controller.prev_mark();
         let allocator = tracer_controller.new_allocator();
+        let _lock = tracer_controller.yield_lock();
 
         Self {
             allocator,
@@ -260,10 +262,10 @@ impl<'gc> Mutator<'gc> {
     /// ```
     pub fn gc_yield(&self) -> bool {
         if self.tracer_controller.yield_flag() {
-            true
-        } else {
-            self.tracer_controller.yield_flag()
+            return true;
         }
+
+        self.tracer_controller.minor_trigger() || self.tracer_controller.major_trigger()
     }
 
     pub(crate) fn has_marked<T: Trace + ?Sized>(&self, gc_ptr: &Gc<'gc, T>) -> bool {
@@ -280,7 +282,7 @@ impl<'gc> Mutator<'gc> {
 
     pub fn retrace<T: Trace + ?Sized>(&self, obj: &'gc T) {
         let ptr: NonNull<Thin<T>> = NonNull::from(obj).cast(); // safe b/c of implicit Sized bound
-        let trace_job = TraceJob::new(ptr);
+        let trace_job = TraceJob::new::<T>(ptr);
 
         self.rescan.borrow_mut().push(trace_job);
 
