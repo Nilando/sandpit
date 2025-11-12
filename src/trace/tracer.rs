@@ -1,6 +1,6 @@
 use super::trace::Trace;
 use super::trace_job::TraceJob;
-use super::tracer_controller::TracerController;
+use super::collector::Collector;
 use crate::debug::{gc_debug, gc_trace};
 use crate::heap::mark;
 use crate::gc::Gc;
@@ -11,16 +11,16 @@ use alloc::format;
 
 /// Internal type used by the GC to perform tracing.
 pub struct Tracer<'a> {
-    controller: &'a TracerController,
+    collector: &'a Collector,
     mark: GcMark,
     pub mark_count: usize,
     work: Vec<TraceJob>,
 }
 
 impl<'a> Tracer<'a> {
-    pub(crate) fn new(controller: &'a TracerController, mark: GcMark) -> Self {
+    pub(crate) fn new(collector: &'a Collector, mark: GcMark) -> Self {
         Self {
-            controller,
+            collector,
             mark,
             mark_count: 0,
             work: vec![],
@@ -61,7 +61,7 @@ impl<'a> Tracer<'a> {
     pub(crate) fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
-                match self.controller.recv_work() {
+                match self.collector.recv_work() {
                     Some(work) => self.work = work,
                     None => break,
                 }
@@ -77,7 +77,7 @@ impl<'a> Tracer<'a> {
     }
 
     fn do_work(&mut self) {
-        for _ in 0..self.controller.config.trace_chunk_size {
+        for _ in 0..self.collector.config().trace_chunk_size {
             match self.work.pop() {
                 Some(job) => job.trace(self),
                 None => break,
@@ -86,15 +86,15 @@ impl<'a> Tracer<'a> {
     }
 
     fn share_work(&mut self) {
-        if self.controller.config.trace_share_min >= self.work.len() || self.controller.has_work() {
+        if self.collector.config().trace_share_min >= self.work.len() || self.collector.has_work() {
             return;
         }
 
-        let split_at = (self.work.len() as f32 * self.controller.get_trace_share_ratio()).floor() as usize;
+        let split_at = (self.work.len() as f32 * self.collector.get_trace_share_ratio()).floor() as usize;
         let share_work = self.work.split_off(split_at);
 
         if !share_work.is_empty() {
-            self.controller.send_work(share_work);
+            self.collector.send_work(share_work);
         }
     }
 

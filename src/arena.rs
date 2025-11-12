@@ -1,4 +1,4 @@
-use crate::trace::TracerController;
+use crate::trace::Collector;
 use super::config::Config;
 use super::metrics::Metrics;
 use super::mutator::Mutator;
@@ -27,7 +27,7 @@ pub struct Arena<R: ForLt + 'static>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    tracer_controller: Arc<TracerController>,
+    collector: Arc<Collector>,
     root: Box<R::Of<'static>>,
     #[cfg(feature = "multi_threaded")]
     monitor_thread: Option<std::thread::JoinHandle<()>>,
@@ -76,10 +76,12 @@ where
         //
         // I have a very fragile understanding of whats going on here, and
         // I truly don't know whether this is safe.
-        let tracer_controller = TracerController::new(config);
-        let tracer_ref: &'static TracerController =
-            unsafe { &*(&tracer_controller as *const TracerController) };
-        let mutator = Mutator::new(tracer_ref);
+
+        let collector = Arc::new(Collector::new(config));
+
+        let collector_ref: &'static Collector =
+            unsafe { &*(&*collector as *const Collector) };
+        let mutator = Mutator::new(collector_ref);
         let mutator_ref: &'static Mutator<'static> =
             unsafe { &*(&mutator as *const Mutator<'static>) };
 
@@ -87,45 +89,44 @@ where
 
         drop(mutator);
 
-        let tracer_controller = Arc::new(tracer_controller);
-
         #[cfg(feature = "multi_threaded")]
         let monitor_thread = if config.monitor_on {
-            let arena = Self {
-                tracer_controller: tracer_controller.clone(),
-                root,
-                monitor_thread: None,
-            };
+            let collector_clone = collector.clone();
+            let root_ptr: *const R::Of<'static> = root.as_ref();
 
-            let tc_clone = arena.tracer_controller.clone();
-            let root_ptr: *const R::Of<'static> = arena.root.as_ref();
+            // SAFETY: The root pointer is valid for the lifetime of the Arena.
+            // We wrap it in usize to make it Send, then convert back in the thread.
+            let root_ptr_usize = root_ptr as usize;
+
             let handle = std::thread::spawn(move || {
-                crate::trace::tracer_controller::monitor::spawn_monitor(tc_clone, root_ptr);
+                let root_ptr = root_ptr_usize as *const R::Of<'static>;
+                crate::trace::multi_threaded_collector::monitor::spawn_monitor(
+                    collector_clone,
+                    root_ptr
+                );
             });
 
-            return Self {
-                tracer_controller: arena.tracer_controller,
-                root: arena.root,
-                monitor_thread: Some(handle),
-            };
+            Some(handle)
         } else {
             None
         };
 
         #[cfg(not(feature = "multi_threaded"))]
-        let arena = Self {
-            tracer_controller,
-            root,
-        };
+        {
+            Self {
+                collector,
+                root,
+            }
+        }
 
         #[cfg(feature = "multi_threaded")]
-        let arena = Self {
-            tracer_controller,
-            root,
-            monitor_thread,
-        };
-
-        arena
+        {
+            Self {
+                collector,
+                root,
+                monitor_thread,
+            }
+        }
     }
 
     /// Provides a [`crate::mutator::Mutator`] and the arena's root within a
@@ -205,7 +206,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn major_collect(&self) {
-        self.tracer_controller.major_collect(self.root.as_ref());
+        self.collector.major_collect(self.root.as_ref());
     }
 
     /// Synchronously trigger a minor collection. A minor collection will only
@@ -217,7 +218,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn minor_collect(&self) {
-        self.tracer_controller.minor_collect(self.root.as_ref());
+        self.collector.minor_collect(self.root.as_ref());
     }
 
     /// Starts a monitor in a separate thread if it is not already started.
@@ -246,7 +247,7 @@ where
     /// Returns a snap short of the GC's current metrics that provide information
     /// about how the GC is running.
     pub fn metrics(&self) -> &Metrics {
-        self.tracer_controller.get_metrics()
+        self.collector.metrics()
     }
 
     // fingers crossed this works! lol
@@ -255,7 +256,7 @@ where
     }
 
     fn new_mutator<'a>(&'a self) -> Mutator<'a> {
-        Mutator::new(&self.tracer_controller)
+        Mutator::new(&*self.collector)
     }
 }
 
@@ -266,7 +267,7 @@ where
 {
     fn drop(&mut self) {
         // Signal the monitor thread to shut down
-        self.tracer_controller.shutdown();
+        self.collector.shutdown();
 
         // Join the monitor thread if it exists to ensure it shuts down
         // before the root is dropped

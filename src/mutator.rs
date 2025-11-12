@@ -4,8 +4,7 @@ use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
-use super::trace::{Trace, TraceJob, TracerController};
-use super::trace::tracer_controller::YieldLockGuard;
+use super::trace::{Trace, TraceJob, Collector, YieldLockGuard};
 use core::cell::RefCell;
 use core::ptr::{write, copy, NonNull};
 use alloc::vec::Vec;
@@ -59,7 +58,7 @@ use alloc::vec;
 /// to be able to identify if the mutation contexts have all exited at
 /// which point the Gc will free memory and then allow for mutation to resume.
 pub struct Mutator<'gc> {
-    tracer_controller: &'gc TracerController,
+    collector: &'gc Collector,
     allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
     _lock: YieldLockGuard<'gc>,
@@ -69,21 +68,21 @@ pub struct Mutator<'gc> {
 impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
-        self.tracer_controller.send_work(work);
+        self.collector.send_work(work);
     }
 }
 
 impl<'gc> Mutator<'gc> {
     pub(crate) fn new(
-        tracer_controller: &'gc TracerController
+        collector: &'gc Collector
     ) -> Self {
-        let mark = tracer_controller.prev_mark();
-        let allocator = tracer_controller.new_allocator();
-        let _lock = tracer_controller.yield_lock();
+        let mark = collector.prev_mark();
+        let allocator = collector.new_allocator();
+        let _lock = collector.yield_lock();
 
         Self {
             allocator,
-            tracer_controller,
+            collector,
             rescan: RefCell::new(vec![]),
             mark,
             _lock,
@@ -261,23 +260,23 @@ impl<'gc> Mutator<'gc> {
     /// });
     /// ```
     pub fn gc_yield(&self) -> bool {
-        if self.tracer_controller.yield_flag() {
+        if self.collector.yield_flag() {
             return true;
         }
 
-        self.tracer_controller.minor_trigger() || self.tracer_controller.major_trigger()
+        self.collector.minor_trigger() || self.collector.major_trigger()
     }
 
     pub(crate) fn has_marked<T: Trace + ?Sized>(&self, gc_ptr: &Gc<'gc, T>) -> bool {
-        gc_ptr.get_header().get_mark() == self.tracer_controller.get_current_mark()
+        gc_ptr.get_header().get_mark() == self.collector.get_current_mark()
     }
 
     pub(crate) fn get_mark(&self) -> GcMark {
-       self.tracer_controller.get_current_mark()
+       self.collector.get_current_mark()
     }
 
     pub(crate) fn get_prev_mark(&self) -> GcMark {
-       self.tracer_controller.get_current_mark().rotate().rotate()
+       self.collector.get_current_mark().rotate().rotate()
     }
 
     pub fn retrace<T: Trace + ?Sized>(&self, obj: &'gc T) {
@@ -286,9 +285,9 @@ impl<'gc> Mutator<'gc> {
 
         self.rescan.borrow_mut().push(trace_job);
 
-        if self.rescan.borrow().len() >= self.tracer_controller.config.mutator_share_min {
+        if self.rescan.borrow().len() >= self.collector.config().mutator_share_min {
             let work = self.rescan.take();
-            self.tracer_controller.send_work(work);
+            self.collector.send_work(work);
         }
     }
 }
