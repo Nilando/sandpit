@@ -28,12 +28,12 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-multi_threaded = ["std"]
+multi_threaded = ["std", "dep:crossbeam-channel"]
 
 [dependencies]
 nimix = { git = "https://github.com/Nilando/nimix" }
 sandpit_derive = { path = "./derive", version = "0.3.0" }
-crossbeam-channel = "0.5.13"
+crossbeam-channel = { version = "0.5.13", optional = true }
 higher-kinded-types = "0.1.1"
 
 [dev-dependencies]

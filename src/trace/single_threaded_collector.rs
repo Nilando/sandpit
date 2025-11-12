@@ -8,16 +8,14 @@ use crate::heap::{Allocator, Heap};
 use crate::metrics::{GC_STATE_SLEEPING, GC_STATE_SWEEPING, GC_STATE_TRACING};
 use crate::Metrics;
 use alloc::format;
-use alloc::vec;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU8, Ordering};
-use crossbeam_channel::{Receiver, Sender};
+use core::cell::RefCell;
 use crate::pointee::Thin;
 
 pub struct SingleThreadedCollector {
-    sender: Sender<Vec<TraceJob>>,
-    receiver: Receiver<Vec<TraceJob>>,
+    work_queue: RefCell<Vec<TraceJob>>,
     heap: Heap,
     current_mark: AtomicU8,
     pub config: Config,
@@ -26,14 +24,12 @@ pub struct SingleThreadedCollector {
 
 impl SingleThreadedCollector {
     pub fn new(config: Config) -> Self {
-        let (sender, receiver) = crossbeam_channel::unbounded();
         let heap = Heap::new();
         let metrics = Metrics::new();
 
         Self {
             heap,
-            sender,
-            receiver,
+            work_queue: RefCell::new(Vec::new()),
             current_mark: AtomicU8::new(GcMark::Red.into()),
             metrics,
             config,
@@ -72,7 +68,7 @@ impl SingleThreadedCollector {
     fn trace_root<T: Trace + ?Sized>(&self, root: &T) {
         let ptr: NonNull<Thin<T>> = NonNull::from(root).cast();
         let trace_job = TraceJob::new(ptr);
-        self.sender.send(vec![trace_job]).unwrap();
+        self.work_queue.borrow_mut().push(trace_job);
     }
 
     fn spawn_tracers(&self) {
@@ -180,16 +176,21 @@ impl SingleThreadedCollector {
         Allocator::from(&self.heap)
     }
 
-    pub fn send_work(&self, work: Vec<TraceJob>) {
-        self.sender.send(work).unwrap();
+    pub fn send_work(&self, mut work: Vec<TraceJob>) {
+        self.work_queue.borrow_mut().append(&mut work);
     }
 
     pub fn recv_work(&self) -> Option<Vec<TraceJob>> {
-        self.receiver.try_recv().ok()
+        let mut work_queue = self.work_queue.borrow_mut();
+        if work_queue.is_empty() {
+            None
+        } else {
+            Some(work_queue.drain(..).collect())
+        }
     }
 
     pub fn has_work(&self) -> bool {
-        !self.receiver.is_empty()
+        !self.work_queue.borrow().is_empty()
     }
 
     pub fn yield_flag(&self) -> bool {
