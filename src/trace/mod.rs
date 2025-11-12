@@ -10,4 +10,4 @@ pub mod multi_threaded_collector;
 pub use trace::{Trace, TraceLeaf, __MustNotDrop};
 pub use trace_job::TraceJob;
 pub use tracer::Tracer;
-pub use collector::{Collector, YieldLockGuard};
+pub use collector::Collector;

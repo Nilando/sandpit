@@ -1,4 +1,3 @@
-use super::collector::YieldLockGuard;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::Tracer;
@@ -197,8 +196,12 @@ impl SingleThreadedCollector {
         false
     }
 
-    pub fn yield_lock(&self) -> YieldLockGuard<'_> {
-        ()
+    pub fn increment_mutators(&self) {
+        // No-op in single-threaded mode
+    }
+
+    pub fn decrement_mutators(&self) {
+        // No-op in single-threaded mode
     }
 
     pub fn major_trigger(&self) -> bool {

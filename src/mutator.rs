@@ -4,7 +4,7 @@ use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
-use super::trace::{Trace, TraceJob, Collector, YieldLockGuard};
+use super::trace::{Trace, TraceJob, Collector};
 use core::cell::RefCell;
 use core::ptr::{write, copy, NonNull};
 use alloc::vec::Vec;
@@ -61,7 +61,6 @@ pub struct Mutator<'gc> {
     collector: &'gc Collector,
     allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
-    _lock: YieldLockGuard<'gc>,
     mark: GcMark,
 }
 
@@ -69,6 +68,7 @@ impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
         self.collector.send_work(work);
+        self.collector.decrement_mutators();
     }
 }
 
@@ -78,14 +78,13 @@ impl<'gc> Mutator<'gc> {
     ) -> Self {
         let mark = collector.prev_mark();
         let allocator = collector.new_allocator();
-        let _lock = collector.yield_lock();
+        collector.increment_mutators();
 
         Self {
             allocator,
             collector,
             rescan: RefCell::new(vec![]),
             mark,
-            _lock,
         }
     }
 

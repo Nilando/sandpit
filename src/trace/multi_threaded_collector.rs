@@ -1,4 +1,3 @@
-use super::collector::YieldLockGuard;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
 use super::tracer::Tracer;
@@ -12,40 +11,11 @@ use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use crossbeam_channel::{Receiver, Sender};
-use std::sync::{Mutex, RwLock, RwLockReadGuard};
+use std::sync::Mutex;
 use std::time::{Instant, SystemTime};
 use crate::pointee::Thin;
-
-struct ControllerLocks {
-    collection_lock: Mutex<()>,
-    yield_lock: RwLock<()>,
-}
-
-impl ControllerLocks {
-    fn new() -> Self {
-        ControllerLocks {
-            yield_lock: RwLock::new(()),
-            collection_lock: Mutex::new(()),
-        }
-    }
-
-    fn lock_collection(&self) -> std::sync::MutexGuard<()> {
-        self.collection_lock.lock().unwrap()
-    }
-
-    fn read_yield(&self) -> RwLockReadGuard<()> {
-        self.yield_lock.read().unwrap()
-    }
-
-    fn try_write_yield(
-        &self,
-    ) -> Result<std::sync::RwLockWriteGuard<()>, std::sync::TryLockError<std::sync::RwLockWriteGuard<()>>>
-    {
-        self.yield_lock.try_write()
-    }
-}
 
 pub struct MultiThreadedCollector {
     sender: Sender<Vec<TraceJob>>,
@@ -53,7 +23,8 @@ pub struct MultiThreadedCollector {
     heap: Heap,
     current_mark: AtomicU8,
     yield_flag: AtomicBool,
-    locks: ControllerLocks,
+    collection_lock: Mutex<()>,
+    active_mutators: AtomicUsize,
     shutdown_flag: AtomicBool,
     pub config: Config,
     pub metrics: Metrics,
@@ -70,7 +41,8 @@ impl MultiThreadedCollector {
             sender,
             receiver,
             yield_flag: AtomicBool::new(false),
-            locks: ControllerLocks::new(),
+            collection_lock: Mutex::new(()),
+            active_mutators: AtomicUsize::new(0),
             current_mark: AtomicU8::new(GcMark::Red.into()),
             shutdown_flag: AtomicBool::new(false),
             metrics,
@@ -216,7 +188,7 @@ impl MultiThreadedCollector {
     }
 
     fn mutators_stopped(&self) -> bool {
-        self.locks.try_write_yield().is_ok()
+        self.active_mutators.load(Ordering::SeqCst) == 0
     }
 
     unsafe fn sweep(&self) {
@@ -249,7 +221,7 @@ impl MultiThreadedCollector {
 
 impl MultiThreadedCollector {
     pub fn major_collect<T: Trace + ?Sized>(&self, root: &T) {
-        let _guard = self.locks.lock_collection();
+        let _guard = self.collection_lock.lock().unwrap();
 
         gc_debug("Starting Major Collection");
 
@@ -275,7 +247,7 @@ impl MultiThreadedCollector {
     }
 
     pub fn minor_collect<T: Trace + ?Sized>(&self, root: &T) {
-        let _guard = self.locks.lock_collection();
+        let _guard = self.collection_lock.lock().unwrap();
 
         gc_debug("Starting Minor Collection");
 
@@ -308,6 +280,7 @@ impl MultiThreadedCollector {
     }
 
     pub fn new_allocator(&self) -> Allocator {
+        let _lock = self.collection_lock.lock();
         Allocator::from(&self.heap)
     }
 
@@ -341,9 +314,12 @@ impl MultiThreadedCollector {
         self.yield_flag.load(Ordering::SeqCst)
     }
 
-    pub fn yield_lock(&self) -> YieldLockGuard<'_> {
-        let _guard = self.locks.lock_collection();
-        self.locks.read_yield()
+    pub fn increment_mutators(&self) {
+        self.active_mutators.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn decrement_mutators(&self) {
+        self.active_mutators.fetch_sub(1, Ordering::SeqCst);
     }
 
     pub fn major_trigger(&self) -> bool {
