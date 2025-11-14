@@ -93,7 +93,7 @@ impl<'a> Tracer<'a> {
         }
 
         let split_at =
-            (self.work.len() as f32 * self.collector.get_trace_share_ratio()).floor() as usize;
+            (self.work.len() as f32 * self.collector.get_trace_share_ratio()) as usize;
         let share_work = self.work.split_off(split_at);
 
         if !share_work.is_empty() {

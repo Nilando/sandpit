@@ -124,6 +124,8 @@
 //! ***WARNING:*** If a mutation continously runs without occasionally checking
 //! the yield signal, memory cannot be freed!
 //!
+#![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate alloc;
 extern crate self as sandpit;
 

@@ -4,6 +4,7 @@ use super::mutator::Mutator;
 use super::trace::Trace;
 use crate::trace::Collector;
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use higher_kinded_types::ForLt;
 

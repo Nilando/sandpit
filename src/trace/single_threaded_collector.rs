@@ -132,7 +132,7 @@ impl SingleThreadedCollector {
             .store(self.get_arena_size(), Ordering::Relaxed);
         let old_objects = self.metrics.get_old_objects_count();
         self.metrics.max_old_objects.store(
-            (old_objects as f32 * self.config.monitor_max_old_growth_rate).floor() as u64,
+            (old_objects as f32 * self.config.monitor_max_old_growth_rate) as u64,
             Ordering::Relaxed,
         );
 
@@ -210,6 +210,7 @@ impl SingleThreadedCollector {
         let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
 
         let result = current_old_objects_count > max_old_objects_count;
+        #[cfg(feature = "std")]
         if result {
             println!(
                 "curr: {}, max {}",
