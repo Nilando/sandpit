@@ -31,30 +31,26 @@
 //! which can be safely derived as long as all inner types also impl [`Trace`].
 //!
 //! ```rust
-//! use sandpit::{Trace, gc::{Gc, GcMut, GcOpt}};
+//! use sandpit::{Trace, Gc, GcOpt};
 //! # #[derive(Trace)]
 //! # struct A;
 //! # #[derive(Trace)]
 //! # struct B;
-//! # #[derive(Trace)]
-//! # struct C;
 //!
 //! #[derive(Trace)]
 //! enum Value<'gc> {
 //!     // GC values must be branded with a mutation lifetime
 //!     // to ensure freeing memory can happen safely.
-//!     A(Gc<'gc, A>), // Immutable pointer, essentially a &'gc T.
-//!     B(GcMut<'gc, B>), // Mutable pointer, can be updated to point at something else via a write barrier.
-//!     C(GcOpt<'gc, C>), // Optionally null pointer that is also mutable. Can be unwrapped into a GcMut.
+//!     A(Gc<'gc, A>), // Mutable pointer to a garbage collected value
+//!     B(GcOpt<'gc, B>), // Optionally null pointer that is also mutable. Can be unwrapped into a Gc.
 //! }
-//! // All inner values must be trace, therefore types A, B, and T must impl Trace as well!
+//! // All inner values must be trace, therefore types A and B must impl Trace as well.
 //! ```
 //! Essentially when a value is traced the tracer will mark the value as live,
 //! and call trace on all its inner pointers to GC values.
 //!
-//! There are 3 types of GC pointers:
+//! There are 2 types of GC pointers:
 //! * [`gc::Gc`]
-//! * [`gc::GcMut`]
 //! * [`gc::GcOpt`]
 //!
 //! A type may also derive [`TraceLeaf`], if it contains no GC pointers.
@@ -68,11 +64,11 @@
 //! * Create new garbage collected values.
 //! * Update Gc pointers to point to new values via a [`WriteBarrier`].
 //! ```rust
-//! use sandpit::{Trace, gc::GcMut};
+//! use sandpit::{Trace, Gc};
 //!
 //! # use sandpit::{Arena, Root, Mutator, WriteBarrier};
-//! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
-//! #     GcMut::new(mutator, 0usize)
+//! # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mutator| {
+//! #     Gc::new(mutator, 0usize)
 //! # });
 //! # fn traverse(root: &usize) {}
 //! arena.mutate(|mutator, root| {
@@ -81,13 +77,13 @@
 //!
 //!     // We can allocate new Gc values.
 //!     // Here is a pointer, to a pointer, to a bool!
-//!     let gc_mut = GcMut::new(mutator,
-//!         GcMut::new(mutator, true)
+//!     let gc_mut = Gc::new(mutator,
+//!         Gc::new(mutator, true)
 //!     );
 //!
-//!     // We can mutate existing inner GcMut and GcOpt pointers.
+//!     // We can mutate existing inner Gc and GcOpt pointers.
 //!     gc_mut.write_barrier(mutator, |barrier| {
-//!         barrier.set(GcMut::new(mutator, false));
+//!         barrier.set(Gc::new(mutator, false));
 //!     })
 //! });
 //! ```
@@ -102,13 +98,13 @@
 //! and that the mutation should end.
 //!
 //! ```rust
-//! # use sandpit::{Arena, Root, Mutator, WriteBarrier, gc::GcMut};
-//! # let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mutator| {
-//! #     GcMut::new(mutator, 0usize)
+//! # use sandpit::{Arena, Root, Mutator, WriteBarrier, Gc};
+//! # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mutator| {
+//! #     Gc::new(mutator, 0usize)
 //! # });
 //! # fn allocate_stuff(mutator: &Mutator, root: &usize) {
 //! #   for i in 0..100 {
-//! #       GcMut::new(mutator, 0);
+//! #       Gc::new(mutator, 0);
 //! #   }
 //! # }
 //! arena.mutate(|mutator, root| loop {
@@ -128,34 +124,39 @@
 //! ***WARNING:*** If a mutation continously runs without occasionally checking
 //! the yield signal, memory cannot be freed!
 //!
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 extern crate self as sandpit;
 
-pub mod gc;
-
-mod allocator;
 mod arena;
 mod barrier;
-mod collector;
 mod config;
+mod debug;
+mod gc;
+mod gc_sync;
 mod header;
+mod heap;
 mod metrics;
-mod monitor;
 mod mutator;
 mod pointee;
-mod time_slicer;
+mod tagged;
 mod trace;
-
-pub use arena::Arena;
-pub use barrier::WriteBarrier;
-pub use config::Config;
+mod vec;
 
 /// Re-exported from ForLt. Used in making the root of an arena.
 pub use higher_kinded_types::ForLt as Root;
 
+pub use arena::Arena;
+pub use barrier::{InnerBarrier, WriteBarrier};
+pub use config::Config;
+pub use gc::{Gc, GcOpt};
 pub use metrics::Metrics;
 pub use mutator::Mutator;
-pub use sandpit_derive::{Trace, TraceLeaf};
+pub use sandpit_derive::{Tag, Trace, TraceLeaf};
+pub use tagged::{Tag, Tagged};
 pub use trace::{Trace, TraceLeaf};
+pub use vec::GcVec;
 
 #[doc(hidden)]
 pub use trace::{Tracer, __MustNotDrop};

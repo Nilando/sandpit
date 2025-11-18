@@ -1,11 +1,12 @@
 use super::trace::Trace;
 use super::tracer::Tracer;
 use crate::pointee::Thin;
-use std::ptr::NonNull;
+use core::ptr::NonNull;
 
 unsafe impl Send for TraceJob {}
 unsafe impl Sync for TraceJob {}
 
+#[derive(Clone)]
 pub struct TraceJob {
     ptr: NonNull<Thin<()>>,
     dyn_trace: fn(NonNull<Thin<()>>, &mut Tracer),

@@ -2,11 +2,11 @@
 resolver = "2"
 
 members = [
-    "derive",
+    "derive", "examples/linked_list",
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Niland Schumacher <naschuma@ucsc.edu>"]
 edition = "2021"
 license = "MIT"
@@ -25,10 +25,15 @@ readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["std"]
+std = []
+multi_threaded = ["std", "dep:crossbeam-channel"]
+
 [dependencies]
-nimix = "0.1.0"
-sandpit_derive = { path = "./derive", version = "0.3.0" }
-crossbeam-channel = "0.5.13"
+nimix = "0.2.0"
+sandpit_derive = { path = "./derive", version = "0.4.0" }
+crossbeam-channel = { version = "0.5.13", optional = true }
 higher-kinded-types = "0.1.1"
 
 [dev-dependencies]
@@ -36,8 +41,15 @@ criterion = "0.5.1"
 rand = "0.8.4"
 
 [[bench]]
-name = "linked_list_bench"
+name = "bench"
 harness = false
 
 [profile.bench]
 debug = true
+
+#[profile.release]
+#opt-level = 3
+#lto = true
+#strip = true
+#panic = "abort"
+#codegen-units = 1

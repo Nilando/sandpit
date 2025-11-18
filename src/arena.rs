@@ -1,12 +1,12 @@
-use super::collector::{Collect, Collector};
 use super::config::Config;
 use super::metrics::Metrics;
-use super::monitor::Monitor;
 use super::mutator::Mutator;
 use super::trace::Trace;
+use crate::trace::Collector;
 
+use alloc::boxed::Box;
+use alloc::sync::Arc;
 use higher_kinded_types::ForLt;
-use std::sync::Arc;
 
 /// A concurrently garbage collected arena with a single root type.
 ///
@@ -15,7 +15,7 @@ use std::sync::Arc;
 ///
 /// # Example
 /// ```rust
-/// use sandpit::{Arena, Root, gc::Gc};
+/// use sandpit::{Arena, Root, Gc};
 ///
 /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
 ///     Gc::new(mu, 42)
@@ -28,23 +28,11 @@ pub struct Arena<R: ForLt + 'static>
 where
     for<'a> <R as ForLt>::Of<'a>: Trace,
 {
-    collector: Arc<Collector<R>>,
-    monitor: Arc<Monitor<Collector<R>>>,
-    // In the future it would be cool to allow for editing the config
-    _config: Config,
+    collector: Arc<Collector>,
+    root: Box<R::Of<'static>>,
+    #[cfg(feature = "multi_threaded")]
+    monitor_thread: Option<std::thread::JoinHandle<()>>,
 }
-
-impl<R: ForLt> Drop for Arena<R>
-where
-    for<'a> <R as ForLt>::Of<'a>: Trace,
-{
-    fn drop(&mut self) {
-        self.monitor.stop();
-    }
-}
-
-unsafe impl<R: ForLt + Send + 'static> Send for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
-unsafe impl<R: ForLt + Sync + 'static> Sync for Arena<R> where for<'a> <R as ForLt>::Of<'a>: Trace {}
 
 impl<R: ForLt + 'static> Arena<R>
 where
@@ -56,7 +44,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use sandpit::{Arena, Root, gc::Gc};
+    /// use sandpit::{Arena, Root, Gc};
     ///
     /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     ///     Gc::new(mu, 42)
@@ -81,21 +69,40 @@ where
     }
 
     // eventually it would be cool to allow the user to pass in their own config
-    fn new_with_config<F>(config: Config, f: F) -> Self
+    pub fn new_with_config<F>(config: Config, f: F) -> Self
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>) -> R::Of<'gc>,
     {
-        let collector: Arc<Collector<R>> = Arc::new(Collector::new(f, &config));
-        let monitor = Arc::new(Monitor::new(collector.clone(), &config));
+        // This is function is extremely sketchy.
+        //
+        // I have a very fragile understanding of whats going on here, and
+        // I truly don't know whether this is safe.
 
-        //if config.monitor_on {
-        monitor.clone().start();
-        //}
+        let collector = Arc::new(Collector::new(config));
 
-        Self {
-            collector,
-            monitor,
-            _config: config,
+        let collector_ref: &'static Collector = unsafe { &*(&*collector as *const Collector) };
+        let mutator = Mutator::new(collector_ref);
+        let mutator_ref: &'static Mutator<'static> =
+            unsafe { &*(&mutator as *const Mutator<'static>) };
+
+        let root = Box::new(f(mutator_ref));
+
+        drop(mutator);
+
+        #[cfg(feature = "multi_threaded")]
+        {
+            let monitor_thread = collector.clone().spawn_monitor_thread(root.as_ref());
+
+            Self {
+                collector,
+                root,
+                monitor_thread,
+            }
+        }
+
+        #[cfg(not(feature = "multi_threaded"))]
+        {
+            Self { collector, root }
         }
     }
 
@@ -107,7 +114,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use sandpit::{Arena, Root, gc::Gc};
+    /// use sandpit::{Arena, Root, Gc};
     ///
     /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     ///     Gc::new(mu, 42)
@@ -129,7 +136,7 @@ where
     /// context they are commonly branded with the `'gc` lifetime.
     ///
     /// ```compile_fail
-    /// # use sandpit::{Arena, Root, gc::Gc};
+    /// # use sandpit::{Arena, Root, Gc};
     /// #
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 42)
@@ -148,7 +155,24 @@ where
     where
         F: for<'gc> FnOnce(&'gc Mutator<'gc>, &'gc R::Of<'gc>),
     {
-        self.collector.mutate(f)
+        let mutator = self.new_mutator();
+        let root = unsafe { self.scoped_root() };
+
+        f(&mutator, root);
+
+        // TODO:
+        // if single threaded mode, collect here on mutation exit
+    }
+
+    /// you can view the root but you don't have a mutator, therefore collection
+    /// can happen while viewing
+    pub fn view<F>(&self, f: F)
+    where
+        F: for<'gc> FnOnce(&'gc R::Of<'gc>),
+    {
+        let root = unsafe { self.scoped_root() };
+
+        f(root);
     }
 
     /// Synchronously trigger a major collection. A major collection means that
@@ -159,7 +183,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn major_collect(&self) {
-        self.collector.major_collect();
+        self.collector.major_collect(self.root.as_ref());
     }
 
     /// Synchronously trigger a minor collection. A minor collection will only
@@ -171,7 +195,7 @@ where
     /// end at which point the collection will begin. This method will automatically
     /// be called by the monitor.
     pub fn minor_collect(&self) {
-        self.collector.minor_collect();
+        self.collector.minor_collect(self.root.as_ref());
     }
 
     /// Starts a monitor in a separate thread if it is not already started.
@@ -199,34 +223,33 @@ where
 
     /// Returns a snap short of the GC's current metrics that provide information
     /// about how the GC is running.
-    pub fn metrics(&self) -> Metrics {
-        Metrics {
-            //
-            state: self.collector.get_state(),
+    pub fn metrics(&self) -> &Metrics {
+        self.collector.metrics()
+    }
 
-            // Collector Metrics:
+    // fingers crossed this works! lol
+    unsafe fn scoped_root<'gc>(&self) -> &'gc R::Of<'gc> {
+        core::mem::transmute::<&R::Of<'static>, &R::Of<'gc>>(self.root.as_ref())
+    }
 
-            // Running count of how many times major/minor collections have happend.
-            major_collections: self.collector.get_major_collections(),
-            minor_collections: self.collector.get_minor_collections(),
+    fn new_mutator<'a>(&'a self) -> Mutator<'a> {
+        Mutator::new(&*self.collector)
+    }
+}
 
-            // Average collect times in milliseconds.
-            major_collect_avg_time: self.collector.get_major_collect_avg_time(),
-            minor_collect_avg_time: self.collector.get_minor_collect_avg_time(),
+#[cfg(feature = "multi_threaded")]
+impl<R: ForLt + 'static> Drop for Arena<R>
+where
+    for<'a> <R as ForLt>::Of<'a>: Trace,
+{
+    fn drop(&mut self) {
+        // Signal the monitor thread to shut down
+        self.collector.shutdown();
 
-            // How many old objects there were as per the last trace.
-            old_objects_count: self.collector.get_old_objects_count(),
-            // The current size of the arena including large objects and blocks.
-            arena_size: self.collector.get_arena_size(),
-
-            // Monitor Metrics:
-
-            // How many old objects must exist before a major collection is triggered.
-            // If you divide this number by the monitor's 'MAX_OLD_GROWTH_RATE, you get the number
-            // of old objects at the end of the last major collection
-            max_old_objects: self.monitor.get_max_old_objects(),
-            // The size of the arena at the end of the last collection.
-            prev_arena_size: self.monitor.get_prev_arena_size(),
+        // Join the monitor thread if it exists to ensure it shuts down
+        // before the root is dropped
+        if let Some(handle) = self.monitor_thread.take() {
+            let _ = handle.join();
         }
     }
 }

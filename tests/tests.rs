@@ -1,9 +1,5 @@
 use rand::prelude::*;
-use sandpit::{
-    field,
-    gc::{Gc, GcMut, GcOpt},
-    Arena, Mutator, Root, Trace, TraceLeaf,
-};
+use sandpit::{field, Arena, Gc, GcOpt, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf};
 
 fn alloc_rand_garbage(mu: &Mutator) {
     let mut rng = rand::thread_rng();
@@ -14,7 +10,7 @@ fn alloc_rand_garbage(mu: &Mutator) {
 
         for _ in 0..rng.gen_range(1..10) {
             let array_size = rng.gen_range(0..u16::MAX);
-            mu.alloc_array(0u8, array_size as usize);
+            mu.alloc_array_from_fn(array_size.into(), |i| i);
         }
     }
 }
@@ -60,7 +56,7 @@ fn objects_counted_should_be_one() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
@@ -74,9 +70,9 @@ fn counts_collections() {
 
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.major_collections, 100);
-    assert_eq!(metrics.minor_collections, 100);
-    assert_eq!(metrics.old_objects_count, 1);
+    assert_eq!(metrics.get_major_collections(), 100);
+    assert_eq!(metrics.get_minor_collections(), 100);
+    assert_eq!(metrics.get_old_objects_count(), 1);
 }
 
 #[test]
@@ -84,12 +80,12 @@ fn empty_gc_metrics() {
     let arena: Arena<Root![()]> = Arena::new(|_| ());
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.major_collections, 0);
-    assert_eq!(metrics.minor_collections, 0);
-    assert_eq!(metrics.old_objects_count, 0);
-    assert_eq!(metrics.max_old_objects, 0);
-    assert_eq!(metrics.arena_size, 0);
-    assert_eq!(metrics.prev_arena_size, 0);
+    assert_eq!(metrics.get_major_collections(), 0);
+    assert_eq!(metrics.get_minor_collections(), 0);
+    assert_eq!(metrics.get_old_objects_count(), 0);
+    assert_eq!(metrics.get_max_old_objects(), 0);
+    assert_eq!(metrics.get_arena_size(), 0);
+    assert_eq!(metrics.get_prev_arena_size(), 0);
 }
 
 #[test]
@@ -104,7 +100,7 @@ fn nested_root() {
 
     let metrics = arena.metrics();
 
-    assert_eq!(metrics.old_objects_count, 3);
+    assert_eq!(metrics.get_old_objects_count(), 3);
 
     arena.mutate(|_, root| assert_eq!(****root, 69));
 }
@@ -116,15 +112,15 @@ fn trace_gc_null_mut() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
     arena.mutate(|_, root| {
-        root.set_null();
+        root.set_none();
     });
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 0);
+    assert_eq!(arena.metrics().get_old_objects_count(), 0);
 }
 
 #[test]
@@ -133,7 +129,7 @@ fn old_objects_count_stays_constant() {
 
     for _ in 0..5 {
         arena.major_collect();
-        assert_eq!(arena.metrics().old_objects_count, 1);
+        assert_eq!(arena.metrics().get_old_objects_count(), 1);
     }
 }
 
@@ -148,9 +144,9 @@ fn write_barrier() {
 
     let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
         let foo = Foo {
-            a: GcOpt::new_none(mu),
-            b: GcOpt::new_none(mu),
-            c: GcOpt::new_none(mu),
+            a: GcOpt::new_none(),
+            b: GcOpt::new_none(),
+            c: GcOpt::new_none(),
         };
 
         Gc::new(mu, foo)
@@ -158,21 +154,21 @@ fn write_barrier() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|mu, root| {
         let new = Gc::new(mu, 420);
 
         root.write_barrier(mu, |write_barrier| {
-            field!(write_barrier, Foo, a).set(new);
-            field!(write_barrier, Foo, b).set(new);
-            field!(write_barrier, Foo, c).set(new);
+            field!(write_barrier, Foo, a).set(new.clone());
+            field!(write_barrier, Foo, b).set(new.clone());
+            field!(write_barrier, Foo, c).set(new.clone());
         });
     });
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 }
 
 #[test]
@@ -195,24 +191,23 @@ fn resets_old_object_count() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
-    arena.mutate(|_mu, root| root.set_null());
+    arena.mutate(|_mu, root| root.set_none());
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 0);
+    assert_eq!(arena.metrics().get_old_objects_count(), 0);
 }
 
 #[test]
 fn alloc_option() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, Option<Gc<'_, usize>>>>]> = Arena::new(|mu| {
-        Gc::new(mu, GcMut::new(mu, None))
-    });
+    let arena: Arena<Root![Gc<'_, Gc<'_, Option<Gc<'_, usize>>>>]> =
+        Arena::new(|mu| Gc::new(mu, Gc::new(mu, None)));
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 
     arena.mutate(|mu, root| {
         assert!(root.is_none());
@@ -224,21 +219,21 @@ fn alloc_option() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 3);
+    assert_eq!(arena.metrics().get_old_objects_count(), 3);
 }
 
 #[test]
 fn alloc_result() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, Result<Gc<'_, usize>, ()>>>]> = Arena::new(|mu| {
-        Gc::new(mu, GcMut::new(mu, Ok(Gc::new(mu, 3))))
-    });
+    let arena: Arena<Root![Gc<'_, Gc<'_, Result<Gc<'_, usize>, ()>>>]> =
+        Arena::new(|mu| Gc::new(mu, Gc::new(mu, Ok(Gc::new(mu, 3)))));
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 3);
+    assert_eq!(arena.metrics().get_old_objects_count(), 3);
 
     arena.mutate(|mu, root| {
-        assert!(*root.unwrap() == 3);
+        let n = root.as_ref().unwrap();
+        assert!(**n == 3);
 
         root.write_barrier(mu, |barrier| {
             barrier.set(Gc::new(mu, Err(())));
@@ -247,20 +242,20 @@ fn alloc_result() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 2);
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
 }
 
 #[test]
 fn alloc_sized_array() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, usize>; 100]>]> = Arena::new(|mu| {
-        let arr = std::array::from_fn(|idx| Gc::new(mu, idx));
+        let arr = core::array::from_fn(|idx| Gc::new(mu, idx));
 
         Gc::new(mu, arr)
     });
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -271,9 +266,8 @@ fn alloc_sized_array() {
 
 #[test]
 fn alloc_tuple() {
-    let arena: Arena<Root![(Gc<'_, usize>, Gc<'_, usize>)]> = Arena::new(|mu| {
-        (Gc::new(mu, 0), Gc::new(mu, 1))
-    });
+    let arena: Arena<Root![(Gc<'_, usize>, Gc<'_, usize>)]> =
+        Arena::new(|mu| (Gc::new(mu, 0), Gc::new(mu, 1)));
 
     arena.major_collect();
 
@@ -289,7 +283,7 @@ fn alloc_array() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|_mu, root| {
         for x in root.iter() {
@@ -301,7 +295,7 @@ fn alloc_array() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
@@ -311,7 +305,7 @@ fn alloc_array_from_fn() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|_mu, root| {
         for (i, x) in root.iter().enumerate() {
@@ -323,13 +317,27 @@ fn alloc_array_from_fn() {
 }
 
 #[test]
+fn collect_empty_arena() {
+    let arena: Arena<Root![()]> = Arena::new(|_| {});
+
+    arena.major_collect();
+}
+
+#[test]
+fn collect_singular_void_gc() {
+    let arena: Arena<Root![Gc<'_, ()>]> = Arena::new(|mu| Gc::new(mu, ()));
+
+    arena.major_collect();
+}
+
+#[test]
 fn alloc_array_from_slice() {
     let arena: Arena<Root![Gc<'_, [usize]>]> =
         Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| idx));
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 
     arena.mutate(|mu, root| {
         let root_copy = mu.alloc_array_from_slice(root);
@@ -339,13 +347,13 @@ fn alloc_array_from_slice() {
 }
 
 #[test]
-fn alloc_array_of_gc() {
+fn alloc_array_of_static_gc() {
     let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> =
         Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)));
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -355,16 +363,16 @@ fn alloc_array_of_gc() {
 }
 
 #[test]
-fn alloc_array_of_gc_mut() {
-    let arena: Arena<Root![GcMut<'_, [GcMut<'_, usize>]>]> =
-        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| GcMut::new(mu, idx)).into());
+fn alloc_array_of_updated_gc() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, usize>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(100, |idx| Gc::new(mu, idx)).into());
 
     arena.major_collect();
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|mu, root| {
         for i in 0..100 {
-            let new = GcMut::new(mu, i + 100);
+            let new = Gc::new(mu, i + 100);
 
             root.write_barrier(mu, |barrier| {
                 barrier.at(i).set(new);
@@ -374,7 +382,7 @@ fn alloc_array_of_gc_mut() {
 
     arena.major_collect();
     arena.major_collect();
-    assert_eq!(arena.metrics().old_objects_count, 101);
+    assert_eq!(arena.metrics().get_old_objects_count(), 101);
 
     arena.mutate(|_mu, root| {
         for (idx, gc) in root.iter().enumerate() {
@@ -404,7 +412,7 @@ fn two_dimensional_array() {
 
 #[test]
 fn change_array_size() {
-    let arena: Arena<Root![Gc<'_, GcMut<'_, [usize]>>]> =
+    let arena: Arena<Root![Gc<'_, Gc<'_, [usize]>>]> =
         Arena::new(|mu| Gc::new(mu, mu.alloc_array_from_fn(100, |i| i).into()));
 
     arena.mutate(|mu, root| {
@@ -453,7 +461,7 @@ fn derive_empty_enums() {
 
 #[test]
 fn traceleaf_tuple_struct() {
-    use std::cell::Cell;
+    use core::cell::Cell;
 
     #[derive(TraceLeaf, Copy, Clone)]
     struct Foo(u8, u8);
@@ -474,9 +482,8 @@ fn trace_tuple_struct() {
     #[derive(Trace)]
     struct Foo<'gc>(Gc<'gc, u8>, Gc<'gc, u8>);
 
-    let arena: Arena<Root![Gc<'_, Foo<'_>>]> = Arena::new(|mu| {
-        Gc::new(mu, Foo(Gc::new(mu, 0), Gc::new(mu, 1)))
-    });
+    let arena: Arena<Root![Gc<'_, Foo<'_>>]> =
+        Arena::new(|mu| Gc::new(mu, Foo(Gc::new(mu, 0), Gc::new(mu, 1))));
 
     arena.major_collect();
 
@@ -487,6 +494,7 @@ fn trace_tuple_struct() {
     });
 }
 
+/*
 #[test]
 fn multi_threaded_allocating() {
     use std::sync::Arc;
@@ -513,6 +521,7 @@ fn multi_threaded_allocating() {
         });
     });
 }
+*/
 
 #[test]
 fn cyclic_graph() {
@@ -522,9 +531,9 @@ fn cyclic_graph() {
     }
 
     impl<'gc> Node<'gc> {
-        fn new(mu: &'gc Mutator) -> Self {
+        fn new(_: &'gc Mutator) -> Self {
             Self {
-                ptr: GcOpt::new_none(mu),
+                ptr: GcOpt::new_none(),
             }
         }
     }
@@ -538,26 +547,26 @@ fn cyclic_graph() {
         let d = Gc::new(mu, Node::new(mu));
 
         a.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(b);
+            field!(barrier, Node, ptr).set(b.clone());
         });
         b.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(c);
+            field!(barrier, Node, ptr).set(c.clone());
         });
         c.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(d);
+            field!(barrier, Node, ptr).set(d.clone());
         });
         d.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a);
+            field!(barrier, Node, ptr).set(a.clone());
         });
         root.write_barrier(mu, |barrier| {
-            field!(barrier, Node, ptr).set(a);
+            field!(barrier, Node, ptr).set(a.clone());
         });
     });
 
     arena.major_collect();
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 5);
+    assert_eq!(arena.metrics().get_old_objects_count(), 5);
 }
 
 // test idea
@@ -570,7 +579,7 @@ fn cyclic_graph() {
 #[test]
 fn alloc_after_collect_test() {
     const LIST_SIZE: usize = 10;
-    // increasing list size makes this test run a  long time
+    // increasing list size makes this test run a long time
     #[derive(Trace)]
     struct Node<'gc> {
         ptr: GcOpt<'gc, Node<'gc>>,
@@ -581,7 +590,7 @@ fn alloc_after_collect_test() {
         Gc::new(
             mu,
             Node {
-                ptr: GcOpt::new_none(mu),
+                ptr: GcOpt::new_none(),
                 idx: 0,
             },
         )
@@ -589,8 +598,6 @@ fn alloc_after_collect_test() {
 
     for i in (1..LIST_SIZE).rev() {
         arena.mutate(|mu, root| {
-            println!("pushing node: {i}");
-
             let new_node = Gc::new(
                 mu,
                 Node {
@@ -622,67 +629,46 @@ fn alloc_after_collect_test() {
 }
 
 #[test]
-fn arena_size_does_not_explode() {
+fn allocating_triggers_gc_yield() {
     let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
-    let mut alloc_counter = 0usize;
 
-    loop {
-        arena.mutate(|mu, _| loop {
-            Gc::new(mu, 42);
+    arena.mutate(|mu, _| loop {
+        Gc::new(mu, 42);
 
-            alloc_counter += std::mem::size_of::<usize>();
-
-            if mu.gc_yield() {
-                break;
-            }
-        });
-
-        // this is kinda a bad test, because the size of the arena actually
-        // really depends on the allocator being used.
-        //
-        // i.e. its possible that changing the allocator could cause this test to fail
-        let config = arena.metrics();
-        let arena_size_mb = config.arena_size as f64 / (1024 * 1024) as f64;
-        let allocated_mb = alloc_counter as f64 / (1024 * 1024) as f64;
-
-        assert!(5.0 > arena_size_mb);
-        println!("Arena MB(s): {}", arena_size_mb);
-        println!("Allocated MB(s): {}", allocated_mb);
-
-        if allocated_mb > 100.0 {
+        if mu.gc_yield() {
             break;
         }
-    }
+    });
 }
 
 #[test]
-fn gc_opt_from_mut() {
-    let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69).into());
+fn gc_opt_from_gc() {
+    let arena: Arena<Root![GcOpt<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69).into());
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
 fn gc_scoped_deref() {
-    let arena: Arena<Root![GcMut<'_, usize>]> = Arena::new(|mu| GcMut::new(mu, 69));
+    let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| Gc::new(mu, 69));
 
     arena.mutate(|mu, root| {
         struct Foo<'gc> {
-            inner: &'gc usize
+            inner: &'gc usize,
         }
 
         impl<'gc> Foo<'gc> {
             fn set_inner(&mut self, gc: Gc<'gc, usize>) {
-                // DOES NOT COMPILE 
+                // DOES NOT COMPILE
                 // self.inner = &gc;
                 self.inner = &gc.scoped_deref();
             }
         }
 
         let mut foo = Foo {
-            inner: root.scoped_deref()
+            inner: root.scoped_deref(),
         };
 
         let gc = Gc::new(mu, 2);
@@ -692,14 +678,13 @@ fn gc_scoped_deref() {
 
     arena.major_collect();
 
-    assert_eq!(arena.metrics().old_objects_count, 1);
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
 }
 
 #[test]
 fn barrier_as_option() {
-    let arena: Arena<Root![Gc<'_, Option<GcMut<'_, bool>>>]> = Arena::new(|mu| {
-        Gc::new(mu, Some(GcMut::new(mu, false)))
-    });
+    let arena: Arena<Root![Gc<'_, Option<Gc<'_, bool>>>]> =
+        Arena::new(|mu| Gc::new(mu, Some(Gc::new(mu, false))));
 
     arena.mutate(|mu, root| {
         root.write_barrier(mu, |barrier| {
@@ -710,11 +695,88 @@ fn barrier_as_option() {
 
 #[test]
 fn gc_clone() {
-    let arena: Arena<Root![Gc<'_, bool>]> = Arena::new(|mu| {
-        Gc::new(mu, false).clone()
-    });
+    let arena: Arena<Root![Gc<'_, bool>]> = Arena::new(|mu| Gc::new(mu, false).clone());
 
     arena.mutate(|_mu, root| {
         assert!(!**root);
     });
+}
+
+#[test]
+fn change_array_size_with_inner_barrier() {
+    let arena: Arena<Root![InnerBarrier<Gc<'_, [usize]>>]> =
+        Arena::new(|mu| InnerBarrier::new(mu, mu.alloc_array_from_fn(100, |i| i).into()));
+
+    arena.mutate(|mu, root| {
+        let new = mu.alloc_array_from_fn(10, |_| 69);
+
+        root.write_barrier(mu, |barrier| barrier.set(new));
+
+        assert!(root.inner().len() == 10);
+    });
+}
+
+use sandpit::GcVec;
+use sandpit::Tagged;
+
+#[derive(Tag)]
+enum TestTag {
+    Raw,
+    #[ptr(usize)]
+    Ptr,
+}
+
+#[test]
+fn gc_vec_of_tagged_pointers() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| GcVec::new(mu));
+
+    fn push_to_vec<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Tagged<'gc, TestTag>>) {
+        for i in 0..1000 {
+            if i % 2 == 0 {
+                let gc_ptr = Gc::new(mu, 123);
+                let tag_ptr = TestTag::from_ptr(gc_ptr);
+
+                vec.push(mu, tag_ptr);
+            } else {
+                let tag_ptr = Tagged::from_raw(1024, TestTag::Raw);
+
+                vec.push(mu, tag_ptr);
+            }
+        }
+
+        for i in 0..vec.len() {
+            let tag_ptr = vec.get_idx(i).unwrap();
+            if i % 2 == 0 {
+                let gc_ptr = TestTag::get_ptr(tag_ptr).unwrap();
+
+                assert!(*gc_ptr == 123);
+            } else {
+                let raw = tag_ptr.get_stripped_raw();
+
+                assert_eq!(raw, 1024);
+            }
+        }
+    }
+
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_to_vec(mu, vec));
+    arena.major_collect();
+}
+
+#[test]
+fn retracing_tagged_ptrs() {
+    let arena: Arena<Root![()]> = Arena::new(|_| ());
+
+    fn mutate<'gc>(mu: &'gc Mutator) {
+        let gc_ptr = Gc::new(mu, 123);
+        let tag_ptr = TestTag::from_ptr(gc_ptr);
+
+        mu.retrace(&*Gc::new(mu, tag_ptr));
+    }
+
+    arena.mutate(|mu, ()| mutate(mu));
+    arena.major_collect();
 }

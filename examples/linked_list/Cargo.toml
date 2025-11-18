@@ -1,6 +1,5 @@
 [package]
-name = "sandpit_derive"
-description = "Derive support for the sandpit GC"
+name = "linked_list"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,10 +8,5 @@ readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[lib]
-proc-macro = true
-
 [dependencies]
-syn = { version = "2.0", features = ["full", "visit-mut"] }
-quote = "1.0"
-proc-macro2 = "1.0.81"
+sandpit = { path = "../../" }

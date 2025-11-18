@@ -1,72 +1,69 @@
+use super::collector::Collector;
 use super::trace::Trace;
 use super::trace_job::TraceJob;
-use super::tracer_controller::TracerController;
-use crate::allocator::Allocator;
+use crate::debug::{gc_debug, gc_trace};
 use crate::gc::Gc;
 use crate::header::{GcHeader, GcMark};
-use std::cell::Cell;
-use std::sync::Arc;
+use crate::heap::mark;
+use alloc::format;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// Internal type used by the GC to perform tracing.
-pub struct Tracer {
-    // sometimes ID might be helpful in debugging, but currently not used anywhere
-    _id: usize,
-    controller: Arc<TracerController>,
+pub struct Tracer<'a> {
+    collector: &'a Collector,
     mark: GcMark,
-    mark_count: Cell<usize>,
+    pub mark_count: usize,
     work: Vec<TraceJob>,
 }
 
-impl Tracer {
-    pub(crate) fn new(controller: Arc<TracerController>, mark: GcMark, id: usize) -> Self {
+impl<'a> Tracer<'a> {
+    pub(crate) fn new(collector: &'a Collector, mark: GcMark) -> Self {
         Self {
-            _id: id,
-            controller,
+            collector,
             mark,
-            mark_count: Cell::new(0),
+            mark_count: 0,
             work: vec![],
         }
     }
 
-    pub(crate) fn get_mark_count(&self) -> usize {
-        self.mark_count.get()
-    }
-
-    pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
+    pub(crate) fn mark<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) -> bool {
+        gc_trace(&format!(
+            "marking\t{}\tptr\t{:#x}\theader\t{:#x}",
+            core::any::type_name::<T>(),
+            gc.as_thin().as_ptr() as usize,
+            gc.get_header_ptr() as usize
+        ));
 
         let header = gc.get_header();
         let alloc_ptr = gc.get_header_ptr();
         let alloc_layout = gc.get_layout();
 
         if header.get_mark() == self.mark {
-            return;
+            return false;
         }
 
         header.set_mark(self.mark);
 
         self.increment_mark_count();
 
-        unsafe { Allocator::mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
+        unsafe { mark(alloc_ptr as *mut u8, alloc_layout, self.mark) };
 
-        if T::IS_LEAF {
+        return true;
+    }
+
+    pub(crate) fn mark_and_trace<T: Trace + ?Sized>(&mut self, gc: Gc<'_, T>) {
+        if !self.mark(gc.clone()) || T::IS_LEAF {
             return;
         }
 
         self.work.push(TraceJob::new(gc.as_thin()));
     }
 
-    pub(crate) fn flush_work(&mut self) {
-        let mut work = vec![];
-
-        std::mem::swap(&mut work, &mut self.work);
-
-        self.controller.send_work(work);
-    }
-
     pub(crate) fn trace_loop(&mut self) -> usize {
         loop {
             if self.work.is_empty() {
-                match self.controller.recv_work() {
+                match self.collector.recv_work() {
                     Some(work) => self.work = work,
                     None => break,
                 }
@@ -76,13 +73,13 @@ impl Tracer {
             self.share_work();
         }
 
-        debug_assert_eq!(self.work.len(), 0);
+        gc_debug("Tracer Exiting");
 
-        self.mark_count.get()
+        self.mark_count
     }
 
     fn do_work(&mut self) {
-        for _ in 0..self.controller.trace_chunk_size {
+        for _ in 0..self.collector.config().trace_chunk_size {
             match self.work.pop() {
                 Some(job) => job.trace(self),
                 None => break,
@@ -91,19 +88,24 @@ impl Tracer {
     }
 
     fn share_work(&mut self) {
-        if self.controller.trace_share_min >= self.work.len() || self.controller.has_work() {
+        if self.collector.config().trace_share_min >= self.work.len() || self.collector.has_work() {
             return;
         }
 
-        let split_at = (self.work.len() as f32 * self.controller.get_trace_share_ratio()).floor() as usize;
+        let split_at =
+            (self.work.len() as f32 * self.collector.get_trace_share_ratio()) as usize;
         let share_work = self.work.split_off(split_at);
 
         if !share_work.is_empty() {
-            self.controller.send_work(share_work);
+            self.collector.send_work(share_work);
         }
     }
 
-    fn increment_mark_count(&self) {
-        self.mark_count.set(self.mark_count.get() + 1);
+    fn increment_mark_count(&mut self) {
+        self.mark_count += 1;
+    }
+
+    pub(crate) fn get_mark(&self) -> GcMark {
+        self.mark
     }
 }

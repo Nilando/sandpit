@@ -1,8 +1,8 @@
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
-use std::alloc::Layout;
-use std::marker::PhantomData;
-use std::num::NonZero;
-use std::sync::atomic::{AtomicU8, Ordering};
+use alloc::alloc::Layout;
+use core::marker::PhantomData;
+use core::num::NonZero;
+use core::sync::atomic::{AtomicU8, Ordering};
 
 // does the allocator need to be aware of the header being used?
 // to mark an object we need its alloc layout
@@ -51,8 +51,7 @@ impl From<u8> for GcMark {
             2 => GcMark::Green,
             3 => GcMark::Blue,
             _ => {
-                println!("Bad GC Mark, aborting process!");
-                std::process::abort();
+                panic!("Bad GC Mark!");
             }
         }
     }

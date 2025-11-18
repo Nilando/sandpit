@@ -1,12 +1,14 @@
-use super::allocator::Allocator;
+use crate::heap::Allocator;
+
 use super::gc::Gc;
 use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout};
-use super::trace::{Trace, TraceJob, TracerController};
-use std::cell::RefCell;
-use std::ptr::{write, NonNull};
-use std::sync::RwLockReadGuard;
+use super::trace::{Collector, Trace, TraceJob};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::RefCell;
+use core::ptr::{copy, write, NonNull};
 
 /// Allows for allocation and mutation within the GC arena.
 ///
@@ -14,7 +16,7 @@ use std::sync::RwLockReadGuard;
 ///
 /// # Example
 /// ```rust
-/// use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+/// use sandpit::{Arena, Gc, Root};
 ///
 /// let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
 ///    Gc::new(mu, 123)
@@ -56,34 +58,31 @@ use std::sync::RwLockReadGuard;
 /// to be able to identify if the mutation contexts have all exited at
 /// which point the Gc will free memory and then allow for mutation to resume.
 pub struct Mutator<'gc> {
-    tracer_controller: &'gc TracerController,
+    collector: &'gc Collector,
     allocator: Allocator,
     rescan: RefCell<Vec<TraceJob>>,
-    _lock: RwLockReadGuard<'gc, ()>,
     mark: GcMark,
 }
 
 impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
-        self.tracer_controller.send_work(work);
+        self.collector.send_work(work);
+        self.collector.decrement_mutators();
     }
 }
 
 impl<'gc> Mutator<'gc> {
-    pub(crate) fn new(
-        allocator: Allocator,
-        tracer_controller: &'gc TracerController,
-        _lock: RwLockReadGuard<'gc, ()>,
-    ) -> Self {
-        let mark = tracer_controller.prev_mark();
+    pub(crate) fn new(collector: &'gc Collector) -> Self {
+        let mark = collector.prev_mark();
+        let allocator = collector.new_allocator();
+        collector.increment_mutators();
 
         Self {
             allocator,
-            tracer_controller,
+            collector,
             rescan: RefCell::new(vec![]),
             mark,
-            _lock,
         }
     }
 
@@ -94,7 +93,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -106,12 +105,13 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, val_offset) = sized_alloc_layout::<T>();
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             // SAFETY: the alloc layout was extended to have capacity
             // for the header and object to be written into.
 
             // Creating the Gc<T> from the obj_ptr is safe, b/c it upholds
             // the Gc invariant that a Gc<T> points to a T with a padded header.
+
             let val_ptr = ptr.add(val_offset).cast();
             let header_ptr = ptr.cast();
 
@@ -126,7 +126,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -140,15 +140,29 @@ impl<'gc> Mutator<'gc> {
     ///     }
     /// });
     /// ```
-    pub fn alloc_array<T: Trace + Clone>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
-        // TODO: I think this could be done much faster
-        self.alloc_array_from_fn(len, |_| value.clone())
+    pub fn alloc_array<T: Trace + Copy>(&'gc self, value: T, len: usize) -> Gc<'gc, [T]> {
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
+
+        unsafe {
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
+            let header_ptr = ptr.cast();
+            let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+            for i in 0..len {
+                write(slice_ptr.add(i), value);
+            }
+
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, len);
+            write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
+
+            Gc::from_ptr(slice)
+        }
     }
 
     /// Alloc a `Gc<[T]>` by copying an existing slice.
     ///
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -161,16 +175,28 @@ impl<'gc> Mutator<'gc> {
     ///     }
     /// });
     /// ```
-    pub fn alloc_array_from_slice<T: Trace + Clone>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
-        // TODO: this could be one single write call
-        self.alloc_array_from_fn(slice.len(), |idx| slice[idx].clone())
+    pub fn alloc_array_from_slice<T: Trace + Copy>(&'gc self, slice: &[T]) -> Gc<'gc, [T]> {
+        let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(slice.len());
+
+        unsafe {
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
+            let header_ptr = ptr.cast();
+            let slice_ptr: *mut T = ptr.add(slice_offset).cast();
+
+            copy(slice.as_ptr(), slice_ptr, slice.len());
+
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, slice.len());
+            write(header_ptr, SliceHeader::<T>::new(self.mark, slice.len()));
+
+            Gc::from_ptr(slice)
+        }
     }
 
     /// Alloc a `Gc<[T]>` by using a closure that sets the value for each index.
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root};
+    /// # use sandpit::{Arena, Gc, Root};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -190,7 +216,7 @@ impl<'gc> Mutator<'gc> {
         let (alloc_layout, slice_offset) = slice_alloc_layout::<T>(len);
 
         unsafe {
-            let ptr = self.allocator.alloc(alloc_layout);
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
             let header_ptr = ptr.cast();
             let slice_ptr: *mut T = ptr.add(slice_offset).cast();
 
@@ -199,7 +225,7 @@ impl<'gc> Mutator<'gc> {
                 write(slice_ptr.add(i), item);
             }
 
-            let slice: *const [T] = std::ptr::slice_from_raw_parts(slice_ptr, len);
+            let slice: *const [T] = core::ptr::slice_from_raw_parts(slice_ptr, len);
             write(header_ptr, SliceHeader::<T>::new(self.mark, len));
 
             Gc::from_ptr(slice)
@@ -211,7 +237,7 @@ impl<'gc> Mutator<'gc> {
     ///
     /// # Example
     /// ```rust
-    /// # use sandpit::{Arena, gc::{Gc, GcMut}, Root, Mutator};
+    /// # use sandpit::{Arena, Gc, Root, Mutator};
     /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
     /// #    Gc::new(mu, 123)
     /// # });
@@ -231,27 +257,34 @@ impl<'gc> Mutator<'gc> {
     /// });
     /// ```
     pub fn gc_yield(&self) -> bool {
-        if self.tracer_controller.yield_flag() {
-            true
-        } else {
-            let _lock = self.tracer_controller.get_time_slice_lock();
-            self.tracer_controller.yield_flag()
+        if self.collector.yield_flag() {
+            return true;
         }
+
+        self.collector.minor_trigger() || self.collector.major_trigger()
     }
 
-    pub(crate) fn retrace<T: Trace + ?Sized>(&self, gc_ptr: Gc<'gc, T>) {
-        if gc_ptr.get_header().get_mark() != self.tracer_controller.get_current_mark() {
-            return;
-        }
+    pub(crate) fn has_marked<T: Trace + ?Sized>(&self, gc_ptr: &Gc<'gc, T>) -> bool {
+        gc_ptr.get_header().get_mark() == self.collector.get_current_mark()
+    }
 
-        let ptr: NonNull<Thin<T>> = gc_ptr.as_thin();
-        let trace_job = TraceJob::new(ptr);
+    pub(crate) fn get_mark(&self) -> GcMark {
+        self.collector.get_current_mark()
+    }
+
+    pub(crate) fn get_prev_mark(&self) -> GcMark {
+        self.collector.get_current_mark().rotate().rotate()
+    }
+
+    pub fn retrace<T: Trace + ?Sized>(&self, obj: &'gc T) {
+        let ptr: NonNull<Thin<T>> = NonNull::from(obj).cast(); // safe b/c of implicit Sized bound
+        let trace_job = TraceJob::new::<T>(ptr);
 
         self.rescan.borrow_mut().push(trace_job);
 
-        if self.rescan.borrow().len() >= self.tracer_controller.mutator_share_min {
+        if self.rescan.borrow().len() >= self.collector.config().mutator_share_min {
             let work = self.rescan.take();
-            self.tracer_controller.send_work(work);
+            self.collector.send_work(work);
         }
     }
 }

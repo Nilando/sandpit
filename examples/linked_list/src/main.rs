@@ -1,11 +1,6 @@
-use sandpit::{
-    Arena,
-    Root,
-    field,
-    gc::{Gc, GcMut, GcOpt}, Mutator, Trace,
-};
+use sandpit::{field, Arena, Gc, GcOpt, Mutator, Root, Trace};
 
-use std::cell::Cell;
+use core::cell::Cell;
 
 struct LinkedListIter<'gc, T: Trace> {
     next: Option<&'gc Node<'gc, T>>,
@@ -94,10 +89,8 @@ impl<'gc, T: Trace> LinkedList<'gc, T> {
             return None;
         }
 
-        // case 1 length 
-        if this.len.get() == 1 {
-
-        }
+        // case 1 length
+        if this.len.get() == 1 {}
 
         // else just set end to end.prev
         // set end.prev.next to null
@@ -236,11 +229,11 @@ impl<'gc, T: Trace> Node<'gc, T> {
         &self.val
     }
 
-    fn get_next(&'gc self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+    fn get_next(&'gc self) -> Option<Gc<'gc, Node<'gc, T>>> {
         self.next.as_option()
     }
 
-    fn get_prev(&'gc self) -> Option<GcMut<'gc, Node<'gc, T>>> {
+    fn get_prev(&'gc self) -> Option<Gc<'gc, Node<'gc, T>>> {
         self.prev.as_option()
     }
 }
@@ -250,11 +243,7 @@ fn main() {
     let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
 
     // mutate our list
-    arena.mutate(|mutator, arena| {
-
-    });
-
-    println!("hello example");
+    arena.mutate(|mutator, arena| {});
 }
 
 // TESTS BELOW
@@ -265,7 +254,8 @@ mod tests {
 
     #[test]
     fn empty_list_arena() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         arena.mutate(|_mu, root| {
             assert!(root.len() == 0);
@@ -274,7 +264,8 @@ mod tests {
 
     #[test]
     fn list_survives_major_collect() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         arena.mutate(|mu, root| {
             for i in 0..100 {
@@ -295,7 +286,8 @@ mod tests {
 
     #[test]
     fn list_survives_minor_collect() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         arena.mutate(|mu, root| {
             for i in 0..100 {
@@ -316,7 +308,8 @@ mod tests {
 
     #[test]
     fn list_survives_multiple_collects() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         arena.mutate(|mu, root| {
             for i in 0..100 {
@@ -340,7 +333,8 @@ mod tests {
 
     #[test]
     fn linked_list_at() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         arena.mutate(|mu, root| {
             for i in 0..100 {
@@ -403,7 +397,8 @@ mod tests {
 
     #[test]
     fn objects_marked_metric() {
-        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> = Arena::new(|mu| LinkedList::new(mu));
+        let arena: Arena<Root![Gc<'_, LinkedList<'_, usize>>]> =
+            Arena::new(|mu| LinkedList::new(mu));
 
         for i in 0..100 {
             arena.major_collect();

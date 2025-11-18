@@ -1,9 +1,10 @@
 use super::tracer::Tracer;
-use crate::gc::{Gc, GcMut, GcOpt};
+use crate::gc::{Gc, GcOpt};
 use crate::pointee::{GcPointee, Thin};
-use std::cell::*;
-use std::ptr::NonNull;
-use std::sync::atomic::*;
+use crate::tagged::{Tag, Tagged};
+use core::cell::*;
+use core::ptr::NonNull;
+use core::sync::atomic::*;
 
 /// Indicates a type contains no Gc references internally.
 ///
@@ -22,7 +23,7 @@ use std::sync::atomic::*;
 ///
 /// ## Example
 /// ```rust
-/// # use std::cell::Cell;
+/// # use core::cell::Cell;
 /// # use sandpit::TraceLeaf;
 /// # #[derive(TraceLeaf)]
 /// # struct Bar;
@@ -30,10 +31,10 @@ use std::sync::atomic::*;
 /// #[derive(TraceLeaf)]
 /// struct Foo<T> {
 ///     // T is TraceLeaf so can be put in a cell
-///     data: Cell<T>, 
+///     data: Cell<T>,
 ///
 ///     // bar is also traceleaf, so can exist within Foo
-///     bar: Bar 
+///     bar: Bar
 ///
 ///     // Foo cannot contain a Gc pointer, b/c it is trace
 ///     // c: Gc<'_, usize>
@@ -73,7 +74,7 @@ impl<T: Drop> __MustNotDrop for T {}
 ///
 /// ## Example
 /// ```rust
-/// # use sandpit::{Trace, gc::Gc};
+/// # use sandpit::{Trace, Gc};
 /// #[derive(Trace)]
 /// struct Foo<'gc, T: Trace> {
 ///     ptr: Gc<'gc, T>
@@ -99,15 +100,7 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for Gc<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        tracer.mark_and_trace(*self);
-    }
-}
-
-unsafe impl<'gc, T: Trace + ?Sized> Trace for GcMut<'gc, T> {
-    const IS_LEAF: bool = false;
-
-    fn trace(&self, tracer: &mut Tracer) {
-        Gc::from(self.clone()).trace(tracer)
+        tracer.mark_and_trace(self.clone());
     }
 }
 
@@ -115,7 +108,17 @@ unsafe impl<'gc, T: Trace + ?Sized> Trace for GcOpt<'gc, T> {
     const IS_LEAF: bool = false;
 
     fn trace(&self, tracer: &mut Tracer) {
-        if let Some(gc_mut) = self.as_option() { gc_mut.trace(tracer) }
+        if let Some(gc_mut) = self.as_option() {
+            gc_mut.trace(tracer)
+        }
+    }
+}
+
+unsafe impl<'gc, T: Tag> Trace for Tagged<'gc, T> {
+    const IS_LEAF: bool = false;
+
+    fn trace(&self, tracer: &mut crate::Tracer) {
+        T::trace_tagged(self, tracer);
     }
 }
 
