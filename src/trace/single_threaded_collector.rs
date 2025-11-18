@@ -210,12 +210,8 @@ impl SingleThreadedCollector {
         let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
 
         let result = current_old_objects_count > max_old_objects_count;
-        #[cfg(feature = "std")]
         if result {
-            println!(
-                "curr: {}, max {}",
-                current_old_objects_count, max_old_objects_count
-            )
+            self.print_debug_info();
         };
         result
     }
