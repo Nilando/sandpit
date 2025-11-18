@@ -326,14 +326,7 @@ impl MultiThreadedCollector {
         let current_old_objects_count = self.metrics.old_objects_count.load(Ordering::Relaxed);
         let max_old_objects_count = self.metrics.max_old_objects.load(Ordering::Relaxed);
 
-        let result = current_old_objects_count > max_old_objects_count;
-        if result {
-            println!(
-                "curr: {}, max {}",
-                current_old_objects_count, max_old_objects_count
-            )
-        };
-        result
+        current_old_objects_count > max_old_objects_count;
     }
 
     pub fn minor_trigger(&self) -> bool {
