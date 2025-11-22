@@ -5,13 +5,18 @@ use super::trace::{Trace, TraceLeaf};
 use core::cell::Cell;
 
 pub trait GcSync<'gc>: Trace + Clone + 'gc {
-    fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self);
-}
+    /// Swap old value with new value, updating GC pointers atomically.
+    ///
+    /// # Safety
+    /// `old` must point to valid, properly aligned memory.
+    unsafe fn gc_swap(old: &Self, new: Self, mu: &'gc Mutator);
 
-impl<'gc, T: Trace> GcSync<'gc> for Gc<'gc, T> {
+    /// Update an element in an array, handling write barriers.
+    ///
+    /// This default implementation calls `gc_swap` and then retraces if needed.
     fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
         unsafe {
-            array[index].set(value.clone());
+            Self::gc_swap(&array[index], value, mu);
         }
 
         if mu.has_marked(&array) {
@@ -20,36 +25,26 @@ impl<'gc, T: Trace> GcSync<'gc> for Gc<'gc, T> {
     }
 }
 
-impl<'gc, T: Trace> GcSync<'gc> for GcOpt<'gc, T> {
-    fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        unsafe {
-            array[index].set(value.clone());
-        }
+impl<'gc, T: Trace + ?Sized> GcSync<'gc> for Gc<'gc, T> {
+    unsafe fn gc_swap(old: &Self, new: Self, _mu: &'gc Mutator) {
+        old.set(new);
+    }
+}
 
-        if mu.has_marked(&array) {
-            if value.is_some() {
-                mu.retrace(&array[index]);
-            }
-        }
+impl<'gc, T: Trace + ?Sized> GcSync<'gc> for GcOpt<'gc, T> {
+    unsafe fn gc_swap(old: &Self, new: Self, _mu: &'gc Mutator) {
+        old.set(new);
     }
 }
 
 impl<'gc, B: Tag + 'gc> GcSync<'gc> for Tagged<'gc, B> {
-    fn update_array(mu: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        unsafe {
-            array[index].set(value.get_raw());
-        }
-
-        if mu.has_marked(&array) {
-            if value.is_ptr() {
-                mu.retrace(&array[index]);
-            }
-        }
+    unsafe fn gc_swap(old: &Self, new: Self, _mu: &'gc Mutator) {
+        old.set(new.get_raw());
     }
 }
 
 impl<'gc, T: TraceLeaf + Copy + 'gc> GcSync<'gc> for Cell<T> {
-    fn update_array(_: &'gc Mutator, array: Gc<'gc, [Self]>, index: usize, value: Self) {
-        array[index].swap(&value);
+    unsafe fn gc_swap(old: &Self, new: Self, _mu: &'gc Mutator) {
+        old.swap(&new);
     }
 }

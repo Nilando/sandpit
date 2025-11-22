@@ -1,5 +1,5 @@
 use rand::prelude::*;
-use sandpit::{field, Arena, Gc, GcOpt, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf};
+use sandpit::{field, Arena, Gc, GcOpt, GcSync, InnerBarrier, Mutator, Root, Tag, Trace, TraceLeaf};
 
 fn alloc_rand_garbage(mu: &Mutator) {
     let mut rng = rand::thread_rng();
@@ -779,4 +779,507 @@ fn retracing_tagged_ptrs() {
 
     arena.mutate(|mu, ()| mutate(mu));
     arena.major_collect();
+}
+
+#[test]
+fn gc_str() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| {
+        let root = mu.alloc_str("test");
+
+        root
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        let s: &str = root;
+
+        assert_eq!(s, "test")
+    });
+}
+
+#[test]
+fn gc_empty_str() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| {
+        let root = mu.alloc_str("");
+
+        root
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        let s: &str = root;
+
+        assert_eq!(s, "")
+    });
+}
+
+#[test]
+fn gc_str_unicode() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| mu.alloc_str("Hello 世界 🦀"));
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        let s: &str = root;
+        assert_eq!(s, "Hello 世界 🦀");
+        assert_eq!(s.len(), 17); // byte length
+        assert_eq!(s.chars().count(), 10); // char count
+    });
+}
+
+#[test]
+fn gc_str_large() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| {
+        let large_string = "x".repeat(10_000);
+        mu.alloc_str(&large_string)
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, root| {
+        assert_eq!(root.len(), 10_000);
+        assert!(root.chars().all(|c| c == 'x'));
+    });
+}
+
+#[test]
+fn gc_str_object_count() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| mu.alloc_str("test string"));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
+}
+
+#[test]
+fn gc_multiple_strings() {
+    let arena: Arena<Root![(Gc<'_, str>, Gc<'_, str>, Gc<'_, str>)]> =
+        Arena::new(|mu| (mu.alloc_str("first"), mu.alloc_str("second"), mu.alloc_str("third")));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 3);
+
+    arena.mutate(|_mu, root| {
+        assert_eq!(&*root.0, "first");
+        assert_eq!(&*root.1, "second");
+        assert_eq!(&*root.2, "third");
+    });
+}
+
+#[test]
+fn gc_array_of_strings() {
+    let arena: Arena<Root![Gc<'_, [Gc<'_, str>]>]> =
+        Arena::new(|mu| mu.alloc_array_from_fn(5, |i| mu.alloc_str(&format!("string_{}", i))));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 6); // 1 array + 5 strings
+
+    arena.mutate(|_mu, root| {
+        for (i, s) in root.iter().enumerate() {
+            assert_eq!(&**s, format!("string_{}", i));
+        }
+    });
+}
+
+#[test]
+fn gc_str_in_struct() {
+    #[derive(Trace)]
+    struct Person<'gc> {
+        name: Gc<'gc, str>,
+        age: usize,
+    }
+
+    let arena: Arena<Root![Gc<'_, Person<'_>>]> = Arena::new(|mu| {
+        Gc::new(
+            mu,
+            Person {
+                name: mu.alloc_str("Alice"),
+                age: 30,
+            },
+        )
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 2); // Person + str
+
+    arena.mutate(|_mu, root| {
+        assert_eq!(&*root.name, "Alice");
+        assert_eq!(root.age, 30);
+    });
+}
+
+#[test]
+fn gc_str_write_barrier() {
+    let arena: Arena<Root![Gc<'_, Gc<'_, str>>]> =
+        Arena::new(|mu| Gc::new(mu, mu.alloc_str("initial")));
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
+
+    arena.mutate(|mu, root| {
+        let new_str = mu.alloc_str("updated");
+        root.write_barrier(mu, |barrier| {
+            barrier.set(new_str);
+        });
+
+        assert_eq!(&***root, "updated");
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 2);
+}
+
+#[test]
+fn gc_opt_str() {
+    let arena: Arena<Root![GcOpt<'_, str>]> = Arena::new(|mu| mu.alloc_str("test").into());
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 1);
+
+    arena.mutate(|_mu, root| {
+        assert!(root.as_option().is_some());
+        assert_eq!(&*root.as_option().unwrap(), "test");
+        root.set_none();
+    });
+
+    arena.major_collect();
+
+    assert_eq!(arena.metrics().get_old_objects_count(), 0);
+}
+
+#[test]
+fn gc_str_survives_collection() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| mu.alloc_str("persistent"));
+
+    for _ in 0..10 {
+        arena.mutate(|mu, _root| {
+            alloc_rand_garbage(mu);
+        });
+
+        arena.major_collect();
+    }
+
+    arena.mutate(|_mu, root| {
+        assert_eq!(&**root, "persistent");
+    });
+}
+
+#[test]
+fn gc_str_on_stack() {
+    let arena: Arena<Root![Gc<'_, str>]> = Arena::new(|mu| mu.alloc_str("persistent"));
+
+
+    arena.mutate(|_mu, root| {
+        let s: Gc<'_, str> = root.clone();
+
+        println!("{}", &*s);
+    });
+}
+
+// ===== GcSync Derive Tests =====
+
+#[test]
+fn derive_gcsync_basic() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Point<'gc> {
+        x: Gc<'gc, i32>,
+        y: Gc<'gc, i32>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Point<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(
+            mu,
+            Point {
+                x: Gc::new(mu, 10),
+                y: Gc::new(mu, 20),
+            },
+        );
+        vec
+    });
+
+    arena.mutate(|_mu, vec| {
+        let p = vec.get_idx(0).unwrap();
+        assert_eq!(*p.x, 10);
+        assert_eq!(*p.y, 20);
+    });
+}
+
+#[test]
+fn derive_gcsync_with_set() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Point<'gc> {
+        x: Gc<'gc, i32>,
+        y: Gc<'gc, i32>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Point<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(
+            mu,
+            Point {
+                x: Gc::new(mu, 10),
+                y: Gc::new(mu, 20),
+            },
+        );
+        vec
+    });
+
+    arena.mutate(|mu, vec| {
+        vec.set(
+            mu,
+            Point {
+                x: Gc::new(mu, 30),
+                y: Gc::new(mu, 40),
+            },
+            0,
+        );
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let p = vec.get_idx(0).unwrap();
+        assert_eq!(*p.x, 30);
+        assert_eq!(*p.y, 40);
+    });
+}
+
+#[test]
+fn derive_gcsync_generic() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Wrapper<'gc, T: GcSync<'gc>> {
+        value: T,
+        marker: Gc<'gc, bool>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Wrapper<'_, Gc<'_, usize>>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(
+            mu,
+            Wrapper {
+                value: Gc::new(mu, 42),
+                marker: Gc::new(mu, true),
+            },
+        );
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let w = vec.get_idx(0).unwrap();
+        assert_eq!(*w.value, 42);
+        assert_eq!(*w.marker, true);
+    });
+}
+
+#[test]
+fn derive_gcsync_mixed_fields() {
+    use core::cell::Cell;
+
+    #[derive(Trace, Clone, GcSync)]
+    struct Mixed<'gc> {
+        gc_ptr: Gc<'gc, str>,
+        opt_ptr: GcOpt<'gc, bool>,
+        leaf_data: Cell<usize>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Mixed<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(
+            mu,
+            Mixed {
+                gc_ptr: mu.alloc_str("test"),
+                opt_ptr: GcOpt::new(mu, true),
+                leaf_data: Cell::new(100),
+            },
+        );
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let m = vec.get_idx(0).unwrap();
+        assert_eq!(&*m.gc_ptr, "test");
+        assert_eq!(*m.opt_ptr.as_option().unwrap(), true);
+        assert_eq!(m.leaf_data.get(), 100);
+    });
+}
+
+#[test]
+fn derive_gcsync_tuple_struct() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Tuple<'gc>(Gc<'gc, i32>, Gc<'gc, bool>);
+
+    let arena: Arena<Root![GcVec<'_, Tuple<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(mu, Tuple(Gc::new(mu, 123), Gc::new(mu, false)));
+        vec
+    });
+
+    arena.mutate(|_mu, vec| {
+        let t = vec.get_idx(0).unwrap();
+        assert_eq!(*t.0, 123);
+        assert_eq!(*t.1, false);
+    });
+}
+
+#[test]
+fn derive_gcsync_nested_generic() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Inner<'gc> {
+        value: Gc<'gc, usize>,
+    }
+
+    #[derive(Trace, Clone, GcSync)]
+    struct Outer<'gc, T: GcSync<'gc>> {
+        inner: T,
+        extra: Gc<'gc, bool>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Outer<'_, Inner<'_>>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        vec.push(
+            mu,
+            Outer {
+                inner: Inner {
+                    value: Gc::new(mu, 999),
+                },
+                extra: Gc::new(mu, true),
+            },
+        );
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let o = vec.get_idx(0).unwrap();
+        assert_eq!(*o.inner.value, 999);
+        assert_eq!(*o.extra, true);
+    });
+}
+
+#[test]
+fn gcvec_push_pop_with_derived_type() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Point<'gc> {
+        x: Gc<'gc, i32>,
+        y: Gc<'gc, i32>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Point<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        for i in 0..100 {
+            vec.push(
+                mu,
+                Point {
+                    x: Gc::new(mu, i),
+                    y: Gc::new(mu, i * 2),
+                },
+            );
+        }
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        for i in (0..100).rev() {
+            let point = vec.pop().unwrap();
+            assert_eq!(*point.x, i);
+            assert_eq!(*point.y, i * 2);
+        }
+        assert_eq!(vec.len(), 0);
+    });
+}
+
+#[test]
+fn gcvec_set_with_gc_collection() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Data<'gc> {
+        value: Gc<'gc, usize>,
+        flag: GcOpt<'gc, bool>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Data<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        for i in 0..50 {
+            vec.push(
+                mu,
+                Data {
+                    value: Gc::new(mu, i),
+                    flag: GcOpt::new(mu, i % 2 == 0),
+                },
+            );
+        }
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|mu, vec| {
+        for i in 0..50 {
+            vec.set(
+                mu,
+                Data {
+                    value: Gc::new(mu, i + 1000),
+                    flag: GcOpt::new_none(),
+                },
+                i,
+            );
+        }
+    });
+
+    arena.major_collect();
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        for i in 0..50 {
+            let d = vec.get_idx(i).unwrap();
+            assert_eq!(*d.value, i + 1000);
+            assert!(d.flag.is_none());
+        }
+    });
+}
+
+#[test]
+fn gcvec_derived_type_with_random_garbage() {
+    #[derive(Trace, Clone, GcSync)]
+    struct Container<'gc> {
+        data: Gc<'gc, usize>,
+    }
+
+    let arena: Arena<Root![GcVec<'_, Container<'_>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        for i in 0..10 {
+            vec.push(mu, Container { data: Gc::new(mu, i) });
+            alloc_rand_garbage(mu);
+        }
+        vec
+    });
+
+    for _ in 0..5 {
+        arena.major_collect();
+        arena.mutate(|mu, _vec| {
+            alloc_rand_garbage(mu);
+        });
+    }
+
+    arena.mutate(|_mu, vec| {
+        for i in 0..10 {
+            let c = vec.get_idx(i).unwrap();
+            assert_eq!(*c.data, i);
+        }
+    });
 }

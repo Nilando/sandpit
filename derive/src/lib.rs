@@ -429,3 +429,70 @@ impl VisitMut for ElideLifetimes {
 fn elide_lifetimes(ty: &mut Type) {
     ElideLifetimes.visit_type_mut(ty);
 }
+
+#[proc_macro_derive(GcSync)]
+pub fn gcsync(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let generics = add_gcsync(input.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let gc_swap_body = match input.data {
+        Data::Struct(DataStruct {
+            fields: Fields::Named(ref fields),
+            ..
+        }) => fields
+            .named
+            .iter()
+            .map(|field| {
+                let field_name = &field.ident;
+                let field_type = &field.ty;
+
+                quote! {
+                    <#field_type as sandpit::GcSync<'gc>>::gc_swap(&old.#field_name, new.#field_name, mu);
+                }
+            })
+            .collect::<Vec<_>>(),
+        Data::Struct(DataStruct {
+            fields: Fields::Unnamed(ref fields),
+            ..
+        }) => fields
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(i, field)| {
+                let idx = syn::Index::from(i);
+                let field_type = &field.ty;
+
+                quote! {
+                    <#field_type as sandpit::GcSync<'gc>>::gc_swap(&old.#idx, new.#idx, mu);
+                }
+            })
+            .collect::<Vec<_>>(),
+        Data::Struct(DataStruct {
+            fields: Fields::Unit,
+            ..
+        }) => vec![quote! {}],
+        _ => panic!("#[derive(GcSync)] can only be used on structs, not enums"),
+    };
+
+    let expanded = quote! {
+        #[automatically_derived]
+        impl #impl_generics sandpit::GcSync<'gc> for #name #ty_generics #where_clause {
+            unsafe fn gc_swap(old: &Self, new: Self, mu: &'gc sandpit::Mutator) {
+                #(#gc_swap_body)*
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+fn add_gcsync(mut generics: Generics) -> Generics {
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(sandpit::GcSync<'gc>));
+        }
+    }
+    generics
+}

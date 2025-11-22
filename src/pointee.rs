@@ -1,5 +1,5 @@
 use super::trace::Trace;
-use crate::header::{GcHeader, SizedHeader, SliceHeader};
+use crate::header::{GcHeader, SizedHeader, SliceHeader, StrHeader};
 
 use alloc::alloc::Layout;
 use core::marker::PhantomData;
@@ -103,6 +103,42 @@ impl<T: Trace> GcPointee for [T] {
     }
 }
 
+impl GcPointee for str {
+    type GcHeader = StrHeader;
+
+    fn as_fat<'a>(thin_ptr: NonNull<Thin<Self>>) -> *const Self {
+        let str_ptr: *const u8 = thin_ptr.cast().as_ptr();
+        debug_assert!(
+            str_ptr as usize % core::mem::align_of::<u8>() == 0,
+            "Str pointer {:p} is not aligned to {} bytes",
+            str_ptr,
+            core::mem::align_of::<u8>()
+        );
+
+        let header: &StrHeader = Self::get_header(thin_ptr);
+        let len = header.len();
+
+        let byte_slice = slice_from_raw_parts(str_ptr, len);
+        byte_slice as *const [u8] as *const str
+    }
+
+    fn get_header_ptr(thin_ptr: NonNull<Thin<Self>>) -> *const Self::GcHeader {
+        // we can just pretend the str has a length of 1 here, doesn't affect the offset
+        let (_, item_offset) = str_alloc_layout(1);
+
+        let ptr: *mut Self::GcHeader = thin_ptr.cast().as_ptr();
+        let header_ptr = unsafe { ptr.byte_sub(item_offset) as *const Self::GcHeader };
+
+        debug_assert!(
+            header_ptr as usize % core::mem::align_of::<Self::GcHeader>() == 0,
+            "Header pointer {:p} is not aligned to {} bytes (required for StrHeader)",
+            header_ptr,
+            core::mem::align_of::<Self::GcHeader>()
+        );
+        header_ptr
+    }
+}
+
 pub fn sized_alloc_layout<T>() -> (Layout, usize) {
     let header_layout = Layout::new::<SizedHeader<T>>();
     let val_layout = Layout::new::<T>();
@@ -116,6 +152,15 @@ pub fn slice_alloc_layout<T>(len: usize) -> (Layout, usize) {
     let header_layout = Layout::new::<SliceHeader<T>>();
     let slice_layout = Layout::array::<T>(len).unwrap();
     let (unpadded_layout, offset) = header_layout.extend(slice_layout).unwrap();
+    let layout = unpadded_layout.pad_to_align();
+
+    (layout, offset)
+}
+
+pub fn str_alloc_layout(len: usize) -> (Layout, usize) {
+    let header_layout = Layout::new::<StrHeader>();
+    let str_layout = Layout::array::<u8>(len).unwrap();
+    let (unpadded_layout, offset) = header_layout.extend(str_layout).unwrap();
     let layout = unpadded_layout.pad_to_align();
 
     (layout, offset)

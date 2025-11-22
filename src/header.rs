@@ -129,3 +129,37 @@ impl<T> GcHeader for SliceHeader<T> {
         layout
     }
 }
+
+pub struct StrHeader {
+    mark: AtomicU8,
+    len: usize,
+}
+
+impl StrHeader {
+    pub fn new(mark: GcMark, len: usize) -> Self {
+        Self {
+            mark: AtomicU8::new(mark.into()),
+            len,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+}
+
+impl GcHeader for StrHeader {
+    fn set_mark(&self, mark: GcMark) {
+        self.mark.store(mark.into(), Ordering::Release);
+    }
+
+    fn get_mark(&self) -> GcMark {
+        self.mark.load(Ordering::Acquire).into()
+    }
+
+    fn get_alloc_layout(&self) -> Layout {
+        let (layout, _) = super::pointee::str_alloc_layout(self.len);
+
+        layout
+    }
+}

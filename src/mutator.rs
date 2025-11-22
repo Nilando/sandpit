@@ -1,9 +1,9 @@
 use crate::heap::Allocator;
 
 use super::gc::Gc;
-use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader};
+use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader, StrHeader};
 use super::pointee::Thin;
-use super::pointee::{sized_alloc_layout, slice_alloc_layout};
+use super::pointee::{sized_alloc_layout, slice_alloc_layout, str_alloc_layout};
 use super::trace::{Collector, Trace, TraceJob};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -229,6 +229,37 @@ impl<'gc> Mutator<'gc> {
             write(header_ptr, SliceHeader::<T>::new(self.mark, len));
 
             Gc::from_ptr(slice)
+        }
+    }
+
+    /// Alloc a `Gc<str>` by copying an existing string slice.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use sandpit::{Arena, Gc, Root};
+    /// # let arena: Arena<Root![Gc<'_, usize>]> = Arena::new(|mu| {
+    /// #    Gc::new(mu, 123)
+    /// # });
+    /// arena.mutate(|mu, root| {
+    ///     let gc_str = mu.alloc_str("hello world");
+    ///
+    ///     assert_eq!(&*gc_str, "hello world");
+    /// });
+    /// ```
+    pub fn alloc_str(&'gc self, s: &str) -> Gc<'gc, str> {
+        let (alloc_layout, str_offset) = str_alloc_layout(s.len());
+
+        unsafe {
+            let ptr = self.allocator.alloc(alloc_layout) as *mut u8;
+            let header_ptr = ptr.cast();
+            let str_ptr: *mut u8 = ptr.add(str_offset);
+
+            copy(s.as_ptr(), str_ptr, s.len());
+
+            let str_slice: *const str = core::ptr::slice_from_raw_parts(str_ptr, s.len()) as *const str;
+            write(header_ptr, StrHeader::new(self.mark, s.len()));
+
+            Gc::from_ptr(str_slice)
         }
     }
 

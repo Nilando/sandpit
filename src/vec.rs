@@ -68,11 +68,6 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
         }
     }
 
-    pub fn as_slice(&mut self) -> &[T] {
-        // BAD!!!! => self.items.inner().unwrap().scoped_deref()
-        todo!()
-    }
-
     pub fn get_idx(&self, idx: usize) -> Option<T> {
         if self.len() <= idx {
             return None;

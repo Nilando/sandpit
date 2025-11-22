@@ -155,6 +155,7 @@ impl_trace_leaf!(
     isize,
     f32,
     f64,
+    str,
     AtomicBool,
     AtomicI8,
     AtomicI16,
