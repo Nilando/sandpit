@@ -721,9 +721,16 @@ use sandpit::Tagged;
 
 #[derive(Tag)]
 enum TestTag {
-    Raw,
     #[ptr(usize)]
     Ptr,
+    Raw,
+}
+
+#[test]
+fn collect_empty_tagged_gc_vec() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| GcVec::new(mu));
+    arena.major_collect();
+
 }
 
 #[test]
@@ -1282,4 +1289,92 @@ fn gcvec_derived_type_with_random_garbage() {
             assert_eq!(*c.data, i);
         }
     });
+}
+
+#[test]
+fn minimal_tagged_ptr_bug() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| {
+        let vec = GcVec::new(mu);
+        let gc_ptr = Gc::new(mu, 123);
+        let tag_ptr = TestTag::from_ptr(gc_ptr);
+        vec.push(mu, tag_ptr);
+        vec
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let tag_ptr = vec.get_idx(0).unwrap();
+        let gc_ptr = TestTag::get_ptr(tag_ptr).unwrap();
+        assert_eq!(*gc_ptr, 123);
+    });
+}
+
+#[test]
+fn minimal_tagged_ptr_push_pop() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| GcVec::new(mu));
+
+    arena.mutate(|mu, vec| {
+        let gc_ptr = Gc::new(mu, 456);
+        let tag_ptr = TestTag::from_ptr(gc_ptr);
+        vec.push(mu, tag_ptr);
+    });
+
+    arena.major_collect();
+
+    arena.mutate(|_mu, vec| {
+        let popped = vec.pop().unwrap();
+        let gc_ptr = TestTag::get_ptr(popped).unwrap();
+        assert_eq!(*gc_ptr, 456);
+    });
+}
+
+#[test]
+fn minimal_tagged_ptr_push_and_read() {
+    let arena: Arena<Root![GcVec<'_, Tagged<'_, TestTag>>]> = Arena::new(|mu| GcVec::new(mu));
+
+    fn push_ten_times<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Tagged<'gc, TestTag>>) {
+        for i in 0..10 {
+            let gc_ptr = Gc::new(mu, i);
+            let tag_ptr = TestTag::from_ptr(gc_ptr);
+            vec.push(mu, tag_ptr);
+        }
+    }
+
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
+}
+
+#[test]
+fn continually_push_and_collect_vec() {
+    let arena: Arena<Root![GcVec<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcVec::new(mu));
+
+    fn push_ten_times<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Gc<'gc, usize>>) {
+        for i in 0..10 {
+            let gc_ptr = Gc::new(mu, i);
+            vec.push(mu, gc_ptr);
+        }
+    }
+
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
+}
+
+#[test]
+fn foo_test() {
+    let arena: Arena<Root![GcVec<'_, Gc<'_, usize>>]> = Arena::new(|mu| GcVec::new(mu));
+
+    fn push_ten_times<'gc>(mu: &'gc Mutator, vec: &GcVec<'gc, Gc<'gc, usize>>) {
+        let gc_ptr = Gc::new(mu, 123);
+        vec.push(mu, gc_ptr);
+    }
+
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
+    arena.mutate(|mu, vec| push_ten_times(mu, vec));
+    arena.major_collect();
 }
