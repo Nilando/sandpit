@@ -127,7 +127,14 @@ impl Metrics {
 pub fn update_avg_u64(running_avg: &AtomicU64, new_value: u64, sample_size: u64) {
     let avg = running_avg.load(Ordering::Relaxed);
     let update = new_value.abs_diff(avg) / (sample_size + 1);
-    let new_avg = avg + update;
+
+    // When new_value > avg, we add the update; when new_value < avg, we subtract.
+    // Use saturating arithmetic to prevent overflow/underflow.
+    let new_avg = if new_value > avg {
+        avg.saturating_add(update)
+    } else {
+        avg.saturating_sub(update)
+    };
 
     running_avg.store(new_avg, Ordering::Relaxed);
 }
