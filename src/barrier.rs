@@ -168,6 +168,10 @@ impl<T: Trace> InnerBarrier<T> {
         &self.inner
     }
 
+    pub fn get_mark(&self) -> u8 {
+        self.mark.load(Ordering::Acquire)
+    }
+
     pub fn mark(&self, tracer: &mut Tracer) -> bool {
         let mark = self.mark.load(Ordering::Acquire);
 

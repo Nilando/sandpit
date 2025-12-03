@@ -270,13 +270,14 @@ where 'a: 'gc {
             NodeContent::VecValues(vec)
         } else {
             // GcVec of nodes (keep it small to avoid deep recursion)
-            let vec_len = rng.gen_range(0..=5);
+            let vec_len = rng.gen_range(0..=100);
             let vec = GcVec::new(mu);
             // Create simple sized nodes to avoid infinite recursion
-            for _ in 0..vec_len {
+            for i in 0..vec_len {
+                let inner_id = id + i;
                 let simple_node = Gc::new(mu, VerifiedNode {
-                    id: Cell::new(id),
-                    content: NodeContent::Sized(Gc::new(mu, id * 999)),
+                    id: Cell::new(inner_id),
+                    content: NodeContent::Sized(Gc::new(mu, inner_id * 777)),
                     next: GcOpt::new_none(),
                 });
                 vec.push(mu, simple_node);
@@ -324,7 +325,8 @@ fn verify_node_content<'gc>(node: &VerifiedNode<'gc>, id: usize, prefix: &str) {
             for i in 0..vec.len() {
                 if let Some(node_gc) = vec.get_idx(i) {
                     let inner_node = node_gc.scoped_deref();
-                    let _ = inner_node.id.get();
+                    let inner_id = inner_node.id.get();
+                    verify_node_content(inner_node, inner_id, "???");
                     // Just verify we can access the node
                 }
             }

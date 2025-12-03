@@ -130,7 +130,6 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
             }
         });
 
-        let old_array = self.items.inner().clone();
         // Don't use write_barrier here because that would retrace the entire new array,
         // including uninitialized elements beyond old_cap. Instead, we directly set the
         // new array and manually mark it and retrace only the valid elements.
@@ -138,26 +137,27 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
 
         // If the old array has been marked by the GC, we need to mark the new array
         // (to keep it alive) and retrace the valid elements.
-        if let Some(old_array_ptr) = old_array.as_option() {
-            if mu.has_marked(&old_array_ptr) {
-                // Mark the new array allocation itself without tracing its contents
-                // FIXME: Marking the array this way bypasses the tracer's mark_count,
-                // so it won't be counted towards the old objects count in metrics.
-                let header = new_array.get_header();
-                let mark = mu.get_mark();
-                header.set_mark(mark);
-                unsafe {
-                    crate::heap::mark(
-                        new_array.get_header_ptr() as *mut u8,
-                        new_array.get_layout(),
-                        mark,
-                    );
-                }
+        let current_mark = mu.get_mark();
+        if self.items.get_mark() == current_mark.into() {
+            // Mark the new array allocation itself without tracing its contents
+            // FIXME: Marking the array this way bypasses the tracer's mark_count,
+            // so it won't be counted towards the old objects count in metrics.
+            let header = new_array.get_header();
+            header.set_mark(current_mark);
 
-                // Manually retrace only the valid elements (up to self.len)
-                for i in 0..self.len() {
-                    mu.retrace(&new_array[i]);
-                }
+            unsafe {
+                crate::heap::mark(
+                    new_array.get_header_ptr() as *mut u8,
+                    new_array.get_layout(),
+                    current_mark,
+                );
+            }
+
+            // Manually retrace only the valid elements (up to self.len)
+            for i in 0..self.len() {
+                let items_ptr = self.items.inner().unwrap();
+
+                mu.retrace(&items_ptr[i]);
             }
         }
     }

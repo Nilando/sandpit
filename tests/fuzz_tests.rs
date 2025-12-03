@@ -131,6 +131,22 @@ fn fuzz_large_objects() {
 }
 
 #[test]
+fn fuzz_super_large_objects() {
+    println!("\n=== Testing: Large Objects ===");
+    let config = FuzzConfig {
+        object_size_range: (1024 * 16 + 1, 1024 * 20),
+        slice_length_range: (1000, 10000),
+        iterations: 10,
+        allocs_per_iteration: (5, 20),
+        ..FuzzConfig::default()
+    };
+    let stats = fuzz_gc_with_node_verification(config);
+    stats.print();
+    assert!(stats.total_allocations > 0);
+}
+
+
+#[test]
 fn fuzz_max_alignment() {
     println!("\n=== Testing: Maximum Alignment ===");
     let config = FuzzConfig {
