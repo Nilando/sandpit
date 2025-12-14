@@ -94,10 +94,10 @@ impl MultiThreadedCollector {
 
         if is_major {
             self.metrics
-                .update_minor_collection_avg_time(collection_duration);
+                .update_major_collection_avg_time(collection_duration);
         } else {
             self.metrics
-                .update_major_collection_avg_time(collection_duration);
+                .update_minor_collection_avg_time(collection_duration);
         }
     }
 
@@ -107,13 +107,6 @@ impl MultiThreadedCollector {
         self.metrics
             .state
             .store(GC_STATE_SWEEPING, Ordering::Relaxed);
-        let current_arena_size = self.heap.get_size();
-        let max_arena_size = self.metrics.get_max_arena_size();
-        if max_arena_size < current_arena_size {
-            self.metrics
-                .max_arena_size
-                .store(current_arena_size, Ordering::Relaxed);
-        }
         // SAFETY: We just completed a trace, and we checked that all mutators
         // have dropped their yield locks, ensuring no mutation contexts exist
         // and we hold the collection lock, ensuring no mutation contexts can

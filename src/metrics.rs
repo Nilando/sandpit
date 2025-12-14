@@ -36,7 +36,6 @@ pub struct Metrics {
 
     pub max_yield_time: AtomicU64,
     pub avg_yield_time: AtomicU64,
-    pub max_arena_size: AtomicU64,
     pub monitor_is_on: bool,
 }
 
@@ -52,7 +51,6 @@ impl Metrics {
             max_old_objects: AtomicU64::new(0),
             old_objects_count: AtomicU64::new(0),
             arena_size: AtomicU64::new(0),
-            max_arena_size: AtomicU64::new(0),
             prev_arena_size: AtomicU64::new(0),
             state: AtomicU8::new(GC_STATE_SLEEPING),
             monitor_is_on: true,
@@ -117,10 +115,6 @@ impl Metrics {
 
     pub fn get_avg_yield_time(&self) -> u64 {
         self.avg_yield_time.load(Ordering::Relaxed)
-    }
-
-    pub fn get_max_arena_size(&self) -> u64 {
-        self.max_arena_size.load(Ordering::Relaxed)
     }
 }
 

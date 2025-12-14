@@ -42,13 +42,6 @@ impl SingleThreadedCollector {
         self.metrics
             .state
             .store(GC_STATE_SWEEPING, Ordering::Relaxed);
-        let current_arena_size = self.heap.get_size();
-        let max_arena_size = self.metrics.get_max_arena_size();
-        if max_arena_size < current_arena_size {
-            self.metrics
-                .max_arena_size
-                .store(current_arena_size, Ordering::Relaxed);
-        }
         // SAFETY: We just completed a trace in single-threaded mode
         unsafe {
             self.sweep();
