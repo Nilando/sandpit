@@ -71,8 +71,8 @@ impl Config {
             trace_share_ratio: GC_CONFIG_DEFAULT_TRACE_SHARE_RATIO,
             trace_wait_time: GC_CONFIG_DEFAULT_TRACE_WAIT_TIME,
 
-            monitor_max_old_growth_rate: 10.0,
-            monitor_arena_size_ratio_trigger: 2.0,
+            monitor_max_old_growth_rate: 1.5,
+            monitor_arena_size_ratio_trigger: 1.5,
             monitor_wait_time: 10,
             monitor_on: true,
 
