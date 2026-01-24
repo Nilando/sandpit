@@ -137,11 +137,22 @@ impl MultiThreadedCollector {
 
     fn spawn_tracers(&self) {
         std::thread::scope(|scope| {
+            let mut handles = vec![];
+
             for _ in 0..self.config.tracer_threads {
-                scope.spawn(|| {
+                let h = scope.spawn(|| {
                     gc_debug("Tracer Spawned");
                     self.run_tracer();
                 });
+
+                handles.push(h);
+            }
+
+            for h in handles.into_iter() {
+                if h.join().is_err() {
+                    println!("thread panicked, shutting down process");
+                    std::process::exit(1)
+                }
             }
         });
     }
