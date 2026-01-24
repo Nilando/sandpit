@@ -160,8 +160,17 @@ where
 
         f(&mutator, root);
 
-        // TODO:
-        // if single threaded mode, collect here on mutation exit
+        // In single-threaded mode, check if we should collect before exiting mutation
+        #[cfg(not(feature = "multi_threaded"))]
+        {
+            drop(mutator);
+
+            if self.collector.major_trigger() {
+                self.major_collect();
+            } else if self.collector.minor_trigger() {
+                self.minor_collect();
+            }
+        }
     }
 
     /// you can view the root but you don't have a mutator, therefore collection
