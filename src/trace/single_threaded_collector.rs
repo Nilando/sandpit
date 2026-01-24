@@ -107,9 +107,7 @@ impl SingleThreadedCollector {
         self.metrics.arena_size.store(arena_size, Ordering::Relaxed);
         arena_size
     }
-}
 
-impl SingleThreadedCollector {
     pub fn major_collect<T: Trace + ?Sized>(&self, root: &T) {
         gc_debug("Starting Major Collection");
 
