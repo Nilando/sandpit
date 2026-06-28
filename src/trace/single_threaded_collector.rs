@@ -185,7 +185,7 @@ impl SingleThreadedCollector {
     }
 
     pub fn yield_flag(&self) -> bool {
-        false
+        self.minor_trigger() || self.major_trigger()
     }
 
     pub fn increment_mutators(&self) {
@@ -213,6 +213,10 @@ impl SingleThreadedCollector {
         let arena_size_ratio_trigger = self.config.monitor_arena_size_ratio_trigger;
 
         arena_size as f32 > (prev_arena_size as f32 * arena_size_ratio_trigger)
+    }
+
+    pub fn check_yield(&self) {
+        // No-op in single-threaded mode
     }
 
     pub fn get_trace_share_ratio(&self) -> f32 {

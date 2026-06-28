@@ -69,6 +69,8 @@ impl<'a> Tracer<'a> {
                 }
             }
 
+            self.collector.check_yield();
+
             self.do_work();
             self.share_work();
         }

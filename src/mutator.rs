@@ -9,6 +9,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ptr::{copy, write, NonNull};
+use std::collections::HashSet;
 
 /// Allows for allocation and mutation within the GC arena.
 ///
@@ -60,14 +61,14 @@ use core::ptr::{copy, write, NonNull};
 pub struct Mutator<'gc> {
     collector: &'gc Collector,
     allocator: Allocator,
-    rescan: RefCell<Vec<TraceJob>>,
+    rescan: RefCell<HashSet<TraceJob>>,
     mark: GcMark,
 }
 
 impl<'gc> Drop for Mutator<'gc> {
     fn drop(&mut self) {
         let work = self.rescan.take();
-        self.collector.send_work(work);
+        self.collector.send_work(work.into_iter().collect());
         self.collector.decrement_mutators();
     }
 }
@@ -81,7 +82,7 @@ impl<'gc> Mutator<'gc> {
         Self {
             allocator,
             collector,
-            rescan: RefCell::new(vec![]),
+            rescan: RefCell::new(HashSet::new()),
             mark,
         }
     }
@@ -288,11 +289,7 @@ impl<'gc> Mutator<'gc> {
     /// });
     /// ```
     pub fn gc_yield(&self) -> bool {
-        if self.collector.yield_flag() {
-            return true;
-        }
-
-        self.collector.minor_trigger() || self.collector.major_trigger()
+        self.collector.yield_flag()
     }
 
     pub(crate) fn has_marked<T: Trace + ?Sized>(&self, gc_ptr: &Gc<'gc, T>) -> bool {
@@ -311,11 +308,11 @@ impl<'gc> Mutator<'gc> {
         let ptr: NonNull<Thin<T>> = NonNull::from(obj).cast(); // safe b/c of implicit Sized bound
         let trace_job = TraceJob::new::<T>(ptr);
 
-        self.rescan.borrow_mut().push(trace_job);
+        self.rescan.borrow_mut().insert(trace_job);
 
         if self.rescan.borrow().len() >= self.collector.config().mutator_share_min {
             let work = self.rescan.take();
-            self.collector.send_work(work);
+            self.collector.send_work(work.into_iter().collect());
         }
     }
 }

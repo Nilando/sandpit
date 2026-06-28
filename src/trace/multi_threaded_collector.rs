@@ -60,6 +60,14 @@ impl MultiThreadedCollector {
         self.shutdown_flag.load(Ordering::SeqCst)
     }
 
+    pub fn check_yield(&self) {
+        let max_headroom = (1.0 + self.config.collector_max_headroom_ratio) * self.metrics.prev_arena_size.load(Ordering::Relaxed) as f64;
+
+        if self.metrics.arena_size.load(Ordering::Relaxed) as f64 > max_headroom {
+            self.raise_yield_flag()
+        }
+    }
+
     /// Spawn a monitor thread for automatic garbage collection.
     /// Returns Some(JoinHandle) if monitor_on is true in config, None otherwise.
     ///
@@ -221,9 +229,7 @@ impl MultiThreadedCollector {
         self.metrics.arena_size.store(arena_size, Ordering::Relaxed);
         arena_size
     }
-}
 
-impl MultiThreadedCollector {
     pub fn major_collect<T: Trace + ?Sized>(&self, root: &T) {
         let _guard = self.collection_lock.lock().unwrap();
 
@@ -319,6 +325,8 @@ impl MultiThreadedCollector {
     }
 
     pub fn increment_mutators(&self) {
+        let _guard = self.collection_lock.lock().unwrap();
+
         self.active_mutators.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -361,11 +369,6 @@ pub mod monitor {
     use alloc::sync::Arc;
     use core::ptr::NonNull;
 
-    // SAFETY: This wrapper makes a raw pointer Send + Sync.
-    // The caller must ensure that:
-    // 1. The pointer remains valid for the lifetime of the monitor thread
-    // 2. No mutable access occurs while the monitor thread is running
-    // 3. The pointer is properly aligned and points to initialized memory
     struct SendSyncPtr<T: ?Sized>(NonNull<T>);
 
     unsafe impl<T: ?Sized> Send for SendSyncPtr<T> {}
@@ -379,14 +382,8 @@ pub mod monitor {
         let root_ptr = SendSyncPtr(unsafe { NonNull::new_unchecked(root_ptr as *mut T) });
 
         loop {
-            // Check shutdown flag first
-            if collector.should_shutdown() {
-                return;
-            }
-
             monitor_sleep(&collector);
 
-            // Check again after sleep
             if collector.should_shutdown() {
                 return;
             }
