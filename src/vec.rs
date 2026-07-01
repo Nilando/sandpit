@@ -152,13 +152,6 @@ impl<'gc, T: GcSync<'gc>> GcVec<'gc, T> {
                     current_mark,
                 );
             }
-
-            // Manually retrace only the valid elements (up to self.len)
-            for i in 0..self.len() {
-                let items_ptr = self.items.inner().unwrap();
-
-                mu.retrace(&items_ptr[i]);
-            }
         }
     }
 }
