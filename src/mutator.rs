@@ -5,8 +5,6 @@ use super::header::{GcHeader, GcMark, SizedHeader, SliceHeader, StrHeader};
 use super::pointee::Thin;
 use super::pointee::{sized_alloc_layout, slice_alloc_layout, str_alloc_layout};
 use super::trace::{Collector, Trace, TraceJob};
-use alloc::vec;
-use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ptr::{copy, write, NonNull};
 use std::collections::HashSet;
